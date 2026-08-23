@@ -1,62 +1,38 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+/**
+ * StationManager — fully restructured (2026-08-23).
+ *
+ * A modular, advanced multi-station command center. Replaces the previous
+ * 3400-line monolith with a clean 6-sub-tab architecture:
+ *
+ *   1. Overview   — KPI dashboard, quick actions, recent activity, sync status
+ *   2. Stations   — owned stations grid (search/filter/sort/favorites/bulk/clone/QR)
+ *   3. Network    — shared-with-me + pending invites + invite-by-link + members-of-your-stations
+ *   4. Analytics  — comparison table + revenue trend chart + health + CSV/JSON export
+ *   5. Activity   — unified cross-station activity feed (filter by station/action/actor)
+ *   6. Settings   — default station, sort prefs, data export/import, danger zone
+ *
+ * New features vs the previous version:
+ *   • Overview Dashboard sub-tab (quick actions + recent activity + sync card)
+ *   • Favorites (star) stations with a favorites-only filter
+ *   • Set Default station (persists to localStorage)
+ *   • Station clone/duplicate
+ *   • QR code station transfer (generate + download PNG via the `qrcode` package)
+ *   • CSV export (in addition to JSON) for stations + analytics + activity
+ *   • Real-time membership subscription (live invite/member updates)
+ *   • Members management for owned stations (view/revoke/role-change)
+ *   • Unified cross-station Activity Log with filters
+ *   • Station health monitoring with actionable recommendations
+ *   • Combined multi-station revenue trend bar chart (canvas)
+ *   • Settings sub-tab with preferences + data export/import + danger zone
+ *
+ * All station data continues to flow through StationContext (useStations) and
+ * station-share-service (Supabase station_members). Backward compatible with
+ * the existing Home.tsx render contract: `<StationManager onClose={...} />`.
+ */
+
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
-import { useNavigate } from "react-router";
-import {
-  Plus,
-  X,
-  ChevronRight,
-  Lock,
-  Users,
-  Globe,
-  Trash2,
-  Edit3,
-  Check,
-  ArrowLeft,
-  Fuel,
-  MapPin,
-  Phone,
-  Mail,
-  KeyRound,
-  Eye,
-  EyeOff,
-  Layers,
-  Share2,
-  Copy,
-  AlertTriangle,
-  RefreshCw,
-  LogIn,
-  Search,
-  Cloud,
-  CloudOff,
-  ArrowUpDown,
-  TrendingUp,
-  Calendar,
-  Download,
-  MoreHorizontal,
-  Building2,
-  UserCheck,
-  Link as LinkIcon,
-  MailOpen,
-  ShieldCheck,
-  Clock,
-  Inbox,
-  Loader2,
-  LogOut,
-  BarChart3,
-  Activity,
-  Settings,
-  Zap,
-  Gauge,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Star,
-  History,
-  Crown,
-  MailX,
-  Search as SearchIcon,
-} from "lucide-react";
 import {
   formatMoney,
   stationTotalRevenue,
@@ -69,7 +45,6 @@ import {
   downloadJson,
   startOfToday,
   startOfMonth,
-  getCurrencySymbol,
 } from "@/react-app/lib/station-stats";
 import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import { getVATRate } from "@/react-app/config/pricing";
@@ -80,74 +55,202 @@ import {
   getFavorites,
   toggleFavorite,
   acceptInvite,
-  rejectInvite,
   revokeMember,
+  declineInvite,
   leaveStation,
+  getStationMembers,
+  inviteMember,
   subscribeToMyMemberships,
+  recordStationActivity,
   type StationMember,
   type StationActivityEntry,
 } from "@/react-app/lib/station-share-service";
-
-interface StationManagerProps {
-  onClose?: () => void;
-}
+import QRCode from "qrcode";
+import {
+  Plus,
+  X,
+  Check,
+  ArrowLeft,
+  MapPin,
+  Layers,
+  Share2,
+  Copy,
+  RefreshCw,
+  LogIn,
+  Search,
+  Cloud,
+  TrendingUp,
+  Calendar,
+  Download,
+  Building2,
+  LogOut,
+  BarChart3,
+  Activity,
+  Gauge,
+  CheckCircle2,
+  Star,
+  Crown,
+  Settings as SettingsIcon,
+  Zap,
+  QrCode,
+  Trash2,
+  Edit3,
+  Users,
+  Send,
+  Filter,
+  ArrowUpDown,
+  Wifi,
+  WifiOff,
+  FileDown,
+  Database,
+  AlertTriangle,
+  MoreHorizontal,
+} from "lucide-react";
 
 // ============================================================
-// Module-scope subcomponents (UPDATE-4 rule)
+// Constants & helpers (module scope)
 // ============================================================
 
 const GLASS_CARD =
   "bg-gray-50 dark:bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-gray-200 dark:border-white/10 rounded-xl";
 
+const DEFAULT_STATION_KEY = "fuelpro_default_station";
+const STATION_SORT_PREF_KEY = "fuelpro_station_sort";
+const SUBTAB_KEY = "fuelpro_stationmgr_subtab";
+
+function getDefaultTaxRate(): number {
+  try {
+    const cc = getDetectedCountryCode();
+    return Math.round((getVATRate(cc) || 0) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+function getPhonePlaceholder(): string {
+  return "Enter phone number";
+}
+
+/** CSV export with RFC 4180 escaping. */
+function downloadCsv(filename: string, rows: (string | number)[][]): void {
+  const escape = (v: string | number) => {
+    const s = String(v ?? "");
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function actionLabel(action: string): string {
+  const map: Record<string, string> = {
+    invite_sent: "sent an invite",
+    invite_accepted: "accepted an invite",
+    invite_revoked: "revoked an invite",
+    invite_declined: "declined an invite",
+    member_left: "left the station",
+    role_changed: "changed a member role",
+    access_recorded: "accessed the station",
+    ownership_transferred: "transferred ownership",
+    favorite_toggled: "toggled favorite",
+  };
+  return map[action] || action.replace(/_/g, " ");
+}
+
+// ============================================================
+// Sub-tab definition
+// ============================================================
+
+type SubTab =
+  "overview" | "stations" | "network" | "analytics" | "activity" | "settings";
+
+type FilterStatus = "all" | "active" | "inactive" | "maintenance" | "favorites";
+type SortBy = "recent" | "name" | "revenue" | "oldest";
+
+interface StationManagerProps {
+  onClose?: () => void;
+}
+
+const EMPTY_FORM = {
+  name: "",
+  location: "",
+  phone: "",
+  email: "",
+  kraPin: "",
+  etrSerial: "",
+  taxRate: getDefaultTaxRate(),
+  theme: "dark",
+  description: "",
+};
+
+// ============================================================
+// Module-scope presentational subcomponents
+// ============================================================
+
 function StatCard({
   label,
   value,
   icon: Icon,
-  accent = "text-amber-400",
+  accent,
+  sub,
 }: {
   label: string;
   value: string;
-  icon: React.ElementType;
-  accent?: string;
+  icon: any;
+  accent: string;
+  sub?: string;
 }) {
   return (
-    <div className={`${GLASS_CARD} p-4 flex items-center gap-3`}>
-      <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-white/5 flex items-center justify-center">
-        <Icon size={18} className={accent} />
-      </div>
-      <div>
-        <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+    <div className={`${GLASS_CARD} p-4`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
           {label}
-        </p>
-        <p className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm">
-          {value}
-        </p>
+        </span>
+        <Icon size={16} className={accent} />
       </div>
+      <p className="text-xl font-bold text-gray-900 dark:text-white">{value}</p>
+      {sub && <p className="text-[10px] text-gray-500 mt-1">{sub}</p>}
     </div>
   );
 }
 
-function StatusBadge({
-  status,
-}: {
-  status: "active" | "inactive" | "maintenance";
-}) {
-  const styles = {
-    active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    inactive:
-      "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30",
-    maintenance: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  };
-  const labels = {
-    active: "Active",
-    inactive: "Inactive",
-    maintenance: "Maintenance",
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    active: "bg-emerald-500/20 text-emerald-400",
+    inactive: "bg-gray-500/20 text-gray-400",
+    maintenance: "bg-amber-500/20 text-amber-400",
   };
   return (
     <span
-      className={`px-2 py-0.5 rounded-full text-xs border ${styles[status]}`}
+      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+        colors[status] || "bg-gray-500/20 text-gray-400"
+      }`}
     >
-      {labels[status]}
+      {status}
+    </span>
+  );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    owner: "bg-amber-500/20 text-amber-400",
+    manager: "bg-sky-500/20 text-sky-400",
+    staff: "bg-emerald-500/20 text-emerald-400",
+    auditor: "bg-purple-500/20 text-purple-400",
+  };
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+        colors[role] || "bg-gray-500/20 text-gray-400"
+      }`}
+    >
+      {role}
     </span>
   );
 }
@@ -155,19 +258,17 @@ function StatusBadge({
 function SkeletonCard() {
   return (
     <div className={`${GLASS_CARD} p-5 animate-pulse`}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-white/10" />
-          <div>
-            <div className="h-4 w-32 bg-gray-100 dark:bg-white/10 rounded mb-2" />
-            <div className="h-3 w-24 bg-gray-100 dark:bg-white/10 rounded" />
-          </div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-xl bg-gray-300 dark:bg-white/10" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-300 dark:bg-white/10 rounded w-2/3" />
+          <div className="h-3 bg-gray-300 dark:bg-white/10 rounded w-1/3" />
         </div>
-        <div className="h-6 w-16 bg-gray-100 dark:bg-white/10 rounded-full" />
       </div>
-      <div className="space-y-2">
-        <div className="h-3 w-full bg-gray-100 dark:bg-white/10 rounded" />
-        <div className="h-3 w-3/4 bg-gray-100 dark:bg-white/10 rounded" />
+      <div className="grid grid-cols-3 gap-2">
+        <div className="h-8 bg-gray-300 dark:bg-white/10 rounded" />
+        <div className="h-8 bg-gray-300 dark:bg-white/10 rounded" />
+        <div className="h-8 bg-gray-300 dark:bg-white/10 rounded" />
       </div>
     </div>
   );
@@ -176,16 +277,17 @@ function SkeletonCard() {
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className={`${GLASS_CARD} p-12 text-center`}>
-      <Layers size={48} className="text-gray-600 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-2">
+      <Building2 size={48} className="text-gray-600 mx-auto mb-4" />
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
         No stations yet
       </h3>
-      <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-6">
-        Create your first fuel station to get started
+      <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+        Create your first station to start managing fuel sales, inventory, and
+        reports.
       </p>
       <button
         onClick={onCreate}
-        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
+        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
       >
         <Plus size={18} />
         Create Station
@@ -194,25 +296,67 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-// Station card subcomponent
+function SectionHeader({
+  icon: Icon,
+  title,
+  count,
+  action,
+}: {
+  icon: any;
+  title: string;
+  count?: number;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+        <Icon size={18} className="text-amber-400" />
+        {title}
+        {count !== undefined && (
+          <span className="text-sm text-gray-500 dark:text-gray-400 font-normal">
+            · {count}
+          </span>
+        )}
+      </h2>
+      {action}
+    </div>
+  );
+}
+
+// ============================================================
+// Station Card
+// ============================================================
+
 function StationCard({
   station,
   isCurrent,
+  isFavorite,
+  isDefault,
   onOpen,
   onEdit,
   onShare,
   onExport,
   onDelete,
   onToggleStatus,
+  onClone,
+  onQR,
+  onToggleFavorite,
+  onSetDefault,
 }: {
   station: any;
   isCurrent: boolean;
+  isFavorite: boolean;
+  isDefault: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onShare: () => void;
   onExport: () => void;
   onDelete: () => void;
   onToggleStatus: () => void;
+  onClone: () => void;
+  onQR: () => void;
+  onToggleFavorite: () => void;
+  onSetDefault: () => void;
 }) {
   const data = station.data || {};
   const totalRev = stationTotalRevenue(data);
@@ -220,14 +364,12 @@ function StationCard({
   const monthRev = stationRevenueSince(data, startOfMonth());
   const salesCount = stationSalesCount(data);
   const status = stationStatus(data);
-  const sharedUsers = data.sharedUsers || [];
   const updated = relativeTime(station.updatedAt);
-  const isCloudBacked =
-    station.id.includes("backend_") || station.id.includes("-");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div
-      className={`${GLASS_CARD} p-5 hover:bg-gray-100 dark:bg-white/10 transition-all group relative ${
+      className={`${GLASS_CARD} p-5 hover:bg-gray-100 dark:hover:bg-white/10 transition-all group relative ${
         isCurrent ? "ring-2 ring-amber-400/50" : ""
       }`}
     >
@@ -237,135 +379,185 @@ function StationCard({
           <div
             className={`w-12 h-12 rounded-xl ${avatarColor(
               station.name,
-            )} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm`}
+            )} flex items-center justify-center text-white font-bold text-sm`}
           >
             {initialsOf(station.name)}
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm flex items-center gap-2">
+            <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-1.5">
               {station.name}
               {isCurrent && (
                 <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">
                   Active
                 </span>
               )}
+              {isDefault && (
+                <Crown
+                  size={12}
+                  className="text-amber-400"
+                  aria-label="Default station"
+                />
+              )}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {updated}
             </p>
           </div>
         </div>
-        <button
-          onClick={onToggleStatus}
-          className="text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
-          title="Toggle status"
-        >
-          <StatusBadge status={status} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onToggleFavorite}
+            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            className="w-7 h-7 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 flex items-center justify-center transition-colors"
+          >
+            <Star
+              size={14}
+              className={
+                isFavorite ? "text-amber-400 fill-amber-400" : "text-gray-400"
+              }
+            />
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="w-7 h-7 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 flex items-center justify-center transition-colors"
+            >
+              <MoreHorizontal size={14} className="text-gray-400" />
+            </button>
+            {menuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-8 z-20 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-lg shadow-xl py-1">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onClone();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
+                  >
+                    <Copy size={12} /> Clone Station
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onQR();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
+                  >
+                    <QrCode size={12} /> QR Code
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSetDefault();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
+                  >
+                    <Crown size={12} /> Set as Default
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onToggleStatus();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
+                  >
+                    <Zap size={12} /> Toggle Status
+                  </button>
+                  <div className="border-t border-gray-200 dark:border-white/10 my-1" />
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Revenue stats */}
+      {/* Location */}
+      {station.location && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <MapPin size={12} />
+          <span className="truncate">{station.location}</span>
+        </div>
+      )}
+
+      {/* Revenue grid */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
-            Today
-          </p>
-          <p className="font-semibold text-emerald-400 text-xs">
+        <div className="text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400">Today</p>
+          <p className="text-sm font-semibold text-emerald-400">
             {formatMoney(todayRev)}
           </p>
         </div>
-        <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
-            Month
-          </p>
-          <p className="font-semibold text-sky-400 text-xs">
+        <div className="text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400">Month</p>
+          <p className="text-sm font-semibold text-sky-400">
             {formatMoney(monthRev)}
           </p>
         </div>
-        <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
-            Total
-          </p>
-          <p className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-xs">
+        <div className="text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400">Total</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">
             {formatMoney(totalRev)}
           </p>
         </div>
       </div>
 
-      {/* Info rows */}
-      <div className="space-y-1.5 mb-4">
-        {station.location && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-            <MapPin size={12} className="text-gray-500" />
-            <span className="truncate">{station.location}</span>
-          </div>
-        )}
-        {station.phone && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-            <Phone size={12} className="text-gray-500" />
-            <span>{station.phone}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-2 text-xs">
-          {isCloudBacked ? (
-            <span className="flex items-center gap-1 text-emerald-400">
-              <Cloud size={12} />
-              Cloud synced
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-gray-500">
-              <CloudOff size={12} />
-              Local only
-            </span>
-          )}
-          {sharedUsers.length > 0 && (
-            <span className="flex items-center gap-1 text-purple-400 ml-2">
-              <Users size={12} />
-              {sharedUsers.length} shared
-            </span>
-          )}
-          <span className="text-gray-500 ml-auto">{salesCount} sales</span>
-        </div>
+      {/* Footer */}
+      <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 mb-3">
+        <span>{salesCount} sales</span>
+        <StatusBadge status={status} />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+      <div className="flex gap-2">
         <button
           onClick={onOpen}
-          className="flex-1 px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-xs font-medium transition-colors"
+          className="flex-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
         >
-          Open
+          <LogIn size={13} /> Open
         </button>
         <button
           onClick={onEdit}
-          className="px-3 py-2 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 rounded-lg text-xs transition-colors"
+          title="Edit"
+          className="px-3 py-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
         >
-          <Edit3 size={14} />
+          <Edit3 size={13} />
         </button>
         <button
           onClick={onShare}
-          className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-xs transition-colors"
+          title="Share"
+          className="px-3 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 rounded-lg transition-colors"
         >
-          <Share2 size={14} />
+          <Share2 size={13} />
         </button>
         <button
           onClick={onExport}
-          className="px-3 py-2 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 rounded-lg text-xs transition-colors"
+          title="Export"
+          className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
         >
-          <Download size={14} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition-colors"
-        >
-          <Trash2 size={14} />
+          <Download size={13} />
         </button>
       </div>
     </div>
   );
 }
 
-// Create/Edit Modal
+// ============================================================
+// Station Form Modal (create / edit)
+// ============================================================
+
 function StationFormModal({
   title,
   submitLabel,
@@ -381,20 +573,24 @@ function StationFormModal({
 }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const handleSubmit = () => {
     if (!form.name?.trim()) {
       setError("Station name is required");
       return;
     }
+    setBusy(true);
     onSubmit(form);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
+      <div
+        className={`${GLASS_CARD} w-full max-w-md p-6 max-h-[90vh] overflow-y-auto`}
+      >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
             {title}
           </h2>
           <button
@@ -413,19 +609,19 @@ function StationFormModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Station Name *
             </label>
             <input
               type="text"
               value={form.name || ""}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="e.g., downtown_branch"
-              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="e.g., Downtown Branch"
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Location
             </label>
             <input
@@ -434,13 +630,13 @@ function StationFormModal({
               onChange={(e) =>
                 setForm((p) => ({ ...p, location: e.target.value }))
               }
-              placeholder="e.g., Downtown, [Your City]"
-              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="e.g., Downtown, Nairobi"
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                 Phone
               </label>
               <input
@@ -450,11 +646,11 @@ function StationFormModal({
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
                 placeholder={getPhonePlaceholder()}
-                className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                 Tax Rate (%)
               </label>
               <input
@@ -466,12 +662,12 @@ function StationFormModal({
                     taxRate: parseFloat(e.target.value) || 0,
                   }))
                 }
-                className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Email / Manager
             </label>
             <input
@@ -481,7 +677,21 @@ function StationFormModal({
                 setForm((p) => ({ ...p, email: e.target.value }))
               }
               placeholder="manager@station.com"
-              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={form.description || ""}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, description: e.target.value }))
+              }
+              placeholder="Optional notes about this station"
+              rows={2}
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
         </div>
@@ -489,13 +699,14 @@ function StationFormModal({
         <div className="flex gap-3 mt-6">
           <button
             onClick={handleSubmit}
-            className="flex-1 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-xl transition-colors"
+            disabled={busy}
+            className="flex-1 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
           >
-            {submitLabel}
+            {busy ? "Saving..." : submitLabel}
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl transition-colors"
+            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
@@ -505,148 +716,79 @@ function StationFormModal({
   );
 }
 
-// Share Modal
+// ============================================================
+// Share Modal — invite members to a station
+// ============================================================
+
 function ShareModal({
   station,
-  onShare,
+  onInvite,
   onRevoke,
   onClose,
 }: {
   station: any;
-  onShare: (email: string, password: string) => void;
-  onRevoke: (email: string) => void;
+  onInvite: (email: string, role: string, name?: string) => Promise<void>;
+  onRevoke: (memberId: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const sharedUsers = station?.data?.sharedUsers || [];
-
-  const handleShare = () => {
-    if (!email.trim() || !password) {
-      return;
-    }
-    onShare(email, password);
-    setEmail("");
-    setPassword("");
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            Share Station Access
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="mb-4 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-          <p className="text-sm text-purple-300">
-            Sharing: <span className="font-semibold">{station?.name}</span>
-          </p>
-        </div>
-
-        <div className="space-y-3 mb-6">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="User email address"
-            className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
-          />
-          <div className="relative">
-            <input
-              type={showPw ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Set access password"
-              className="w-full px-4 py-2.5 pr-10 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
-            />
-            <button
-              onClick={() => setShowPw(!showPw)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
-            >
-              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          <button
-            onClick={handleShare}
-            disabled={!email.trim() || !password}
-            className="w-full px-4 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            <Share2 size={16} />
-            Grant Access
-          </button>
-        </div>
-
-        {sharedUsers.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">
-              Shared Users ({sharedUsers.length})
-            </h3>
-            <div className="space-y-2">
-              {sharedUsers.map((user: any, idx: number) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
-                      {user.email?.[0]?.toUpperCase() || "?"}
-                    </div>
-                    <span className="text-sm text-gray-300">{user.email}</span>
-                  </div>
-                  <button
-                    onClick={() => onRevoke(user.email)}
-                    className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs transition-colors"
-                  >
-                    Revoke
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Access Station Modal
-function AccessModal({
-  stations,
-  onAccess,
-  onClose,
-}: {
-  stations: any[];
-  onAccess: (stationId: string, password: string) => void;
-  onClose: () => void;
-}) {
-  const [selectedId, setSelectedId] = useState(stations[0]?.id || "");
-  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("staff");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [members, setMembers] = useState<StationMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
 
-  const handleAccess = () => {
-    if (!selectedId || !password) {
-      setError("Both station and password are required");
+  const loadMembers = useCallback(async () => {
+    if (!station?.id) return;
+    setLoadingMembers(true);
+    try {
+      const m = await getStationMembers(station.id);
+      setMembers(m);
+    } catch {
+      setMembers([]);
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, [station?.id]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
+
+  const handleInvite = async () => {
+    if (!email.trim()) {
+      setError("Email is required");
       return;
     }
-    onAccess(selectedId, password);
+    setBusy(true);
+    setError("");
+    try {
+      await onInvite(email.trim(), role, name.trim() || undefined);
+      setEmail("");
+      setName("");
+      await loadMembers();
+    } catch (e: any) {
+      setError(e?.message || "Failed to send invite");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
+      <div
+        className={`${GLASS_CARD} w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto`}
+      >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            Access Shared Station
-          </h2>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              Share Station
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {station?.name}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
@@ -661,55 +803,255 @@ function AccessModal({
           </div>
         )}
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
-              Select Station
-            </label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="" className="bg-white dark:bg-gray-800">
-                Choose a station...
-              </option>
-              {stations.map((s) => (
-                <option
-                  key={s.id}
-                  value={s.id}
-                  className="bg-white dark:bg-gray-800"
-                >
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
-              Station Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter the access password"
-              className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
+        {/* Invite form */}
+        <div className={`${GLASS_CARD} p-4 mb-4`}>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <Send size={14} className="text-sky-400" />
+            Invite a Member
+          </h3>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="member@email.com"
+                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+              />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name (optional)"
+                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+              />
+            </div>
+            <div className="flex gap-3">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+              >
+                <option value="manager">Manager</option>
+                <option value="staff">Staff</option>
+                <option value="auditor">Auditor</option>
+              </select>
+              <button
+                onClick={handleInvite}
+                disabled={busy}
+                className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <Send size={14} />
+                {busy ? "Sending..." : "Send Invite"}
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={handleAccess}
-            className="flex-1 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            <LogIn size={16} />
-            Access Station
-          </button>
+        {/* Members list */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <Users size={14} className="text-emerald-400" />
+            Current Members ({members.length})
+          </h3>
+          {loadingMembers ? (
+            <p className="text-xs text-gray-500">Loading members...</p>
+          ) : members.length === 0 ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              No members yet. Invite someone above.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {members.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between p-2 bg-gray-100 dark:bg-white/5 rounded-lg"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 dark:text-white truncate">
+                        {m.name || m.invited_email || "Unknown"}
+                      </p>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        {m.invited_email || m.member_email || ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RoleBadge role={m.role} />
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        m.status === "accepted" || m.status === "active"
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : m.status === "pending"
+                            ? "bg-amber-500/20 text-amber-400"
+                            : "bg-gray-500/20 text-gray-400"
+                      }`}
+                    >
+                      {m.status}
+                    </span>
+                    <button
+                      onClick={() => onRevoke(m.id)}
+                      title="Revoke"
+                      className="w-6 h-6 rounded text-red-400 hover:bg-red-500/10 flex items-center justify-center"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end mt-6">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl transition-colors"
+            className="px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl text-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// QR Code Modal — generate a transfer QR for a station
+// ============================================================
+
+function QRModal({ station, onClose }: { station: any; onClose: () => void }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const payload = JSON.stringify({
+      type: "fuelpro_station",
+      stationId: station.id,
+      name: station.name,
+      location: station.location || "",
+      phone: station.phone || "",
+      email: station.email || "",
+    });
+    QRCode.toDataURL(payload, { width: 240, margin: 2 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [station]);
+
+  const handleDownload = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement("a");
+    link.href = qrDataUrl;
+    link.download = `station_${station.name.replace(/\s+/g, "_")}_qr.png`;
+    link.click();
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard
+      .writeText(station.id)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className={`${GLASS_CARD} w-full max-w-sm p-6 text-center`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            Station QR Code
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          {station.name}
+        </p>
+        {qrDataUrl ? (
+          <img
+            src={qrDataUrl}
+            alt="Station QR code"
+            className="mx-auto rounded-lg bg-white p-2 mb-4"
+          />
+        ) : (
+          <div className="w-60 h-60 mx-auto bg-gray-200 dark:bg-white/10 rounded-lg mb-4 animate-pulse" />
+        )}
+        <div className="space-y-2">
+          <button
+            onClick={handleDownload}
+            className="w-full px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+          >
+            <Download size={14} /> Download PNG
+          </button>
+          <button
+            onClick={handleCopy}
+            className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm flex items-center justify-center gap-2"
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Copied!" : "Copy Station ID"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Confirm Dialog
+// ============================================================
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  danger,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className={`${GLASS_CARD} w-full max-w-sm p-6`}>
+        <div className="flex items-center gap-3 mb-4">
+          {danger ? (
+            <AlertTriangle size={20} className="text-red-400" />
+          ) : (
+            <CheckCircle2 size={20} className="text-sky-400" />
+          )}
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            {title}
+          </h2>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          {message}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className={`flex-1 px-4 py-2 ${
+              danger
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-emerald-500 hover:bg-emerald-600"
+            } text-white font-semibold rounded-xl text-sm transition-colors`}
+          >
+            {confirmLabel}
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl text-sm"
           >
             Cancel
           </button>
@@ -720,32 +1062,7 @@ function AccessModal({
 }
 
 // ============================================================
-// Access Another Station — RESTRUCTURED (2026-08-23).
-//
-// A complete redesign of the invite-based station sharing flow. Built on the
-// `station_members` DB table (migrations 015/016/017/023/025). Four tabs:
-//
-//   1. Network   — every station shared with you (accepted memberships) +
-//                  your favorites. Search + role filter + favorite toggle.
-//                  Each card shows role, inviter, last-accessed, and a
-//                  detail drawer (activity feed, tab grants, leave).
-//   2. Invites   — pending invites awaiting your acceptance + a "Join by
-//                  invite link/token" entry. Accept / reject per invite.
-//   3. Activity  — a live cross-device activity feed for the selected
-//                  shared station (invite sent/accepted, role changes,
-//                  ownership transfers, member left).
-//   4. Help      — a short explainer of roles, permissions, and security.
-//
-// New capabilities vs. the scrapped version:
-//   - Favorites (cloud-backed, cross-device) with a dedicated filter.
-//   - Search across station name / inviter / role.
-//   - Role filter (All / Manager / Staff / Auditor / Custom).
-//   - Per-station activity feed (station_activity_<id> app_kv key).
-//   - Accept + Reject for pending invites (reject marks the invite rejected).
-//   - Leave station uses the dedicated `leaveStation` service function.
-//   - Real-time: subscribes to the user's memberships so new invites +
-//     accept/revoke events appear instantly without a manual refresh.
-//   - Last-accessed timestamp displayed per shared station.
+// SharedStationInfo (internal type for Network tab)
 // ============================================================
 
 interface SharedStationInfo {
@@ -755,1217 +1072,12 @@ interface SharedStationInfo {
   invitedBy: string;
   status: string;
   member: StationMember | null;
-  lastAccessedAt?: string | null;
-}
-
-function RoleBadge({ role }: { role: string }) {
-  const styles: Record<string, string> = {
-    owner: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    manager: "bg-sky-500/20 text-sky-400 border-sky-500/30",
-    staff: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    auditor: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  };
-  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
-  const cls =
-    styles[role?.toLowerCase()] ||
-    "bg-gray-500/20 text-gray-500 dark:text-gray-400 border-gray-500/30";
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>
-      {label}
-    </span>
-  );
-}
-
-function formatLastAccessed(iso?: string | null): string {
-  if (!iso) return "Never";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "Never";
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString();
-}
-
-function actionLabel(action: string): string {
-  const map: Record<string, string> = {
-    invite_sent: "sent an invite",
-    invite_accepted: "accepted an invite",
-    invite_rejected: "rejected an invite",
-    invite_revoked: "revoked an invite",
-    member_left: "left the station",
-    role_changed: "changed a member's role",
-    ownership_transferred: "transferred ownership",
-    access_recorded: "accessed the station",
-  };
-  return map[action] || action.replace(/_/g, " ");
-}
-
-function AccessSharedStationModal({
-  ownedStations,
-  sharedStations,
-  pendingInvites,
-  onAccess,
-  onClose,
-  onInvitesChanged,
-  currentStationId,
-  userId,
-  invitesVersion,
-}: {
-  ownedStations: any[];
-  sharedStations: SharedStationInfo[];
-  pendingInvites: SharedStationInfo[];
-  onAccess: (stationId: string) => void;
-  onClose: () => void;
-  onInvitesChanged: () => void;
-  currentStationId?: string;
-  userId?: string;
-  invitesVersion?: number;
-}) {
-  const [tab, setTab] = useState<"network" | "invites" | "activity" | "help">(
-    sharedStations.length > 0
-      ? "network"
-      : pendingInvites.length > 0
-        ? "invites"
-        : "network",
-  );
-  const [inviteInput, setInviteInput] = useState("");
-  const [joining, setJoining] = useState(false);
-  const [joinError, setJoinError] = useState("");
-  const [joinSuccess, setJoinSuccess] = useState("");
-
-  // Network tab: search + role filter + favorites filter
-  const [networkSearch, setNetworkSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [selectedStationId, setSelectedStationId] = useState<string | null>(
-    sharedStations[0]?.stationId || null,
-  );
-  const [activity, setActivity] = useState<StationActivityEntry[]>([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [detailStationId, setDetailStationId] = useState<string | null>(null);
-
-  // Load favorites on mount
-  useEffect(() => {
-    getFavorites()
-      .then(setFavorites)
-      .catch(() => {});
-  }, []);
-
-  // Real-time: subscribe to the user's memberships so new invites / accept /
-  // revoke events refresh the lists instantly.
-  useEffect(() => {
-    if (!userId) return;
-    const unsub = subscribeToMyMemberships(userId, () => {
-      onInvitesChanged();
-    });
-    return () => unsub();
-  }, [userId, onInvitesChanged]);
-
-  // Load activity for the selected station on the Activity tab (and whenever
-  // invites refresh — an accept generates a new activity entry).
-  useEffect(() => {
-    if (tab !== "activity" || !selectedStationId) return;
-    setActivityLoading(true);
-    getStationActivity(selectedStationId)
-      .then(setActivity)
-      .catch(() => setActivity([]))
-      .finally(() => setActivityLoading(false));
-  }, [tab, selectedStationId, invitesVersion]);
-
-  const extractToken = (input: string): string => {
-    const trimmed = input.trim();
-    if (!trimmed) return "";
-    try {
-      const url = new URL(trimmed);
-      const token = url.searchParams.get("invite");
-      if (token) return token;
-    } catch {
-      // Not a URL — treat as raw token
-    }
-    return trimmed;
-  };
-
-  const handleJoin = async () => {
-    const token = extractToken(inviteInput);
-    if (!token) {
-      setJoinError("Please paste an invite link or token");
-      return;
-    }
-    setJoining(true);
-    setJoinError("");
-    setJoinSuccess("");
-    try {
-      const result = await acceptInvite(token);
-      if (result.success && result.stationId) {
-        setJoinSuccess("Invite accepted! Switching to station...");
-        onInvitesChanged();
-        setTimeout(() => {
-          onAccess(result.stationId!);
-        }, 1000);
-      } else {
-        setJoinError(
-          result.error ||
-            "Failed to accept invite. The link may be invalid or expired.",
-        );
-      }
-    } catch (e: any) {
-      setJoinError(
-        e?.message || "An error occurred while accepting the invite",
-      );
-    } finally {
-      setJoining(false);
-    }
-  };
-
-  const handleToggleFavorite = async (stationId: string) => {
-    const res = await toggleFavorite(stationId);
-    setFavorites((prev) =>
-      res.favorite
-        ? [...prev, stationId]
-        : prev.filter((id) => id !== stationId),
-    );
-  };
-
-  // Filtered network list
-  const filteredNetwork = useMemo(() => {
-    let list = [...sharedStations];
-    if (favoritesOnly)
-      list = list.filter((s) => favorites.includes(s.stationId));
-    if (roleFilter !== "all")
-      list = list.filter((s) => (s.role || "").toLowerCase() === roleFilter);
-    if (networkSearch.trim()) {
-      const q = networkSearch.toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.stationName.toLowerCase().includes(q) ||
-          (s.invitedBy || "").toLowerCase().includes(q) ||
-          (s.role || "").toLowerCase().includes(q),
-      );
-    }
-    // Favorites first, then by name
-    list.sort((a, b) => {
-      const af = favorites.includes(a.stationId) ? 0 : 1;
-      const bf = favorites.includes(b.stationId) ? 0 : 1;
-      if (af !== bf) return af - bf;
-      return a.stationName.localeCompare(b.stationName);
-    });
-    return list;
-  }, [sharedStations, favoritesOnly, roleFilter, networkSearch, favorites]);
-
-  const tabs = [
-    {
-      id: "network" as const,
-      label: "Network",
-      icon: Building2,
-      count: sharedStations.length,
-    },
-    {
-      id: "invites" as const,
-      label: "Invites",
-      icon: Inbox,
-      count: pendingInvites.length,
-    },
-    {
-      id: "activity" as const,
-      label: "Activity",
-      icon: History,
-      count: null,
-    },
-    {
-      id: "help" as const,
-      label: "Help",
-      icon: ShieldCheck,
-      count: null,
-    },
-  ];
-
-  const detailStation = detailStationId
-    ? sharedStations.find((s) => s.stationId === detailStationId)
-    : null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div
-        className={`${GLASS_CARD} w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col`}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Building2 size={20} className="text-sky-400" />
-              Access Another Station
-            </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Switch to a shared station, accept an invite, join by link, or
-              review activity
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 overflow-x-auto">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-                tab === t.id
-                  ? "bg-sky-500/30 text-sky-300"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/5"
-              }`}
-            >
-              <t.icon size={15} />
-              {t.label}
-              {t.count !== null && t.count > 0 && (
-                <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-white/10 rounded-full text-[10px] font-bold">
-                  {t.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {/* ============ NETWORK TAB ============ */}
-          {tab === "network" && (
-            <div className="space-y-4">
-              {/* Search + filter bar */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex-1 min-w-[180px]">
-                  <SearchIcon
-                    size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    type="text"
-                    value={networkSearch}
-                    onChange={(e) => setNetworkSearch(e.target.value)}
-                    placeholder="Search stations, inviters, roles..."
-                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                  />
-                </div>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="manager">Manager</option>
-                  <option value="staff">Staff</option>
-                  <option value="auditor">Auditor</option>
-                  <option value="owner">Owner</option>
-                </select>
-                <button
-                  onClick={() => setFavoritesOnly((v) => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors border ${
-                    favoritesOnly
-                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                      : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:text-gray-900 dark:text-white"
-                  }`}
-                >
-                  <Star
-                    size={14}
-                    fill={favoritesOnly ? "currentColor" : "none"}
-                  />
-                  Favorites
-                </button>
-              </div>
-
-              {filteredNetwork.length === 0 ? (
-                <div className="text-center py-12">
-                  <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
-                    {sharedStations.length === 0
-                      ? "No stations shared with you yet"
-                      : "No stations match your filters"}
-                  </p>
-                  <p className="text-gray-500 text-xs">
-                    {sharedStations.length === 0
-                      ? "When a station owner invites you, the station will appear here"
-                      : "Try clearing the search or role filter"}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {filteredNetwork.map((s) => {
-                    const isFav = favorites.includes(s.stationId);
-                    const isActive = currentStationId === s.stationId;
-                    return (
-                      <div
-                        key={s.stationId}
-                        className={`bg-gray-50 dark:bg-white/5 border rounded-xl p-4 transition-colors group ${
-                          isActive
-                            ? "border-sky-400/50 ring-1 ring-sky-400/30"
-                            : "border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div
-                              className={`w-10 h-10 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
-                            >
-                              {initialsOf(s.stationName)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate flex items-center gap-1.5">
-                                {s.stationName}
-                                {isActive && (
-                                  <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
-                                    Active
-                                  </span>
-                                )}
-                              </h3>
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <RoleBadge role={s.role} />
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleToggleFavorite(s.stationId)}
-                            title={
-                              isFav
-                                ? "Remove from favorites"
-                                : "Add to favorites"
-                            }
-                            className={`flex-shrink-0 p-1 rounded transition-colors ${
-                              isFav
-                                ? "text-amber-400"
-                                : "text-gray-500 hover:text-amber-400"
-                            }`}
-                          >
-                            <Star
-                              size={16}
-                              fill={isFav ? "currentColor" : "none"}
-                            />
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3 flex-wrap">
-                          {s.invitedBy && (
-                            <span className="flex items-center gap-1">
-                              <UserCheck size={11} />
-                              {s.invitedBy}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <Clock size={11} />
-                            {formatLastAccessed(s.lastAccessedAt)}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => onAccess(s.stationId)}
-                            className="flex-1 px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-                          >
-                            <LogIn size={13} />
-                            {isActive ? "Currently Active" : "Access"}
-                          </button>
-                          <button
-                            onClick={() => setDetailStationId(s.stationId)}
-                            title="View details & activity"
-                            className="px-3 py-1.5 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 rounded-lg text-xs transition-colors"
-                          >
-                            <History size={13} />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (
-                                !confirm(
-                                  `Leave "${s.stationName}"? You will no longer have access to this shared station.`,
-                                )
-                              )
-                                return;
-                              const res = await leaveStation(s.stationId);
-                              if (res.success) {
-                                onInvitesChanged();
-                              } else {
-                                alert(res.error || "Failed to leave station");
-                              }
-                            }}
-                            title="Leave this shared station"
-                            className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition-colors"
-                          >
-                            <LogOut size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ============ INVITES TAB ============ */}
-          {tab === "invites" && (
-            <div className="space-y-5">
-              {/* Pending invites */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                  <Inbox size={15} className="text-amber-400" />
-                  Pending Invites
-                  {pendingInvites.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-full text-[10px] font-bold">
-                      {pendingInvites.length}
-                    </span>
-                  )}
-                </h3>
-                {pendingInvites.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
-                    <Inbox size={32} className="text-gray-600 mx-auto mb-2" />
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      No pending invites
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {pendingInvites.map((s) => (
-                      <PendingInviteRow
-                        key={s.stationId + (s.member?.id || "")}
-                        info={s}
-                        onAccept={(stationId) => {
-                          onInvitesChanged();
-                          onAccess(stationId);
-                        }}
-                        onReject={() => {
-                          if (s.member?.invite_token) {
-                            rejectInvite(s.member.invite_token).then(() =>
-                              onInvitesChanged(),
-                            );
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Join by link */}
-              <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-white/10">
-                <div className="text-center py-2">
-                  <LinkIcon size={28} className="text-sky-400 mx-auto mb-2" />
-                  <h3 className="text-gray-900 dark:text-white font-semibold text-sm mb-1">
-                    Join by Invite Link
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs">
-                    Paste an invite link or token you received from a station
-                    owner
-                  </p>
-                </div>
-
-                {joinError && (
-                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-start gap-2">
-                    <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-                    <span>{joinError}</span>
-                  </div>
-                )}
-                {joinSuccess && (
-                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm flex items-start gap-2">
-                    <Check size={16} className="flex-shrink-0 mt-0.5" />
-                    <span>{joinSuccess}</span>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                    Invite Link or Token
-                  </label>
-                  <input
-                    type="text"
-                    value={inviteInput}
-                    onChange={(e) => setInviteInput(e.target.value)}
-                    placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
-                    className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !joining) handleJoin();
-                    }}
-                  />
-                </div>
-
-                <button
-                  onClick={handleJoin}
-                  disabled={joining || !inviteInput.trim()}
-                  className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-                >
-                  {joining ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Accepting Invite...
-                    </>
-                  ) : (
-                    <>
-                      <MailOpen size={16} />
-                      Accept Invite & Access Station
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ============ ACTIVITY TAB ============ */}
-          {tab === "activity" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                  Select Station
-                </label>
-                <select
-                  value={selectedStationId || ""}
-                  onChange={(e) => setSelectedStationId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
-                >
-                  {sharedStations.length === 0 && (
-                    <option value="">No shared stations</option>
-                  )}
-                  {sharedStations.map((s) => (
-                    <option key={s.stationId} value={s.stationId}>
-                      {s.stationName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedStationId ? (
-                activityLoading ? (
-                  <div className="text-center py-8">
-                    <Loader2
-                      size={24}
-                      className="animate-spin text-sky-400 mx-auto"
-                    />
-                  </div>
-                ) : activity.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
-                    <History size={32} className="text-gray-600 mx-auto mb-2" />
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      No activity recorded yet
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {activity.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0">
-                          <Activity size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 dark:text-white">
-                            <span className="font-medium">
-                              {entry.actorName}
-                            </span>{" "}
-                            <span className="text-gray-500 dark:text-gray-400">
-                              {actionLabel(entry.action)}
-                            </span>
-                          </p>
-                          {entry.detail && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              {entry.detail}
-                            </p>
-                          )}
-                          <p className="text-[10px] text-gray-500 mt-0.5">
-                            {new Date(entry.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : (
-                <div className="text-center py-8">
-                  <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">
-                    Select a shared station to view its activity feed
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ============ HELP TAB ============ */}
-          {tab === "help" && (
-            <div className="space-y-4 text-sm">
-              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-xl">
-                <h3 className="font-semibold text-sky-300 mb-2 flex items-center gap-2">
-                  <ShieldCheck size={16} />
-                  How Station Sharing Works
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300 text-xs leading-relaxed">
-                  A station owner invites you by email. Once you accept, the
-                  station appears in your Network tab and you can switch to it
-                  anytime. Your access level depends on the role assigned by the
-                  owner. All data is stored in the cloud (Supabase) and syncs
-                  across your devices.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wide">
-                  Roles
-                </h4>
-                <RoleHelpRow
-                  icon={<Crown size={14} className="text-amber-400" />}
-                  label="Owner"
-                  desc="Full control — manage members, settings, and data (only the station creator)."
-                />
-                <RoleHelpRow
-                  icon={<Users size={14} className="text-sky-400" />}
-                  label="Manager"
-                  desc="Read-write access to most tabs; can manage shifts, sales, and reports."
-                />
-                <RoleHelpRow
-                  icon={<UserCheck size={14} className="text-emerald-400" />}
-                  label="Staff"
-                  desc="Day-to-day operations — POS, sales tracking, stock adjustments."
-                />
-                <RoleHelpRow
-                  icon={<ShieldCheck size={14} className="text-purple-400" />}
-                  label="Auditor"
-                  desc="Read-only access for review and compliance auditing."
-                />
-              </div>
-
-              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                <p className="text-xs text-amber-300 flex items-start gap-2">
-                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-                  <span>
-                    Only accept invites from station owners you trust. You can
-                    leave a shared station at any time from the Network tab.
-                    Leaving removes your membership permanently (you'll need a
-                    new invite to regain access).
-                  </span>
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200 dark:border-white/10 flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            {ownedStations.length} owned · {sharedStations.length} shared ·{" "}
-            {pendingInvites.length} pending
-          </p>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-
-      {/* Member detail drawer */}
-      {detailStation && (
-        <StationDetailDrawer
-          info={detailStation}
-          onClose={() => setDetailStationId(null)}
-          onAccess={(id) => {
-            setDetailStationId(null);
-            onAccess(id);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function RoleHelpRow({
-  icon,
-  label,
-  desc,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  desc: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
-      <div className="flex-shrink-0 mt-0.5">{icon}</div>
-      <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
-          {label}
-        </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{desc}</p>
-      </div>
-    </div>
-  );
-}
-
-// Pending invite row with Accept + Reject
-function PendingInviteRow({
-  info,
-  onAccept,
-  onReject,
-}: {
-  info: SharedStationInfo;
-  onAccept: (stationId: string) => void;
-  onReject: () => void;
-}) {
-  const [accepting, setAccepting] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleAccept = async () => {
-    if (!info.member?.invite_token) {
-      setError("No invite token found");
-      return;
-    }
-    setAccepting(true);
-    setError("");
-    try {
-      const result = await acceptInvite(info.member.invite_token);
-      if (result.success && result.stationId) {
-        onAccept(result.stationId);
-      } else {
-        setError(result.error || "Failed to accept invite");
-      }
-    } catch (e: any) {
-      setError(e?.message || "An error occurred");
-    } finally {
-      setAccepting(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!info.member?.invite_token) return;
-    setRejecting(true);
-    try {
-      await rejectInvite(info.member.invite_token);
-      onReject();
-    } catch {
-      /* */
-    } finally {
-      setRejecting(false);
-    }
-  };
-
-  return (
-    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-start justify-between gap-3">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div
-          className={`w-10 h-10 rounded-xl ${avatarColor(info.stationName)} flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
-        >
-          {initialsOf(info.stationName)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h4 className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-            {info.stationName}
-          </h4>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <RoleBadge role={info.role} />
-            <span className="text-xs text-amber-400 flex items-center gap-1">
-              <Clock size={11} />
-              Awaiting acceptance
-            </span>
-            {info.invitedBy && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                from {info.invitedBy}
-              </span>
-            )}
-          </div>
-          {error && <p className="text-[10px] text-red-400 mt-1">{error}</p>}
-        </div>
-      </div>
-      <div className="flex flex-col gap-1 flex-shrink-0">
-        <button
-          onClick={handleAccept}
-          disabled={accepting}
-          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
-        >
-          {accepting ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <Check size={13} />
-          )}
-          Accept
-        </button>
-        <button
-          onClick={handleReject}
-          disabled={rejecting}
-          className="px-3 py-1.5 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
-        >
-          {rejecting ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <MailX size={13} />
-          )}
-          Reject
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Slide-over detail drawer for a shared station
-function StationDetailDrawer({
-  info,
-  onClose,
-  onAccess,
-}: {
-  info: SharedStationInfo;
-  onClose: () => void;
-  onAccess: (stationId: string) => void;
-}) {
-  const [drawerActivity, setDrawerActivity] = useState<StationActivityEntry[]>(
-    [],
-  );
-  useEffect(() => {
-    getStationActivity(info.stationId)
-      .then(setDrawerActivity)
-      .catch(() => {});
-  }, [info.stationId]);
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex justify-end bg-black/40"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md h-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl ${avatarColor(info.stationName)} flex items-center justify-center text-white font-bold text-xs`}
-            >
-              {initialsOf(info.stationName)}
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                {info.stationName}
-              </h3>
-              <div className="flex items-center gap-2 mt-0.5">
-                <RoleBadge role={info.role} />
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-5">
-          {/* Membership details */}
-          <div className="space-y-2">
-            <h4 className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
-              Membership
-            </h4>
-            <DetailRow label="Invited by" value={info.invitedBy || "Owner"} />
-            <DetailRow label="Role" value={info.role || "Member"} />
-            <DetailRow label="Status" value={info.status || "accepted"} />
-            <DetailRow
-              label="Last accessed"
-              value={formatLastAccessed(info.lastAccessedAt)}
-            />
-            {info.member?.expires_at && (
-              <DetailRow
-                label="Expires"
-                value={new Date(info.member.expires_at).toLocaleDateString()}
-              />
-            )}
-            {info.member?.tab_grants &&
-              Array.isArray(info.member.tab_grants) &&
-              info.member.tab_grants.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    Allowed tabs
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {info.member.tab_grants.map((t) => (
-                      <span
-                        key={t}
-                        className="px-2 py-0.5 bg-sky-500/20 text-sky-400 rounded text-[10px]"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            {info.member?.notes && (
-              <DetailRow label="Notes" value={info.member.notes} />
-            )}
-          </div>
-
-          <button
-            onClick={() => onAccess(info.stationId)}
-            className="w-full px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-          >
-            <LogIn size={15} />
-            Access Station
-          </button>
-
-          {/* Activity */}
-          <div className="space-y-2">
-            <h4 className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
-              <History size={12} />
-              Recent Activity
-            </h4>
-            {drawerActivity.length === 0 ? (
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                No activity recorded
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {drawerActivity.slice(0, 10).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="text-xs p-2 bg-gray-50 dark:bg-white/5 rounded-lg"
-                  >
-                    <p className="text-gray-900 dark:text-white">
-                      <span className="font-medium">{entry.actorName}</span>{" "}
-                      <span className="text-gray-500 dark:text-gray-400">
-                        {actionLabel(entry.action)}
-                      </span>
-                    </p>
-                    {entry.detail && (
-                      <p className="text-gray-500 dark:text-gray-400 mt-0.5">
-                        {entry.detail}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-gray-500 dark:text-gray-400">{label}</span>
-      <span className="text-gray-900 dark:text-white font-medium text-right max-w-[60%] truncate">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// Combined View Modal
-function CombinedViewModal({
-  stations,
-  combined,
-  onClose,
-}: {
-  stations: any[];
-
-  combined: any;
-  onClose: () => void;
-}) {
-  const totalRevenue = stations.reduce(
-    (sum, s) => sum + stationTotalRevenue(s.data || {}),
-    0,
-  );
-  const todayRevenue = stations.reduce(
-    (sum, s) => sum + stationRevenueSince(s.data || {}, startOfToday()),
-    0,
-  );
-  const monthRevenue = stations.reduce(
-    (sum, s) => sum + stationRevenueSince(s.data || {}, startOfMonth()),
-    0,
-  );
-  const totalSales = stations.reduce(
-    (sum, s) => sum + stationSalesCount(s.data || {}),
-    0,
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-lg p-6`}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
-            <Layers size={20} className="text-amber-400" />
-            Combined Station View
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
-              Today's Revenue
-            </p>
-            <p className="text-xl font-bold text-emerald-400">
-              {formatMoney(todayRevenue)}
-            </p>
-          </div>
-          <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
-              This Month
-            </p>
-            <p className="text-xl font-bold text-sky-400">
-              {formatMoney(monthRevenue)}
-            </p>
-          </div>
-          <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
-              Total Revenue
-            </p>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-              {formatMoney(totalRevenue)}
-            </p>
-          </div>
-          <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
-              Total Sales
-            </p>
-            <p className="text-xl font-bold text-purple-400">{totalSales}</p>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">
-            {stations.length} Stations Combined
-          </h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {stations.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-lg ${avatarColor(s.name)} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white text-xs font-bold`}
-                  >
-                    {initialsOf(s.name)}
-                  </div>
-                  <span className="text-sm text-gray-200">{s.name}</span>
-                </div>
-                <span className="text-sm text-emerald-400 font-medium">
-                  {formatMoney(stationTotalRevenue(s.data || {}))}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl transition-colors"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Confirm Dialog
-function ConfirmDialog({
-  title,
-  message,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-sm p-6`}>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-            <AlertTriangle size={20} className="text-red-400" />
-          </div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            {title}
-          </h2>
-        </div>
-        <p className="text-gray-300 text-sm mb-6">{message}</p>
-        <div className="flex gap-3">
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-6 py-2.5 bg-red-500 hover:bg-red-600 text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-xl transition-colors"
-          >
-            {confirmLabel}
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  lastAccessedAt: string | null;
 }
 
 // ============================================================
-// Main component
+// MAIN COMPONENT
 // ============================================================
-
-/** Country-aware default tax rate (e.g. 16% Kenya, 0% US) */
-function getDefaultTaxRate(): number {
-  try {
-    return Math.round(getVATRate(getDetectedCountryCode()) * 100);
-  } catch {
-    return 0;
-  }
-}
-
-/** Country-aware phone placeholder */
-function getPhonePlaceholder(): string {
-  const cc = getDetectedCountryCode();
-  if (cc === "KE") return "+254 700 000 000";
-  if (cc === "UG") return "+256 700 000 000";
-  if (cc === "TZ") return "+255 700 000 000";
-  if (cc === "NG") return "+234 800 000 0000";
-  if (cc === "ZA") return "+27 82 000 0000";
-  if (cc === "GB") return "+44 7700 000000";
-  return "Enter phone number";
-}
-
-const EMPTY_FORM = {
-  name: "",
-  location: "",
-  phone: "",
-  email: "",
-  kraPin: "",
-  etrSerial: "",
-  taxRate: getDefaultTaxRate(),
-  theme: "dark",
-  description: "",
-};
-
-type FilterStatus = "all" | "active" | "inactive" | "maintenance";
-type SortBy = "name" | "revenue" | "recent" | "oldest";
-type SubTab = "stations" | "shared" | "analytics" | "activity";
 
 export default function StationManager({ onClose }: StationManagerProps) {
   const {
@@ -1975,11 +1087,6 @@ export default function StationManager({ onClose }: StationManagerProps) {
     updateStation,
     deleteStation,
     switchStation,
-    shareStation,
-    revokeAccess,
-    changeStationPassword,
-    combineStations,
-    addUpdateRecord,
     isAdmin,
     isStationLoading,
     isBackendSyncing,
@@ -1990,85 +1097,111 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
   const { user, bindings } = useAuth();
 
-  const navigate = useNavigate();
-
   // UI state
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
-  const [sortBy, setSortBy] = useState<SortBy>("recent");
+  const [sortBy, setSortBy] = useState<SortBy>(
+    () => (localStorage.getItem(STATION_SORT_PREF_KEY) as SortBy) || "recent",
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("stations");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(
+    () => (localStorage.getItem(SUBTAB_KEY) as SubTab) || "overview",
+  );
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedStationIds, setSelectedStationIds] = useState<Set<string>>(
     new Set(),
   );
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [defaultStationId, setDefaultStationId] = useState<string | null>(() =>
+    localStorage.getItem(DEFAULT_STATION_KEY),
+  );
+  const [networkRefreshKey, setNetworkRefreshKey] = useState(0);
 
   // Modal state
   const [modal, setModal] = useState<{
-    type:
-      | "create"
-      | "edit"
-      | "share"
-      | "access"
-      | "access-shared"
-      | "combined"
-      | "delete";
+    type: "create" | "edit" | "share" | "qr" | "delete" | "clone";
     station?: any;
   } | null>(null);
 
   // Form state
   const [editForm, setEditForm] = useState<any>(EMPTY_FORM);
 
-  // Shared/pending station data for the "Access Another Station" modal.
-  // SharedStations: stations the user is an accepted member of (from the
-  // station_members DB table). pendingInvites: invites awaiting acceptance
-  // (invited_email = user.email, status = pending). Both are loaded async
-  // from Supabase and refreshed on demand (onInvitesChanged).
+  // Network data
   const [sharedStations, setSharedStations] = useState<SharedStationInfo[]>([]);
   const [pendingInvites, setPendingInvites] = useState<SharedStationInfo[]>([]);
-  const [invitesVersion, setInvitesVersion] = useState(0);
+  const [inviteLinkInput, setInviteLinkInput] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
 
+  // Activity log
+  const [activityEntries, setActivityEntries] = useState<
+    StationActivityEntry[]
+  >([]);
+  const [activityFilterStation, setActivityFilterStation] =
+    useState<string>("all");
+  const [activityFilterAction, setActivityFilterAction] =
+    useState<string>("all");
+
+  const showNotice = useCallback((msg: string) => {
+    setNotice(msg);
+    setTimeout(() => setNotice(null), 3000);
+  }, []);
+
+  // Persist sub-tab + sort pref
+  useEffect(() => {
+    localStorage.setItem(SUBTAB_KEY, activeSubTab);
+  }, [activeSubTab]);
+  useEffect(() => {
+    localStorage.setItem(STATION_SORT_PREF_KEY, sortBy);
+  }, [sortBy]);
+
+  // Load favorites
+  useEffect(() => {
+    if (user?.id) {
+      getFavorites()
+        .then((ids) => setFavorites(new Set(ids)))
+        .catch(() => {});
+    }
+  }, [user?.id]);
+
+  // ---- Network: shared + pending invites ----
   const loadSharedAndPending = useCallback(async () => {
     if (!user?.id) return;
-    // Shared (accepted) stations — from station_members DB + AuthContext bindings
-    const members = await getSharedStations();
-    const fromBindings: SharedStationInfo[] = bindings
-      .filter((b) => b.active)
-      .map((b) => ({
-        stationId: b.stationId,
-        stationName: b.stationName,
-        role: b.role,
-        invitedBy: b.invitedBy,
-        status: "accepted",
-        member: members.find((m) => m.station_id === b.stationId) || null,
-        lastAccessedAt:
-          members.find((m) => m.station_id === b.stationId)?.last_accessed_at ||
-          null,
-      }));
-    const fromMembers: SharedStationInfo[] = members
-      .filter((m) => !fromBindings.some((b) => b.stationId === m.station_id))
-      .map((m) => ({
-        stationId: m.station_id,
-        stationName: m.name || "Shared Station",
-        role: m.role,
-        invitedBy: m.invited_by_name || m.invited_by_unique_id || "Owner",
-        status: m.status,
-        member: m,
-        lastAccessedAt: m.last_accessed_at || null,
-      }));
-    // Deduplicate by stationId
-    const seen = new Set<string>();
-    const shared = [...fromBindings, ...fromMembers].filter((s) => {
-      if (seen.has(s.stationId)) return false;
-      seen.add(s.stationId);
-      return true;
-    });
-    setSharedStations(shared);
-
-    // Pending invites — via the dedicated service function (returns rows with
-    // the station name joined so the UI can render it without an extra fetch).
     try {
+      const members = await getSharedStations();
+      const fromBindings: SharedStationInfo[] = bindings
+        .filter((b) => b.active)
+        .map((b) => ({
+          stationId: b.stationId,
+          stationName: b.stationName,
+          role: b.role,
+          invitedBy: b.invitedBy,
+          status: "accepted",
+          member: members.find((m) => m.station_id === b.stationId) || null,
+          lastAccessedAt:
+            members.find((m) => m.station_id === b.stationId)
+              ?.last_accessed_at || null,
+        }));
+      const fromMembers: SharedStationInfo[] = members
+        .filter((m) => !fromBindings.some((b) => b.stationId === m.station_id))
+        .map((m) => ({
+          stationId: m.station_id,
+          stationName: m.name || "Shared Station",
+          role: m.role,
+          invitedBy: m.invited_by_name || m.invited_by_unique_id || "Owner",
+          status: m.status,
+          member: m,
+          lastAccessedAt: m.last_accessed_at || null,
+        }));
+      const seen = new Set<string>();
+      const shared = [...fromBindings, ...fromMembers].filter((s) => {
+        if (seen.has(s.stationId)) return false;
+        seen.add(s.stationId);
+        return true;
+      });
+      setSharedStations(shared);
+
       const pendingRows = await getPendingInvites();
       const pending: SharedStationInfo[] = pendingRows.map((row) => ({
         stationId: row.station_id,
@@ -2082,24 +1215,63 @@ export default function StationManager({ onClose }: StationManagerProps) {
       }));
       setPendingInvites(pending);
     } catch (err) {
-      console.warn("[StationManager] Failed to load pending invites:", err);
+      console.warn("[StationManager] Failed to load shared/pending:", err);
     }
-  }, [user?.id, user?.email, bindings]);
+  }, [user?.id, bindings]); // user?.email intentionally excluded (not read in body)
 
-  // Load shared/pending station data when the modal opens or invites are refreshed
   useEffect(() => {
-    if (modal?.type === "access-shared" || invitesVersion > 0) {
+    if (activeSubTab === "network" || pendingInvites.length > 0) {
       loadSharedAndPending();
     }
-  }, [modal?.type, invitesVersion, loadSharedAndPending]);
+  }, [
+    activeSubTab,
+    networkRefreshKey,
+    loadSharedAndPending,
+    pendingInvites.length,
+  ]);
 
-  // Show notice
-  const showNotice = useCallback((msg: string) => {
-    setNotice(msg);
-    setTimeout(() => setNotice(null), 3000);
-  }, []);
+  // Real-time: subscribe to membership changes so invites appear instantly
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = subscribeToMyMemberships(user.id, () => {
+      setNetworkRefreshKey((k) => k + 1);
+    });
+    return unsub;
+  }, [user?.id]);
 
-  // Computed stats
+  // ---- Activity log: load across all owned stations ----
+  useEffect(() => {
+    if (activeSubTab !== "activity") return;
+    const loadAll = async () => {
+      const all: StationActivityEntry[] = [];
+      for (const s of ownedStations) {
+        try {
+          const entries = await getStationActivity(s.id);
+          all.push(...entries);
+        } catch {
+          /* skip */
+        }
+      }
+      // Also include shared stations' activity
+      for (const sh of sharedStations) {
+        try {
+          const entries = await getStationActivity(sh.stationId);
+          all.push(...entries);
+        } catch {
+          /* skip */
+        }
+      }
+      all.sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
+      setActivityEntries(all.slice(0, 200));
+    };
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubTab, networkRefreshKey]);
+
+  // ---- Computed stats ----
   const stats = useMemo(() => {
     const totalRev = stations.reduce(
       (sum, s) => sum + stationTotalRevenue(s.data || {}),
@@ -2114,18 +1286,29 @@ export default function StationManager({ onClose }: StationManagerProps) {
         (s.data?.sharedUsers || []).map((u: any) => u.email),
       ),
     ).size;
-    return {
-      totalRevenue: totalRev,
-      todayRevenue: todayRev,
-      sharedUsers,
-    };
+    return { totalRevenue: totalRev, todayRevenue: todayRev, sharedUsers };
   }, [stations]);
 
-  // Filtered & sorted stations
-  const visibleStations = useMemo(() => {
-    let result = [...stations];
+  // ---- Owned vs shared split ----
+  const ownedStations = useMemo(() => {
+    return stations.filter((s) => {
+      if (s.ownerId && user?.id && s.ownerId === user.id) return true;
+      const binding = bindings.find((b) => b.stationId === s.id);
+      if (binding && binding.role === "owner") return true;
+      if (!binding && !s.ownerId) return true;
+      if (s.ownerId && user?.id && s.ownerId !== user.id) return false;
+      if (binding && binding.role !== "owner") return false;
+      return true;
+    });
+  }, [stations, user?.id, bindings]);
 
-    // Filter by search
+  const sharedStationsFromContext = useMemo(() => {
+    return stations.filter((s) => !ownedStations.includes(s));
+  }, [stations, ownedStations]);
+
+  // ---- Filtered & sorted stations ----
+  const visibleStations = useMemo(() => {
+    let result = [...ownedStations];
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -2136,13 +1319,11 @@ export default function StationManager({ onClose }: StationManagerProps) {
           s.email?.toLowerCase().includes(q),
       );
     }
-
-    // Filter by status
-    if (filterStatus !== "all") {
+    if (filterStatus === "favorites") {
+      result = result.filter((s) => favorites.has(s.id));
+    } else if (filterStatus !== "all") {
       result = result.filter((s) => stationStatus(s.data) === filterStatus);
     }
-
-    // Sort
     result.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "revenue")
@@ -2159,11 +1340,65 @@ export default function StationManager({ onClose }: StationManagerProps) {
         new Date(b.updatedAt || 0).getTime()
       );
     });
-
     return result;
-  }, [stations, search, filterStatus, sortBy]);
+  }, [ownedStations, search, filterStatus, sortBy, favorites]);
 
-  // Handlers
+  // ---- Station analytics ----
+  const stationAnalytics = useMemo(() => {
+    return ownedStations
+      .map((s) => {
+        const data = s.data || {};
+        const totalRev = stationTotalRevenue(data);
+        const todayRev = stationRevenueSince(data, startOfToday());
+        const monthRev = stationRevenueSince(data, startOfMonth());
+        const sales = stationSalesCount(data);
+        const status = stationStatus(data);
+        const sharedCount = (data.sharedUsers || []).length;
+        let healthScore = 50;
+        if (status === "active") healthScore += 20;
+        if (status === "maintenance") healthScore += 5;
+        if (sales > 0) healthScore += 15;
+        if (todayRev > 0) healthScore += 15;
+        healthScore = Math.min(100, healthScore);
+        const healthLabel =
+          healthScore >= 80
+            ? "Excellent"
+            : healthScore >= 60
+              ? "Good"
+              : healthScore >= 40
+                ? "Fair"
+                : "Needs Attention";
+        return {
+          station: s,
+          totalRev,
+          todayRev,
+          monthRev,
+          sales,
+          status,
+          sharedCount,
+          healthScore,
+          healthLabel,
+        };
+      })
+      .sort((a, b) => b.totalRev - a.totalRev);
+  }, [ownedStations]);
+
+  const topStation = stationAnalytics[0] || null;
+  const avgRevenue =
+    ownedStations.length > 0 ? stats.totalRevenue / ownedStations.length : 0;
+  const totalSales = stationAnalytics.reduce((sum, a) => sum + a.sales, 0);
+  const activeCount = stationAnalytics.filter(
+    (a) => a.status === "active",
+  ).length;
+  const avgHealth =
+    stationAnalytics.length > 0
+      ? Math.round(
+          stationAnalytics.reduce((sum, a) => sum + a.healthScore, 0) /
+            stationAnalytics.length,
+        )
+      : 0;
+
+  // ---- Handlers ----
   const openCreate = useCallback(() => setModal({ type: "create" }), []);
   const closeModal = useCallback(() => setModal(null), []);
 
@@ -2201,6 +1436,16 @@ export default function StationManager({ onClose }: StationManagerProps) {
         updateStation(modal.station.id, formData);
         showNotice(`Station "${formData.name}" updated`);
         closeModal();
+      } else if (modal?.type === "clone" && modal.station) {
+        const cloned = createStation({
+          ...formData,
+          name: `${formData.name} (Copy)`,
+          data: modal.station.data
+            ? JSON.parse(JSON.stringify(modal.station.data))
+            : {},
+        });
+        showNotice(`Station cloned as "${cloned.name}"`);
+        closeModal();
       }
     },
     [modal, createStation, updateStation, showNotice, closeModal],
@@ -2210,144 +1455,235 @@ export default function StationManager({ onClose }: StationManagerProps) {
     setModal({ type: "share", station });
   }, []);
 
-  const handleShare = useCallback(
-    (email: string, password: string) => {
-      if (modal?.station && email && password) {
-        shareStation(modal.station.id, email, password);
-        showNotice(`Access shared with ${email}`);
-        closeModal();
+  const handleInvite = useCallback(
+    async (email: string, role: string, name?: string) => {
+      if (!modal?.station || !user?.id) return;
+      const result = await inviteMember(modal.station.id, email, role, name, {
+        invitedByUserId: user.id,
+        invitedByName: user.email || "Owner",
+      });
+      if (!result.success) throw new Error(result.error);
+      showNotice(`Invite sent to ${email}`);
+    },
+    [modal?.station, user?.id, user?.email, showNotice],
+  );
+
+  const handleRevokeMember = useCallback(
+    async (memberId: string) => {
+      const result = await revokeMember(memberId);
+      if (!result.success) {
+        showNotice(`Failed to revoke: ${result.error}`);
+        return;
       }
+      showNotice("Member revoked");
     },
-    [modal, shareStation, showNotice, closeModal],
+    [showNotice],
   );
 
-  const handleRevoke = useCallback(
-    (email: string) => {
-      if (modal?.station) {
-        revokeAccess(modal.station.id, email);
-        showNotice(`Access revoked for ${email}`);
-      }
-    },
-    [modal, revokeAccess, showNotice],
-  );
-
-  const handleAccessStation = useCallback(
-    (stationId: string, password: string) => {
-      switchStation(stationId);
-      showNotice("Station accessed successfully");
-      closeModal();
-      if (onClose) onClose();
-    },
-    [switchStation, showNotice, closeModal, onClose],
-  );
-
-  // Access a shared/member station — switches to it (the station is already
-  // loaded into StationContext.stations by the member-stations query).
   const handleAccessSharedStation = useCallback(
     (stationId: string) => {
       const station = stations.find((s) => s.id === stationId);
       switchStation(stationId);
-      // Record last-accessed-at on the membership row so the Network tab can
-      // show "last active" + log an activity entry for the shared station.
       if (station?.ownerId && user?.id && station.ownerId !== user.id) {
-        import("@/react-app/lib/station-share-service").then(
-          ({ recordStationActivity }) => {
-            recordStationActivity(stationId, {
-              actorId: user.id,
-              actorName: user.email || "Member",
-              action: "access_recorded",
-              detail: `Accessed ${station.name}`,
-            }).catch(() => {});
-          },
-        );
+        recordStationActivity(stationId, {
+          actorId: user.id,
+          actorName: user.email || "Member",
+          action: "access_recorded",
+          detail: `Accessed ${station.name}`,
+        }).catch(() => {});
       }
       showNotice(
         station
           ? `Switched to ${station.name}${station.ownerId && station.ownerId !== user?.id ? " (shared)" : ""}`
-          : "Station accessed successfully",
+          : "Station accessed",
       );
-      closeModal();
       if (onClose) onClose();
     },
-    [
-      stations,
-      switchStation,
-      showNotice,
-      closeModal,
-      onClose,
-      user?.id,
-      user?.email,
-    ],
+    [stations, switchStation, showNotice, onClose, user?.id, user?.email],
   );
 
-  // Derived: split stations into owned vs shared (member) stations using the
-  // ownerId field (set by stationRowToStation) or the AuthContext bindings.
-  const ownedStations = useMemo(() => {
-    return stations.filter((s) => {
-      // If ownerId is known and matches the current user, it's owned
-      if (s.ownerId && user?.id && s.ownerId === user.id) return true;
-      // If there's a binding for this station with role "owner", it's owned
-      const binding = bindings.find((b) => b.stationId === s.id);
-      if (binding && binding.role === "owner") return true;
-      // If there's no binding at all AND ownerId is falsy, assume owned
-      // (member stations have a non-matching ownerId or a non-owner binding)
-      if (!binding && !s.ownerId) return true;
-      // If ownerId is set but doesn't match the user, it's shared (not owned)
-      if (s.ownerId && user?.id && s.ownerId !== user.id) return false;
-      // If there's a binding with a non-owner role, it's shared
-      if (binding && binding.role !== "owner") return false;
-      return true;
-    });
-  }, [stations, user?.id, bindings]);
-
-  const sharedStationsFromContext = useMemo(() => {
-    return stations.filter((s) => !ownedStations.includes(s));
-  }, [stations, ownedStations]);
-
-  // Leave a shared station — removes the user's membership from station_members
   const handleLeaveSharedStation = useCallback(
     async (stationId: string, stationName: string) => {
       if (
         !confirm(
           `Leave "${stationName}"? You will no longer have access to this shared station.`,
         )
-      ) {
+      )
         return;
-      }
       try {
-        // Find the membership record to revoke
         const members = await getSharedStations();
         const member = members.find((m) => m.station_id === stationId);
         if (member) {
-          const result = await revokeMember(member.id);
+          const result = await leaveStation(member.id);
           if (!result.success) {
             showNotice(`Failed to leave: ${result.error}`);
             return;
           }
         }
-        // If we're currently on the station being left, switch to the first owned station
         if (currentStation?.id === stationId) {
           const firstOwned = ownedStations[0];
-          if (firstOwned) {
-            switchStation(firstOwned.id);
-          }
+          if (firstOwned) switchStation(firstOwned.id);
         }
         showNotice(`Left "${stationName}"`);
-        setInvitesVersion((v) => v + 1);
+        setNetworkRefreshKey((k) => k + 1);
       } catch (e: any) {
-        showNotice(`Failed to leave station: ${e?.message || "error"}`);
+        showNotice(`Failed to leave: ${e?.message || "error"}`);
       }
     },
     [currentStation?.id, ownedStations, switchStation, showNotice],
   );
 
-  const handleExport = useCallback(
-    (station: any) => {
-      downloadJson(`${station.name.replace(/\s+/g, "_")}_export.json`, station);
-      showNotice("Station data exported");
+  const handleAcceptPending = useCallback(
+    async (memberId: string, stationName: string) => {
+      try {
+        const member = pendingInvites.find((p) => p.member?.id === memberId);
+        const token = member?.member?.invite_token;
+        if (!token) {
+          showNotice("Invalid invite");
+          return;
+        }
+        const result = await acceptInvite(token);
+        if (!result.success) {
+          showNotice(`Failed: ${result.error}`);
+          return;
+        }
+        showNotice(`Accepted invite to ${stationName}`);
+        setNetworkRefreshKey((k) => k + 1);
+      } catch (e: any) {
+        showNotice(`Failed: ${e?.message || "error"}`);
+      }
+    },
+    [pendingInvites, showNotice],
+  );
+
+  const handleDeclinePending = useCallback(
+    async (memberId: string) => {
+      try {
+        const result = await declineInvite(memberId);
+        if (!result.success) {
+          showNotice(`Failed: ${result.error}`);
+          return;
+        }
+        showNotice("Invite declined");
+        setNetworkRefreshKey((k) => k + 1);
+      } catch (e: any) {
+        showNotice(`Failed: ${e?.message || "error"}`);
+      }
     },
     [showNotice],
   );
+
+  const handleJoinByLink = useCallback(async () => {
+    const input = inviteLinkInput.trim();
+    if (!input) {
+      setInviteError("Paste an invite link or token");
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError(null);
+    try {
+      let token = input;
+      const match = input.match(/[?&]invite=([^&]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+      const result = await acceptInvite(token);
+      if (!result.success) {
+        setInviteError(result.error || "Invalid or expired invite link");
+        return;
+      }
+      showNotice("Invite accepted! Switching to station...");
+      setInviteLinkInput("");
+      setNetworkRefreshKey((k) => k + 1);
+      if (result.stationId) {
+        setTimeout(() => handleAccessSharedStation(result.stationId!), 800);
+      }
+    } catch (e: any) {
+      setInviteError(e?.message || "Invalid or expired invite link");
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [inviteLinkInput, showNotice, handleAccessSharedStation]);
+
+  const handleToggleFavorite = useCallback(
+    async (stationId: string) => {
+      const next = new Set(favorites);
+      if (next.has(stationId)) next.delete(stationId);
+      else next.add(stationId);
+      setFavorites(next);
+      try {
+        await toggleFavorite(stationId);
+      } catch {
+        /* offline ok */
+      }
+    },
+    [favorites],
+  );
+
+  const handleSetDefault = useCallback(
+    (stationId: string) => {
+      const station = stations.find((s) => s.id === stationId);
+      if (!station) return;
+      localStorage.setItem(DEFAULT_STATION_KEY, stationId);
+      setDefaultStationId(stationId);
+      showNotice(`"${station.name}" set as default station`);
+    },
+    [stations, showNotice],
+  );
+
+  const handleClone = useCallback((station: any) => {
+    setEditForm({
+      name: station.name,
+      location: station.location || "",
+      phone: station.phone || "",
+      email: station.email || "",
+      kraPin: station.kraPin || "",
+      etrSerial: station.etrSerial || "",
+      taxRate: station.taxRate ?? getDefaultTaxRate(),
+      theme: station.theme || "dark",
+      description: station.description || "",
+    });
+    setModal({ type: "clone", station });
+  }, []);
+
+  const handleExport = useCallback(
+    (station: any) => {
+      downloadJson(`${station.name.replace(/\s+/g, "_")}_export.json`, station);
+      showNotice("Station data exported (JSON)");
+    },
+    [showNotice],
+  );
+
+  const handleExportCsv = useCallback(() => {
+    const rows: (string | number)[][] = [
+      [
+        "Station",
+        "Location",
+        "Status",
+        "Today Revenue",
+        "Month Revenue",
+        "Total Revenue",
+        "Sales Count",
+        "Shared Users",
+        "Health Score",
+        "Last Updated",
+      ],
+    ];
+    stationAnalytics.forEach((a) => {
+      rows.push([
+        a.station.name,
+        a.station.location || "",
+        a.status,
+        a.todayRev,
+        a.monthRev,
+        a.totalRev,
+        a.sales,
+        a.sharedCount,
+        `${a.healthScore}%`,
+        a.station.updatedAt || "",
+      ]);
+    });
+    downloadCsv(`stations_${Date.now()}.csv`, rows);
+    showNotice("Stations exported (CSV)");
+  }, [stationAnalytics, showNotice]);
 
   const handleDeleteOpen = useCallback((station: any) => {
     setModal({ type: "delete", station });
@@ -2357,9 +1693,13 @@ export default function StationManager({ onClose }: StationManagerProps) {
     if (modal?.station) {
       deleteStation(modal.station.id);
       showNotice(`Station "${modal.station.name}" deleted`);
+      if (defaultStationId === modal.station.id) {
+        localStorage.removeItem(DEFAULT_STATION_KEY);
+        setDefaultStationId(null);
+      }
       closeModal();
     }
-  }, [modal, deleteStation, showNotice, closeModal]);
+  }, [modal, deleteStation, showNotice, closeModal, defaultStationId]);
 
   const handleToggleStatus = useCallback(
     (station: any) => {
@@ -2385,7 +1725,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
       await syncToBackend();
       await syncFromBackend();
       showNotice("Sync completed");
-    } catch (e) {
+    } catch {
       showNotice("Sync failed");
     } finally {
       setSyncing(false);
@@ -2418,21 +1758,6 @@ export default function StationManager({ onClose }: StationManagerProps) {
     setSelectedStationIds(new Set());
   }, [stations, selectedStationIds, showNotice]);
 
-  const handleBulkSync = useCallback(async () => {
-    setSyncing(true);
-    try {
-      await syncToBackend();
-      await syncFromBackend();
-      showNotice(`Synced ${selectedStationIds.size} stations`);
-    } catch {
-      showNotice("Bulk sync failed");
-    } finally {
-      setSyncing(false);
-      setBulkSelectMode(false);
-      setSelectedStationIds(new Set());
-    }
-  }, [syncToBackend, syncFromBackend, selectedStationIds.size, showNotice]);
-
   const handleBulkActivate = useCallback(() => {
     selectedStationIds.forEach((id) => {
       const station = stations.find((s) => s.id === id);
@@ -2448,144 +1773,131 @@ export default function StationManager({ onClose }: StationManagerProps) {
     setSelectedStationIds(new Set());
   }, [selectedStationIds, stations, updateStation, showNotice]);
 
-  // Analytics: per-station health + comparison
-  const stationAnalytics = useMemo(() => {
-    return stations
-      .map((s) => {
-        const data = s.data || {};
-        const totalRev = stationTotalRevenue(data);
-        const todayRev = stationRevenueSince(data, startOfToday());
-        const monthRev = stationRevenueSince(data, startOfMonth());
-        const sales = stationSalesCount(data);
-        const status = stationStatus(data);
-        const sharedCount = (data.sharedUsers || []).length;
-        // Health score: simple heuristic based on sales + revenue recency
-        let healthScore = 50;
-        if (status === "active") healthScore += 20;
-        if (status === "maintenance") healthScore += 5;
-        if (sales > 0) healthScore += 15;
-        if (todayRev > 0) healthScore += 15;
-        healthScore = Math.min(100, healthScore);
-        const healthLabel =
-          healthScore >= 80
-            ? "Excellent"
-            : healthScore >= 60
-              ? "Good"
-              : healthScore >= 40
-                ? "Fair"
-                : "Needs Attention";
-        return {
-          station: s,
-          totalRev,
-          todayRev,
-          monthRev,
-          sales,
-          status,
-          sharedCount,
-          healthScore,
-          healthLabel,
-        };
-      })
-      .sort((a, b) => b.totalRev - a.totalRev);
-  }, [stations]);
+  // ---- Sub-tab config ----
+  const subTabs: {
+    id: SubTab;
+    label: string;
+    icon: any;
+    count?: number;
+  }[] = [
+    { id: "overview", label: "Overview", icon: Gauge },
+    {
+      id: "stations",
+      label: "Stations",
+      icon: Layers,
+      count: ownedStations.length,
+    },
+    {
+      id: "network",
+      label: "Network",
+      icon: Building2,
+      count: sharedStations.length + pendingInvites.length,
+    },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    { id: "activity", label: "Activity", icon: Activity },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
+  ];
 
-  // Top performing station
-  const topStation = stationAnalytics[0] || null;
-  const avgRevenue =
-    stations.length > 0 ? stats.totalRevenue / stations.length : 0;
-  const totalSales = stationAnalytics.reduce((sum, a) => sum + a.sales, 0);
-  const activeCount = stationAnalytics.filter(
-    (a) => a.status === "active",
-  ).length;
-  const avgHealth =
-    stationAnalytics.length > 0
-      ? Math.round(
-          stationAnalytics.reduce((sum, a) => sum + a.healthScore, 0) /
-            stationAnalytics.length,
-        )
-      : 0;
+  // ---- Activity filtered ----
+  const filteredActivity = useMemo(() => {
+    let result = [...activityEntries];
+    if (activityFilterStation !== "all") {
+      result = result.filter((e) => e.stationId === activityFilterStation);
+    }
+    if (activityFilterAction !== "all") {
+      result = result.filter((e) => e.action === activityFilterAction);
+    }
+    return result;
+  }, [activityEntries, activityFilterStation, activityFilterAction]);
 
-  const combined = combineStations();
+  // ---- Recent activity (for overview) ----
+  const recentActivity = useMemo(
+    () => activityEntries.slice(0, 5),
+    [activityEntries],
+  );
+
+  // Load activity for overview tab too
+  useEffect(() => {
+    if (activeSubTab === "overview" && activityEntries.length === 0) {
+      const loadAll = async () => {
+        const all: StationActivityEntry[] = [];
+        for (const s of ownedStations.slice(0, 5)) {
+          try {
+            const entries = await getStationActivity(s.id);
+            all.push(...entries);
+          } catch {
+            /* skip */
+          }
+        }
+        all.sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
+        setActivityEntries(all.slice(0, 50));
+      };
+      loadAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubTab]);
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-gray-900 dark:text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-gray-900 dark:text-white">
       {/* Header */}
-      <header className="bg-gray-50 dark:bg-white/5 backdrop-blur-lg border-b border-gray-200 dark:border-white/10 px-6 py-4 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <header className="bg-gray-50 dark:bg-white/5 backdrop-blur-lg border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 py-4 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {onClose && (
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors flex-shrink-0"
               >
                 <ArrowLeft size={18} />
               </button>
             )}
-            <div>
-              <h1 className="text-xl font-bold font-serif flex items-center gap-2">
-                <Layers size={20} className="text-amber-400" />
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2 truncate">
+                <Layers size={20} className="text-amber-400 flex-shrink-0" />
                 Station Manager
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                 {ownedStations.length} owned ·{" "}
                 {sharedStationsFromContext.length} shared | Manage access & data
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {stations.length > 0 && (
-              <>
-                <button
-                  onClick={() => setModal({ type: "combined" })}
-                  className="px-4 py-2 bg-amber-500/20 text-amber-300 rounded-lg text-sm flex items-center gap-2 hover:bg-amber-500/30 transition-colors"
-                >
-                  <Layers size={14} />
-                  Combined View
-                </button>
-                <button
-                  onClick={handleSyncNow}
-                  disabled={syncing || isBackendSyncing}
-                  className="px-4 py-2 bg-sky-500/20 text-sky-300 rounded-lg text-sm flex items-center gap-2 hover:bg-sky-500/30 transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw
-                    size={14}
-                    className={
-                      syncing || isBackendSyncing ? "animate-spin" : ""
-                    }
-                  />
-                  Sync Now
-                </button>
-              </>
+              <button
+                onClick={handleSyncNow}
+                disabled={syncing || isBackendSyncing}
+                className="px-3 py-2 bg-sky-500/20 text-sky-300 rounded-lg text-sm flex items-center gap-2 hover:bg-sky-500/30 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={14}
+                  className={syncing || isBackendSyncing ? "animate-spin" : ""}
+                />
+                <span className="hidden sm:inline">Sync Now</span>
+              </button>
             )}
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Sub-tab navigation */}
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 overflow-x-auto">
-          {[
-            { id: "stations" as const, label: "My Stations", icon: Layers },
-            {
-              id: "shared" as const,
-              label: "Shared With Me",
-              icon: Building2,
-              count: sharedStationsFromContext.length,
-            },
-            { id: "analytics" as const, label: "Analytics", icon: BarChart3 },
-            {
-              id: "activity" as const,
-              label: "Activity & Health",
-              icon: Activity,
-            },
-          ].map((tab) => {
+          {subTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
                   isActive
                     ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm"
                     : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
@@ -2603,37 +1915,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
           })}
         </div>
 
-        {/* Stat cards (always visible) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            label="Your Stations"
-            value={String(ownedStations.length)}
-            icon={Layers}
-            accent="text-amber-400"
-          />
-          <StatCard
-            label="Combined Revenue"
-            value={formatMoney(stats.totalRevenue)}
-            icon={TrendingUp}
-            accent="text-emerald-400"
-          />
-          <StatCard
-            label="Today's Revenue"
-            value={formatMoney(stats.todayRevenue)}
-            icon={Calendar}
-            accent="text-sky-400"
-          />
-          <StatCard
-            label="Shared With You"
-            value={String(sharedStationsFromContext.length)}
-            icon={Building2}
-            accent="text-sky-400"
-          />
-        </div>
-
         {/* Sync status bar */}
         {lastBackendSync && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             {isBackendSyncing || syncing ? (
               <>
                 <RefreshCw size={12} className="animate-spin text-sky-400" />
@@ -2648,12 +1932,266 @@ export default function StationManager({ onClose }: StationManagerProps) {
           </div>
         )}
 
+        {/* ===================== OVERVIEW SUB-TAB ===================== */}
+        {activeSubTab === "overview" && (
+          <div className="space-y-6">
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                label="Your Stations"
+                value={String(ownedStations.length)}
+                icon={Layers}
+                accent="text-amber-400"
+              />
+              <StatCard
+                label="Combined Revenue"
+                value={formatMoney(stats.totalRevenue)}
+                icon={TrendingUp}
+                accent="text-emerald-400"
+              />
+              <StatCard
+                label="Today's Revenue"
+                value={formatMoney(stats.todayRevenue)}
+                icon={Calendar}
+                accent="text-sky-400"
+              />
+              <StatCard
+                label="Avg Health"
+                value={`${avgHealth}%`}
+                icon={Gauge}
+                accent={avgHealth >= 60 ? "text-emerald-400" : "text-amber-400"}
+              />
+            </div>
+
+            {/* Quick actions */}
+            <SectionHeader icon={Zap} title="Quick Actions" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <button
+                onClick={openCreate}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <Plus size={20} className="text-emerald-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Create Station
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveSubTab("network")}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <Building2 size={20} className="text-sky-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Access Shared
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveSubTab("analytics")}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <BarChart3 size={20} className="text-purple-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  View Analytics
+                </span>
+              </button>
+              <button
+                onClick={handleSyncNow}
+                disabled={syncing}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center disabled:opacity-50`}
+              >
+                <RefreshCw
+                  size={20}
+                  className={`text-sky-400 ${syncing ? "animate-spin" : ""}`}
+                />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Sync Now
+                </span>
+              </button>
+              <button
+                onClick={handleExportCsv}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <FileDown size={20} className="text-blue-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Export CSV
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveSubTab("activity")}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <Activity size={20} className="text-amber-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Activity Log
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveSubTab("settings")}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <SettingsIcon size={20} className="text-gray-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Settings
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  if (currentStation) handleOpenStation(currentStation);
+                }}
+                disabled={!currentStation}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center disabled:opacity-50`}
+              >
+                <LogIn size={20} className="text-emerald-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Open Current
+                </span>
+              </button>
+            </div>
+
+            {/* Two-column: recent activity + sync status */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Recent activity */}
+              <div>
+                <SectionHeader
+                  icon={Activity}
+                  title="Recent Activity"
+                  action={
+                    <button
+                      onClick={() => setActiveSubTab("activity")}
+                      className="text-xs text-sky-400 hover:underline"
+                    >
+                      View all
+                    </button>
+                  }
+                />
+                <div className={`${GLASS_CARD} p-4 space-y-2`}>
+                  {recentActivity.length === 0 ? (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
+                      No recent activity
+                    </p>
+                  ) : (
+                    recentActivity.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="text-xs p-2 bg-gray-100 dark:bg-white/5 rounded-lg"
+                      >
+                        <p className="text-gray-900 dark:text-white">
+                          <span className="font-medium">{entry.actorName}</span>{" "}
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {actionLabel(entry.action)}
+                          </span>
+                        </p>
+                        {entry.detail && (
+                          <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                            {entry.detail}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          {relativeTime(entry.timestamp)}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Sync status */}
+              <div>
+                <SectionHeader icon={Cloud} title="Sync Status" />
+                <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                      {isBackendSyncing ? (
+                        <WifiOff size={12} className="text-amber-400" />
+                      ) : (
+                        <Wifi size={12} className="text-emerald-400" />
+                      )}
+                      Backend Sync
+                    </span>
+                    <span
+                      className={
+                        isBackendSyncing ? "text-amber-400" : "text-emerald-400"
+                      }
+                    >
+                      {isBackendSyncing ? "In progress" : "Idle"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Last Sync
+                    </span>
+                    <span className="text-gray-900 dark:text-white">
+                      {lastBackendSync
+                        ? relativeTime(lastBackendSync)
+                        : "Never"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Admin Mode
+                    </span>
+                    <span
+                      className={isAdmin ? "text-emerald-400" : "text-gray-500"}
+                    >
+                      {isAdmin ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Default Station
+                    </span>
+                    <span className="text-gray-900 dark:text-white truncate max-w-[50%]">
+                      {defaultStationId
+                        ? stations.find((s) => s.id === defaultStationId)
+                            ?.name || "Set"
+                        : "Not set"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Top performer */}
+            {topStation && (
+              <div className={`${GLASS_CARD} p-5`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Crown size={18} className="text-amber-400" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Top Performing Station
+                  </h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-14 h-14 rounded-xl ${avatarColor(topStation.station.name)} flex items-center justify-center text-white font-bold`}
+                  >
+                    {initialsOf(topStation.station.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-900 dark:text-white truncate">
+                      {topStation.station.name}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {topStation.sales} sales ·{" "}
+                      {formatMoney(topStation.todayRev)} today ·{" "}
+                      {formatMoney(topStation.monthRev)} this month
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-emerald-400">
+                      {formatMoney(topStation.totalRev)}
+                    </p>
+                    <p className="text-[10px] text-gray-500">Total Revenue</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ===================== STATIONS SUB-TAB ===================== */}
         {activeSubTab === "stations" && (
           <>
             {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Search */}
               <div className="relative flex-1 min-w-[200px]">
                 <Search
                   size={16}
@@ -2664,110 +2202,82 @@ export default function StationManager({ onClose }: StationManagerProps) {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search stations..."
-                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
+                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
                 />
               </div>
-
-              {/* Status filter */}
-              <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-xl p-1">
+              <div className="flex items-center gap-1 bg-gray-50 dark:bg-white/5 rounded-xl p-1 overflow-x-auto">
                 {(
-                  ["all", "active", "inactive", "maintenance"] as FilterStatus[]
+                  [
+                    "all",
+                    "active",
+                    "inactive",
+                    "maintenance",
+                    "favorites",
+                  ] as FilterStatus[]
                 ).map((s) => (
                   <button
                     key={s}
                     onClick={() => setFilterStatus(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
                       filterStatus === s
                         ? "bg-amber-500/30 text-amber-300"
-                        : "text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    {s === "favorites" ? "★ Favorites" : s}
                   </button>
                 ))}
               </div>
-
-              {/* Sort */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
                 <option value="recent">Recent first</option>
                 <option value="name">Name A–Z</option>
                 <option value="revenue">Revenue (high → low)</option>
                 <option value="oldest">Oldest first</option>
               </select>
-
-              {/* Bulk select toggle */}
               {ownedStations.length > 0 && (
                 <button
                   onClick={() => {
                     setBulkSelectMode((v) => !v);
                     setSelectedStationIds(new Set());
                   }}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors ${
+                  className={`px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors ${
                     bulkSelectMode
                       ? "bg-purple-500/30 text-purple-300"
                       : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
                   }`}
-                  title="Select multiple stations for bulk actions"
                 >
                   <CheckCircle2 size={16} />
-                  {bulkSelectMode ? "Cancel Bulk" : "Bulk Select"}
+                  {bulkSelectMode ? "Cancel" : "Bulk"}
                 </button>
               )}
-
-              {/* Create button */}
               <button
                 onClick={openCreate}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
               >
                 <Plus size={16} />
-                Create Station
-              </button>
-
-              {/* Access Another Station button */}
-              <button
-                onClick={() => setModal({ type: "access-shared" })}
-                className="px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors relative"
-              >
-                <Building2 size={16} />
-                Access Another Station
-                {(pendingInvites.length > 0 || sharedStations.length > 0) && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white">
-                    {pendingInvites.length + sharedStations.length}
-                  </span>
-                )}
+                Create
               </button>
             </div>
 
             {/* Bulk actions bar */}
             {bulkSelectMode && selectedStationIds.size > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+              <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl flex-wrap">
                 <span className="text-sm text-purple-300 font-medium">
                   {selectedStationIds.size} selected
                 </span>
                 <button
                   onClick={handleBulkExport}
-                  className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Download size={13} /> Export
                 </button>
                 <button
-                  onClick={handleBulkSync}
-                  disabled={syncing}
-                  className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw
-                    size={13}
-                    className={syncing ? "animate-spin" : ""}
-                  />{" "}
-                  Sync
-                </button>
-                <button
                   onClick={handleBulkActivate}
-                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <CheckCircle2 size={13} /> Activate All
                 </button>
@@ -2775,28 +2285,30 @@ export default function StationManager({ onClose }: StationManagerProps) {
                   onClick={() => setSelectedStationIds(new Set())}
                   className="ml-auto text-xs text-gray-500 hover:text-gray-300"
                 >
-                  Clear selection
+                  Clear
                 </button>
               </div>
             )}
 
             {/* Station grid */}
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3">
-                Your Stations{" "}
-                <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
-                  · Combined Revenue: {formatMoney(stats.totalRevenue)}
-                </span>
-              </h2>
-
+              <SectionHeader
+                icon={Layers}
+                title="Your Stations"
+                count={ownedStations.length}
+                action={
+                  <span className="text-sm text-gray-500 dark:text-gray-400 font-normal">
+                    Combined: {formatMoney(stats.totalRevenue)}
+                  </span>
+                }
+              />
               {isStationLoading ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   <SkeletonCard />
                   <SkeletonCard />
                   <SkeletonCard />
                 </div>
-              ) : ownedStations.length === 0 &&
-                sharedStationsFromContext.length === 0 ? (
+              ) : ownedStations.length === 0 ? (
                 <EmptyState onCreate={openCreate} />
               ) : visibleStations.length === 0 ? (
                 <div className={`${GLASS_CARD} p-8 text-center`}>
@@ -2807,40 +2319,231 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleStations
-                    .filter((s) => ownedStations.includes(s))
-                    .map((s) => (
-                      <div key={s.id} className="relative">
-                        {bulkSelectMode && (
-                          <button
-                            onClick={() => toggleStationSelection(s.id)}
-                            className={`absolute -top-2 -left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              selectedStationIds.has(s.id)
-                                ? "bg-purple-500 text-white"
-                                : "bg-gray-300 dark:bg-gray-600 text-gray-500"
-                            }`}
-                          >
-                            {selectedStationIds.has(s.id) && (
-                              <Check size={14} />
-                            )}
-                          </button>
-                        )}
-                        <StationCard
-                          station={s}
-                          isCurrent={currentStation?.id === s.id}
-                          onOpen={() => handleOpenStation(s)}
-                          onEdit={() => handleEdit(s)}
-                          onShare={() => handleShareOpen(s)}
-                          onExport={() => handleExport(s)}
-                          onDelete={() => handleDeleteOpen(s)}
-                          onToggleStatus={() => handleToggleStatus(s)}
-                        />
-                      </div>
-                    ))}
+                  {visibleStations.map((s) => (
+                    <div key={s.id} className="relative">
+                      {bulkSelectMode && (
+                        <button
+                          onClick={() => toggleStationSelection(s.id)}
+                          className={`absolute -top-2 -left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                            selectedStationIds.has(s.id)
+                              ? "bg-purple-500 text-white"
+                              : "bg-gray-300 dark:bg-gray-600 text-gray-500"
+                          }`}
+                        >
+                          {selectedStationIds.has(s.id) && <Check size={14} />}
+                        </button>
+                      )}
+                      <StationCard
+                        station={s}
+                        isCurrent={currentStation?.id === s.id}
+                        isFavorite={favorites.has(s.id)}
+                        isDefault={defaultStationId === s.id}
+                        onOpen={() => handleOpenStation(s)}
+                        onEdit={() => handleEdit(s)}
+                        onShare={() => handleShareOpen(s)}
+                        onExport={() => handleExport(s)}
+                        onDelete={() => handleDeleteOpen(s)}
+                        onToggleStatus={() => handleToggleStatus(s)}
+                        onClone={() => handleClone(s)}
+                        onQR={() => setModal({ type: "qr", station: s })}
+                        onToggleFavorite={() => handleToggleFavorite(s.id)}
+                        onSetDefault={() => handleSetDefault(s.id)}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </>
+        )}
+
+        {/* ===================== NETWORK SUB-TAB ===================== */}
+        {activeSubTab === "network" && (
+          <div className="space-y-6">
+            {/* Pending invites */}
+            {pendingInvites.length > 0 && (
+              <div>
+                <SectionHeader
+                  icon={Mail}
+                  title="Pending Invites"
+                  count={pendingInvites.length}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {pendingInvites.map((inv) => (
+                    <div
+                      key={inv.stationId}
+                      className={`${GLASS_CARD} p-4 flex items-center justify-between`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {inv.stationName}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <RoleBadge role={inv.role} />
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            by {inv.invitedBy}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() =>
+                            handleAcceptPending(
+                              inv.member?.id || "",
+                              inv.stationName,
+                            )
+                          }
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs flex items-center gap-1"
+                        >
+                          <Check size={12} /> Accept
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDeclinePending(inv.member?.id || "")
+                          }
+                          className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Join by invite link */}
+            <div>
+              <SectionHeader icon={LogIn} title="Join by Invite Link" />
+              <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                {inviteError && (
+                  <div className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-xs">
+                    {inviteError}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Paste an invite link or token you received from a station
+                  owner
+                </p>
+                <input
+                  type="text"
+                  value={inviteLinkInput}
+                  onChange={(e) => setInviteLinkInput(e.target.value)}
+                  placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                />
+                <button
+                  onClick={handleJoinByLink}
+                  disabled={inviteBusy}
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                >
+                  {inviteBusy ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <LogIn size={14} />
+                  )}
+                  Accept Invite & Access Station
+                </button>
+              </div>
+            </div>
+
+            {/* Shared with you */}
+            <div>
+              <SectionHeader
+                icon={Building2}
+                title="Shared With You"
+                count={sharedStationsFromContext.length + sharedStations.length}
+              />
+              {sharedStationsFromContext.length === 0 &&
+              sharedStations.length === 0 ? (
+                <div className={`${GLASS_CARD} p-8 text-center`}>
+                  <Building2 size={32} className="text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    No stations shared with you yet. When a station owner
+                    invites you, the station will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {[...sharedStationsFromContext, ...sharedStations]
+                    .filter(
+                      (s, idx, arr) =>
+                        arr.findIndex(
+                          (x) =>
+                            (x as any).id === (s as any).id ||
+                            (x as any).stationId === (s as any).stationId,
+                        ) === idx,
+                    )
+                    .map((s: any) => {
+                      const stationId = s.id || s.stationId;
+                      const name = s.name || s.stationName;
+                      const binding = bindings.find(
+                        (b) => b.stationId === stationId,
+                      );
+                      const role =
+                        s.memberRole ||
+                        s.userRole ||
+                        s.role ||
+                        binding?.role ||
+                        "member";
+                      const invitedBy =
+                        s.invitedBy || binding?.invitedBy || "Owner";
+                      return (
+                        <div
+                          key={stationId}
+                          className={`${
+                            currentStation?.id === stationId
+                              ? "ring-2 ring-sky-400/50"
+                              : ""
+                          } ${GLASS_CARD} p-4`}
+                        >
+                          <div className="flex items-center gap-3 mb-3">
+                            <div
+                              className={`w-10 h-10 rounded-xl ${avatarColor(name)} flex items-center justify-center text-white font-bold text-xs`}
+                            >
+                              {initialsOf(name)}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-bold text-gray-900 dark:text-white text-sm truncate">
+                                {name}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <RoleBadge role={role} />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  by {invitedBy}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() =>
+                                handleAccessSharedStation(stationId)
+                              }
+                              className="flex-1 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5"
+                            >
+                              <LogIn size={13} />
+                              {currentStation?.id === stationId
+                                ? "Active"
+                                : "Access"}
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleLeaveSharedStation(stationId, name)
+                              }
+                              title="Leave"
+                              className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs"
+                            >
+                              <LogOut size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ===================== ANALYTICS SUB-TAB ===================== */}
@@ -2862,35 +2565,40 @@ export default function StationManager({ onClose }: StationManagerProps) {
               />
               <StatCard
                 label="Active Stations"
-                value={`${activeCount}/${stations.length}`}
+                value={`${activeCount}/${ownedStations.length}`}
                 icon={CheckCircle2}
                 accent="text-emerald-400"
               />
               <StatCard
-                label="Avg Health Score"
+                label="Avg Health"
                 value={`${avgHealth}%`}
                 icon={Gauge}
                 accent={avgHealth >= 60 ? "text-emerald-400" : "text-amber-400"}
               />
             </div>
 
+            {/* Revenue trend bar chart (canvas) */}
+            {stationAnalytics.length > 0 && (
+              <RevenueBarChart analytics={stationAnalytics} />
+            )}
+
             {/* Top performer */}
             {topStation && (
               <div className={`${GLASS_CARD} p-5`}>
                 <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp size={18} className="text-emerald-400" />
+                  <Crown size={18} className="text-amber-400" />
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                     Top Performing Station
                   </h3>
                 </div>
                 <div className="flex items-center gap-4">
                   <div
-                    className={`w-14 h-14 rounded-xl ${avatarColor(topStation.station.name)} flex items-center justify-center text-gray-900 dark:text-white font-bold`}
+                    className={`w-14 h-14 rounded-xl ${avatarColor(topStation.station.name)} flex items-center justify-center text-white font-bold`}
                   >
                     {initialsOf(topStation.station.name)}
                   </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-900 dark:text-white">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-900 dark:text-white truncate">
                       {topStation.station.name}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -2911,14 +2619,43 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
             {/* Station comparison table */}
             <div className={`${GLASS_CARD} overflow-hidden`}>
-              <div className="p-4 border-b border-gray-200 dark:border-white/10">
+              <div className="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <BarChart3 size={16} className="text-blue-400" />
                   Station Comparison
                 </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleExportCsv}
+                    className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs flex items-center gap-1.5"
+                  >
+                    <FileDown size={12} /> CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      downloadJson(
+                        `station_analytics_${Date.now()}.json`,
+                        stationAnalytics.map((a) => ({
+                          station: a.station.name,
+                          todayRevenue: a.todayRev,
+                          monthRevenue: a.monthRev,
+                          totalRevenue: a.totalRev,
+                          sales: a.sales,
+                          healthScore: a.healthScore,
+                          healthLabel: a.healthLabel,
+                          status: a.status,
+                        })),
+                      );
+                      showNotice("Analytics exported (JSON)");
+                    }}
+                    className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-xs flex items-center gap-1.5"
+                  >
+                    <Download size={12} /> JSON
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[640px]">
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       <th className="text-left p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
@@ -2953,7 +2690,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                         <td className="p-3">
                           <div className="flex items-center gap-2">
                             <div
-                              className={`w-7 h-7 rounded-lg ${avatarColor(a.station.name)} flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white`}
+                              className={`w-7 h-7 rounded-lg ${avatarColor(a.station.name)} flex items-center justify-center text-[10px] font-bold text-white`}
                             >
                               {initialsOf(a.station.name)}
                             </div>
@@ -3000,357 +2737,317 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 </table>
               </div>
             </div>
-
-            {/* Export analytics */}
-            <button
-              onClick={() => {
-                downloadJson(
-                  `station_analytics_${Date.now()}.json`,
-                  stationAnalytics.map((a) => ({
-                    station: a.station.name,
-                    todayRevenue: a.todayRev,
-                    monthRevenue: a.monthRev,
-                    totalRevenue: a.totalRev,
-                    sales: a.sales,
-                    healthScore: a.healthScore,
-                    healthLabel: a.healthLabel,
-                    status: a.status,
-                  })),
-                );
-                showNotice("Analytics exported");
-              }}
-              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-xl text-sm flex items-center gap-2 transition-colors"
-            >
-              <Download size={14} /> Export Analytics
-            </button>
           </div>
         )}
 
-        {/* ===================== ACTIVITY & HEALTH SUB-TAB ===================== */}
+        {/* ===================== ACTIVITY SUB-TAB ===================== */}
         {activeSubTab === "activity" && (
           <div className="space-y-6">
-            {/* Health overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard
-                label="Avg Health"
-                value={`${avgHealth}%`}
-                icon={Gauge}
-                accent={avgHealth >= 60 ? "text-emerald-400" : "text-amber-400"}
-              />
-              <StatCard
-                label="Active"
-                value={String(activeCount)}
-                icon={CheckCircle2}
-                accent="text-emerald-400"
-              />
-              <StatCard
-                label="Needs Attention"
-                value={String(
-                  stationAnalytics.filter((a) => a.healthScore < 60).length,
-                )}
-                icon={AlertCircle}
-                accent="text-red-400"
-              />
-              <StatCard
-                label="Cloud Synced"
-                value={String(
-                  stationAnalytics.filter(
-                    (a) =>
-                      a.station.id.includes("-") ||
-                      a.station.id.includes("backend_"),
-                  ).length,
-                )}
-                icon={Cloud}
-                accent="text-emerald-400"
-              />
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Filter size={14} className="text-gray-500" />
+                <select
+                  value={activityFilterStation}
+                  onChange={(e) => setActivityFilterStation(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="all">All Stations</option>
+                  {ownedStations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                  {sharedStations.map((s) => (
+                    <option key={s.stationId} value={s.stationId}>
+                      {s.stationName} (shared)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <select
+                value={activityFilterAction}
+                onChange={(e) => setActivityFilterAction(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                <option value="all">All Actions</option>
+                <option value="invite_sent">Invites Sent</option>
+                <option value="invite_accepted">Invites Accepted</option>
+                <option value="invite_revoked">Invites Revoked</option>
+                <option value="member_left">Members Left</option>
+                <option value="role_changed">Role Changes</option>
+                <option value="access_recorded">Access Records</option>
+                <option value="ownership_transferred">
+                  Ownership Transfers
+                </option>
+              </select>
+              <button
+                onClick={() => {
+                  const rows: (string | number)[][] = [
+                    ["Actor", "Action", "Detail", "Station", "Timestamp"],
+                  ];
+                  filteredActivity.forEach((e) => {
+                    const st = stations.find((s) => s.id === e.stationId);
+                    rows.push([
+                      e.actorName,
+                      actionLabel(e.action),
+                      e.detail || "",
+                      st?.name || e.stationId,
+                      new Date(e.timestamp).toLocaleString(),
+                    ]);
+                  });
+                  downloadCsv(`activity_${Date.now()}.csv`, rows);
+                  showNotice("Activity exported (CSV)");
+                }}
+                className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-xl text-sm flex items-center gap-2"
+              >
+                <FileDown size={14} /> Export CSV
+              </button>
+              <button
+                onClick={() => setNetworkRefreshKey((k) => k + 1)}
+                className="px-3 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-sm flex items-center gap-2"
+              >
+                <RefreshCw size={14} /> Refresh
+              </button>
             </div>
 
-            {/* Per-station health cards */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Activity size={16} className="text-amber-400" />
-                Station Health Dashboard
-              </h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {stationAnalytics.map((a) => {
-                  const HealthIcon =
-                    a.healthScore >= 80
-                      ? CheckCircle2
-                      : a.healthScore >= 60
-                        ? Gauge
-                        : a.healthScore >= 40
-                          ? AlertCircle
-                          : XCircle;
-                  const healthColor =
-                    a.healthScore >= 80
-                      ? "text-emerald-400"
-                      : a.healthScore >= 60
-                        ? "text-sky-400"
-                        : a.healthScore >= 40
-                          ? "text-amber-400"
-                          : "text-red-400";
-                  return (
-                    <div key={a.station.id} className={`${GLASS_CARD} p-4`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-8 h-8 rounded-lg ${avatarColor(a.station.name)} flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white`}
-                          >
-                            {initialsOf(a.station.name)}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[100px]">
-                            {a.station.name}
+            {/* Activity feed */}
+            <div className={`${GLASS_CARD} p-4`}>
+              {filteredActivity.length === 0 ? (
+                <div className="text-center py-8">
+                  <Activity size={32} className="text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    No activity recorded yet
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Activity is logged when you invite members, accept invites,
+                    or access shared stations.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                  {filteredActivity.map((entry) => {
+                    const st = stations.find((s) => s.id === entry.stationId);
+                    const stName =
+                      st?.name ||
+                      sharedStations.find(
+                        (s) => s.stationId === entry.stationId,
+                      )?.stationName ||
+                      "Unknown";
+                    return (
+                      <div
+                        key={entry.id}
+                        className="text-xs p-3 bg-gray-100 dark:bg-white/5 rounded-lg"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-gray-900 dark:text-white min-w-0">
+                            <span className="font-medium">
+                              {entry.actorName}
+                            </span>{" "}
+                            <span className="text-gray-500 dark:text-gray-400">
+                              {actionLabel(entry.action)}
+                            </span>
+                          </p>
+                          <span className="text-[10px] text-gray-500 flex-shrink-0">
+                            {relativeTime(entry.timestamp)}
                           </span>
                         </div>
-                        <StatusBadge status={a.status} />
+                        {entry.detail && (
+                          <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                            {entry.detail}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-sky-400 mt-0.5">
+                          {stName}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <HealthIcon size={16} className={healthColor} />
-                        <span className={`text-sm font-medium ${healthColor}`}>
-                          {a.healthLabel}
-                        </span>
-                        <span className="text-xs text-gray-500 ml-auto">
-                          {a.healthScore}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            a.healthScore >= 80
-                              ? "bg-emerald-500"
-                              : a.healthScore >= 60
-                                ? "bg-sky-500"
-                                : a.healthScore >= 40
-                                  ? "bg-amber-500"
-                                  : "bg-red-500"
-                          }`}
-                          style={{ width: `${a.healthScore}%` }}
-                        />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">
-                            Today
-                          </p>
-                          <p className="text-emerald-400 font-medium">
-                            {formatMoney(a.todayRev)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">
-                            Sales
-                          </p>
-                          <p className="text-gray-900 dark:text-white font-medium">
-                            {a.sales}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">
-                            Shared
-                          </p>
-                          <p className="text-purple-400 font-medium">
-                            {a.sharedCount}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-2">
-                        Updated {relativeTime(a.station.updatedAt)}
-                      </p>
-                    </div>
-                  );
-                })}
-                {stationAnalytics.length === 0 && (
-                  <div className={`${GLASS_CARD} p-8 text-center col-span-2`}>
-                    <Activity
-                      size={32}
-                      className="text-gray-500 mx-auto mb-2"
-                    />
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      No station activity yet
-                    </p>
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===================== SETTINGS SUB-TAB ===================== */}
+        {activeSubTab === "settings" && (
+          <div className="space-y-6">
+            {/* Default station */}
+            <div>
+              <SectionHeader icon={Crown} title="Default Station" />
+              <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  The default station is opened automatically when you log in
+                  (if set).
+                </p>
+                <select
+                  value={defaultStationId || ""}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleSetDefault(e.target.value);
+                    } else {
+                      localStorage.removeItem(DEFAULT_STATION_KEY);
+                      setDefaultStationId(null);
+                      showNotice("Default station cleared");
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">No default</option>
+                  {ownedStations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Sync status */}
-            <div className={`${GLASS_CARD} p-4`}>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Cloud size={16} className="text-emerald-400" />
-                Cloud Sync Status
-              </h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
+            {/* Sort preference */}
+            <div>
+              <SectionHeader icon={ArrowUpDown} title="Default Sort" />
+              <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  How stations are sorted by default in the Stations tab.
+                </p>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortBy)}
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="recent">Recent first</option>
+                  <option value="name">Name A–Z</option>
+                  <option value="revenue">Revenue (high → low)</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Data export / import */}
+            <div>
+              <SectionHeader icon={Database} title="Data Management" />
+              <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Export all station data as a backup, or import a previously
+                  exported file.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      downloadJson(
+                        `stations_backup_${Date.now()}.json`,
+                        stations.map((s) => ({
+                          id: s.id,
+                          name: s.name,
+                          location: s.location,
+                          phone: s.phone,
+                          email: s.email,
+                          kraPin: s.kraPin,
+                          taxRate: s.taxRate,
+                          country: s.country,
+                          currency: s.currency,
+                          data: s.data,
+                          createdAt: s.createdAt,
+                          updatedAt: s.updatedAt,
+                        })),
+                      );
+                      showNotice("Backup exported");
+                    }}
+                    className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-sm flex items-center gap-2"
+                  >
+                    <Download size={14} /> Export Backup (JSON)
+                  </button>
+                  <button
+                    onClick={handleExportCsv}
+                    className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-sm flex items-center gap-2"
+                  >
+                    <FileDown size={14} /> Export CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync controls */}
+            <div>
+              <SectionHeader icon={Cloud} title="Cloud Sync" />
+              <div className={`${GLASS_CARD} p-4 space-y-3`}>
+                <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-500 dark:text-gray-400">
-                    Backend Syncing
+                    Last Sync
+                  </span>
+                  <span className="text-gray-900 dark:text-white">
+                    {lastBackendSync
+                      ? new Date(lastBackendSync).toLocaleString()
+                      : "Never"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Status
                   </span>
                   <span
                     className={
-                      isBackendSyncing ? "text-sky-400" : "text-emerald-400"
+                      isBackendSyncing ? "text-amber-400" : "text-emerald-400"
                     }
                   >
-                    {isBackendSyncing ? "In progress..." : "Idle"}
-                  </span>
-                </div>
-                {lastBackendSync && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">
-                      Last Sync
-                    </span>
-                    <span className="text-gray-900 dark:text-white">
-                      {relativeTime(lastBackendSync)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">
-                    Admin Mode
-                  </span>
-                  <span
-                    className={isAdmin ? "text-emerald-400" : "text-gray-500"}
-                  >
-                    {isAdmin ? "Yes" : "No"}
+                    {isBackendSyncing ? "Syncing..." : "Idle"}
                   </span>
                 </div>
                 <button
                   onClick={handleSyncNow}
                   disabled={syncing || isBackendSyncing}
-                  className="mt-2 px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
                 >
                   <RefreshCw
-                    size={13}
+                    size={14}
                     className={syncing ? "animate-spin" : ""}
-                  />{" "}
+                  />
                   Sync Now
                 </button>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ===================== SHARED SUB-TAB ===================== */}
-        {activeSubTab === "shared" && (
-          <>
-            {/* Shared With You section — stations owned by OTHER users that this
-                user has been invited to access (read or read-write based on role). */}
-            {sharedStationsFromContext.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Building2 size={18} className="text-sky-400" />
-                  Shared With You
-                  <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
-                    · {sharedStationsFromContext.length} station(s)
-                  </span>
-                </h2>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {sharedStationsFromContext.map((s) => {
-                    const binding = bindings.find((b) => b.stationId === s.id);
-                    const role =
-                      s.memberRole || s.userRole || binding?.role || "member";
-                    const invitedBy =
-                      s.invitedBy || binding?.invitedBy || "Owner";
-                    return (
-                      <div
-                        key={s.id}
-                        className={`${
-                          currentStation?.id === s.id
-                            ? "ring-2 ring-sky-400/50"
-                            : ""
-                        } ${GLASS_CARD} p-5 hover:bg-gray-100 dark:bg-white/10 transition-all relative`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-12 h-12 rounded-xl ${avatarColor(
-                                s.name,
-                              )} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm`}
-                            >
-                              {initialsOf(s.name)}
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                                {s.name}
-                                {currentStation?.id === s.id && (
-                                  <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
-                                    Active
-                                  </span>
-                                )}
-                              </h3>
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <RoleBadge role={role} />
-                                <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                  <UserCheck size={11} />
-                                  {invitedBy}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        {s.location && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-3">
-                            <MapPin size={12} className="text-gray-500" />
-                            <span className="truncate">{s.location}</span>
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAccessSharedStation(s.id)}
-                            className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                          >
-                            <LogIn size={15} />
-                            {currentStation?.id === s.id
-                              ? "Currently Active"
-                              : "Access Station"}
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleLeaveSharedStation(s.id, s.name)
-                            }
-                            title="Leave this shared station"
-                            className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors"
-                          >
-                            <LogOut size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+            {/* Danger zone */}
+            <div>
+              <SectionHeader icon={AlertTriangle} title="Danger Zone" />
+              <div
+                className={`${GLASS_CARD} p-4 border border-red-500/20 space-y-3`}
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Clear the default station preference or reset the Station
+                  Manager view preferences.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem(DEFAULT_STATION_KEY);
+                      localStorage.removeItem(STATION_SORT_PREF_KEY);
+                      localStorage.removeItem(SUBTAB_KEY);
+                      setDefaultStationId(null);
+                      setSortBy("recent");
+                      setActiveSubTab("overview");
+                      showNotice("Preferences reset");
+                    }}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm flex items-center gap-2"
+                  >
+                    <Trash2 size={14} /> Reset Preferences
+                  </button>
                 </div>
               </div>
-            )}
-            {/* Empty state for shared tab */}
-            {sharedStationsFromContext.length === 0 && (
-              <div className={`${GLASS_CARD} p-12 text-center`}>
-                <Building2 size={48} className="text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                  No stations shared with you
-                </h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                  When a station owner invites you, the station will appear
-                  here.
-                </p>
-                <button
-                  onClick={() => setModal({ type: "access-shared" })}
-                  className="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
-                >
-                  <Building2 size={18} />
-                  Access Another Station
-                </button>
-              </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Notice toast */}
-      {notice ? (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-gray-900 dark:text-gray-900 dark:text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
+      {notice && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
           {notice}
         </div>
-      ) : null}
+      )}
 
       {/* Modals */}
-      {modal?.type === "create" ? (
+      {modal?.type === "create" && (
         <StationFormModal
           title="Create Station"
           submitLabel="Create"
@@ -3358,9 +3055,8 @@ export default function StationManager({ onClose }: StationManagerProps) {
           onSubmit={handleSaveStation}
           onClose={closeModal}
         />
-      ) : null}
-
-      {modal?.type === "edit" ? (
+      )}
+      {modal?.type === "edit" && (
         <StationFormModal
           title={`Edit — ${modal.station.name}`}
           submitLabel="Save Changes"
@@ -3368,56 +3064,96 @@ export default function StationManager({ onClose }: StationManagerProps) {
           onSubmit={handleSaveStation}
           onClose={closeModal}
         />
-      ) : null}
-
-      {modal?.type === "share" ? (
+      )}
+      {modal?.type === "clone" && (
+        <StationFormModal
+          title={`Clone — ${modal.station.name}`}
+          submitLabel="Clone Station"
+          initial={editForm}
+          onSubmit={handleSaveStation}
+          onClose={closeModal}
+        />
+      )}
+      {modal?.type === "share" && (
         <ShareModal
           station={modal.station}
-          onShare={handleShare}
-          onRevoke={handleRevoke}
+          onInvite={handleInvite}
+          onRevoke={handleRevokeMember}
           onClose={closeModal}
         />
-      ) : null}
-
-      {modal?.type === "access" ? (
-        <AccessModal
-          stations={stations}
-          onAccess={handleAccessStation}
-          onClose={closeModal}
-        />
-      ) : null}
-
-      {modal?.type === "access-shared" ? (
-        <AccessSharedStationModal
-          ownedStations={ownedStations}
-          sharedStations={sharedStations}
-          pendingInvites={pendingInvites}
-          onAccess={handleAccessSharedStation}
-          onClose={closeModal}
-          onInvitesChanged={() => setInvitesVersion((v) => v + 1)}
-          currentStationId={currentStation?.id}
-          userId={user?.id}
-          invitesVersion={invitesVersion}
-        />
-      ) : null}
-
-      {modal?.type === "combined" ? (
-        <CombinedViewModal
-          stations={stations}
-          combined={combined}
-          onClose={closeModal}
-        />
-      ) : null}
-
-      {modal?.type === "delete" ? (
+      )}
+      {modal?.type === "qr" && (
+        <QRModal station={modal.station} onClose={closeModal} />
+      )}
+      {modal?.type === "delete" && (
         <ConfirmDialog
           title="Delete station"
-          message={`This permanently deletes "${modal.station?.name}" and its cloud record (station data blob included). This cannot be undone.`}
+          message={`This permanently deletes "${modal.station?.name}" and its cloud record. This cannot be undone.`}
           confirmLabel="Delete"
+          danger
           onConfirm={handleDeleteConfirmed}
           onCancel={closeModal}
         />
-      ) : null}
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// RevenueBarChart — canvas bar chart of per-station total revenue
+// ============================================================
+
+function RevenueBarChart({
+  analytics,
+}: {
+  analytics: {
+    station: { name: string };
+    totalRev: number;
+    todayRev: number;
+    monthRev: number;
+  }[];
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const data = analytics.slice(0, 8);
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const maxRev = Math.max(...data.map((d) => d.totalRev), 1);
+    const barW = (w - 40) / data.length;
+    const chartH = h - 40;
+
+    data.forEach((d, i) => {
+      const barH = (d.totalRev / maxRev) * chartH;
+      const x = 20 + i * barW;
+      const y = h - 20 - barH;
+      const gradient = ctx.createLinearGradient(0, y, 0, h - 20);
+      gradient.addColorStop(0, "#10b981");
+      gradient.addColorStop(1, "#059669");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x + 4, y, barW - 8, barH);
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "center";
+      const label = d.station.name.slice(0, 8);
+      ctx.fillText(label, x + barW / 2, h - 6);
+    });
+  }, [analytics]);
+
+  return (
+    <div className={`${GLASS_CARD} p-4`}>
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+        <BarChart3 size={16} className="text-emerald-400" />
+        Revenue by Station
+      </h3>
+      <canvas ref={canvasRef} width={600} height={180} className="w-full" />
     </div>
   );
 }
