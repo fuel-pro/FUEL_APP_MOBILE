@@ -926,24 +926,51 @@ export default function Dashboard() {
       };
     }
 
-    const colors = [
-      "rgba(34, 197, 94, 0.8)",
-      "rgba(234, 179, 8, 0.8)",
-      "rgba(99, 102, 241, 0.8)",
-      "rgba(236, 72, 153, 0.8)",
-      "rgba(20, 184, 166, 0.8)",
-      "rgba(249, 115, 22, 0.8)",
-      "rgba(139, 92, 246, 0.8)",
-    ];
-    const borderColors = [
-      "rgb(34, 197, 94)",
-      "rgb(234, 179, 8)",
-      "rgb(99, 102, 241)",
-      "rgb(236, 72, 153)",
-      "rgb(20, 184, 166)",
-      "rgb(249, 115, 22)",
-      "rgb(139, 92, 246)",
-    ];
+    // Royal Professional theme: lead with gold (#c5a059) as the primary chart
+    // color so the signature royal accent shows in the data viz.
+    const isRoyal =
+      typeof document !== "undefined" &&
+      document.documentElement.dataset.colorTheme === "royal";
+    const royalLead = "rgba(197, 160, 89, 0.9)"; // gold
+    const royalBorder = "rgb(197, 160, 89)";
+    const colors = isRoyal
+      ? [
+          royalLead,
+          "rgba(74, 222, 128, 0.8)", // green
+          "rgba(99, 102, 241, 0.8)", // indigo
+          "rgba(236, 72, 153, 0.8)", // pink
+          "rgba(20, 184, 166, 0.8)", // teal
+          "rgba(249, 115, 22, 0.8)", // orange
+          "rgba(139, 92, 246, 0.8)", // violet
+        ]
+      : [
+          "rgba(34, 197, 94, 0.8)",
+          "rgba(234, 179, 8, 0.8)",
+          "rgba(99, 102, 241, 0.8)",
+          "rgba(236, 72, 153, 0.8)",
+          "rgba(20, 184, 166, 0.8)",
+          "rgba(249, 115, 22, 0.8)",
+          "rgba(139, 92, 246, 0.8)",
+        ];
+    const borderColors = isRoyal
+      ? [
+          royalBorder,
+          "rgb(74, 222, 128)",
+          "rgb(99, 102, 241)",
+          "rgb(236, 72, 153)",
+          "rgb(20, 184, 166)",
+          "rgb(249, 115, 22)",
+          "rgb(139, 92, 246)",
+        ]
+      : [
+          "rgb(34, 197, 94)",
+          "rgb(234, 179, 8)",
+          "rgb(99, 102, 241)",
+          "rgb(236, 72, 153)",
+          "rgb(20, 184, 166)",
+          "rgb(249, 115, 22)",
+          "rgb(139, 92, 246)",
+        ];
 
     return {
       labels: types.map(

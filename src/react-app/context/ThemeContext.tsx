@@ -12,7 +12,7 @@ type Theme = "light" | "dark" | "system";
 
 /** The 6 soft pastel color themes from design spec (99.txt). */
 export type ColorTheme =
-  "eucalyptus" | "mauve" | "ocean" | "peach" | "periwinkle" | "mint";
+  "royal" | "eucalyptus" | "mauve" | "ocean" | "peach" | "periwinkle" | "mint";
 
 export interface ColorThemeMeta {
   id: ColorTheme;
@@ -22,6 +22,12 @@ export interface ColorThemeMeta {
 }
 
 export const COLOR_THEMES: ColorThemeMeta[] = [
+  {
+    id: "royal",
+    name: "Royal Professional",
+    primaryHex: "#c5a059",
+    tintHex: "#111625",
+  },
   {
     id: "eucalyptus",
     name: "Eucalyptus Glow",
@@ -60,7 +66,7 @@ export const COLOR_THEMES: ColorThemeMeta[] = [
   },
 ];
 
-export const DEFAULT_COLOR_THEME: ColorTheme = "eucalyptus";
+export const DEFAULT_COLOR_THEME: ColorTheme = "royal";
 const COLOR_THEME_CLOUD_KEY = "app_color_theme";
 const COLOR_THEME_LS_KEY = "fuelpro_color_theme";
 

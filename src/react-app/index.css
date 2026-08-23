@@ -1484,6 +1484,204 @@ code {
    Rule 9 (Avoid Using Pure Colors): low-saturation pastels
    prevent eye strain during long monitoring sessions.
    ============================================================ */
+/* ============================================================
+   ROYAL PROFESSIONAL DARK MODE (design spec UI.txt)
+   The signature theme: deep cool-blue-grey backgrounds, gold
+   accents, off-white text, subtle blue-grey borders. Luxurious
+   + professional. Applied via <html data-color-theme="royal">.
+   Retunes the full token set + maps the semantic "blue/primary"
+   hue to gold so every action element (buttons, active tabs,
+   links, chart lines, focus rings) becomes gold automatically.
+   ============================================================ */
+html[data-color-theme="royal"] {
+  /* ── Royal background surfaces (cool blue-grey, not pure black) ── */
+  --dt-bg-main: #0a0e17;
+  --dt-bg-card: #111625;
+  --dt-bg-card-hover: #161b2c;
+  --dt-bg-input: #1a1f2e;
+
+  /* ── Gold accent (the signature royal highlight) ── */
+  --dt-accent-blue: #c5a059;
+  --dt-accent-glow: rgba(197, 160, 89, 0.15);
+  --fp-accent: #c5a059;
+  --fp-accent-tint: #111625;
+  --fp-accent-rgb: 197, 160, 89;
+  --fp-accent-gradient: linear-gradient(135deg, #111625 0%, #c5a059 100%);
+  --fp-ring: 0 0 0 3px rgba(197, 160, 89, 0.22);
+
+  /* ── Off-white text tiers (cool, easy on the eyes) ── */
+  --dt-text-primary: #e0e6ed;
+  --dt-text-secondary: #94a3b8;
+  --dt-text-muted: #7b8794;
+
+  /* ── Subtle blue-grey borders ── */
+  --dt-border-subtle: #2d3748;
+  --dt-border-active: #3d4a5c;
+  --dt-border-focus: #c5a059;
+
+  /* ── Blend vars: inline-styled elements go royal too ── */
+  --blend-text-primary: #e0e6ed;
+  --blend-text-secondary: #94a3b8;
+  --blend-text-muted: #7b8794;
+  --blend-border: #2d3748;
+  --blend-surface-dark: #0a0e17;
+  --blend-amber: #c5a059; /* gold = the royal amber */
+  --blend-green: #4ade80;
+  --blend-red: #ef4444;
+  /* Map blue → gold so all primary/action inline-styled elements become gold */
+  --blend-blue: #c5a059;
+  --blend-amber-bg: rgba(197, 160, 89, 0.1);
+}
+
+/* ── Royal dark-mode surface application ─────────────────────────────── */
+html.dark[data-color-theme="royal"] body {
+  background-color: #0a0e17;
+  color: #e0e6ed;
+}
+/* Cards/panels: cool blue-grey with subtle border + lift */
+html.dark[data-color-theme="royal"] .card,
+html.dark[data-color-theme="royal"] .fp-halo-card,
+html.dark[data-color-theme="royal"]
+  [class*="bg-white"]:not(input):not(select):not(textarea) {
+  background-color: #111625 !important;
+  border-color: #2d3748 !important;
+  box-shadow:
+    0 0 0 1px #2d3748,
+    0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 4px 6px rgba(0, 0, 0, 0.25);
+}
+html.dark[data-color-theme="royal"] .card:hover,
+html.dark[data-color-theme="royal"] .fp-halo-card:hover {
+  border-color: #3d4a5c !important;
+  box-shadow:
+    0 0 0 1px #3d4a5c,
+    0 1px 0 0 rgba(197, 160, 89, 0.08) inset,
+    0 8px 18px rgba(0, 0, 0, 0.35),
+    0 0 20px rgba(197, 160, 89, 0.08);
+}
+
+/* ── Inputs: royal input surface + gold focus glow ───────────────────── */
+html.dark[data-color-theme="royal"]
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark[data-color-theme="royal"] select,
+html.dark[data-color-theme="royal"] textarea {
+  background-color: #1a1f2e !important;
+  border-color: #2d3748 !important;
+  color: #e0e6ed !important;
+}
+html.dark[data-color-theme="royal"] input:focus,
+html.dark[data-color-theme="royal"] select:focus,
+html.dark[data-color-theme="royal"] textarea:focus {
+  border-color: #c5a059 !important;
+  box-shadow:
+    0 0 0 3px rgba(197, 160, 89, 0.22),
+    0 1px 2px rgba(0, 0, 0, 0.3) inset !important;
+}
+html.dark[data-color-theme="royal"] input::placeholder,
+html.dark[data-color-theme="royal"] textarea::placeholder {
+  color: #7b8794 !important;
+}
+
+/* ── Active tab/nav → gold (the signature royal highlight) ──────────── */
+html.dark[data-color-theme="royal"] .fp-tab-nav .text-blue-400,
+html.dark[data-color-theme="royal"] .fp-tab-nav .text-blue-500 {
+  color: #c5a059 !important;
+}
+html.dark[data-color-theme="royal"] .fp-tab-nav .border-blue-500 {
+  border-color: #c5a059 !important;
+  box-shadow: 0 2px 8px rgba(197, 160, 89, 0.35);
+}
+html.dark[data-color-theme="royal"] .fp-tab-nav .bg-blue-500\/5 {
+  background-color: rgba(197, 160, 89, 0.1) !important;
+}
+/* Mobile bottom-nav active */
+html.dark[data-color-theme="royal"] nav .text-blue-400,
+html.dark[data-color-theme="royal"] nav .text-blue-500 {
+  color: #c5a059 !important;
+}
+html.dark[data-color-theme="royal"] nav .bg-blue-100,
+html.dark[data-color-theme="royal"] nav .bg-blue-900\/40 {
+  background-color: rgba(197, 160, 89, 0.12) !important;
+}
+
+/* ── Links → gold ────────────────────────────────────────────────────── */
+html.dark[data-color-theme="royal"] a {
+  color: #c5a059;
+  transition: color 0.2s var(--fp-ease);
+}
+html.dark[data-color-theme="royal"] a:hover {
+  color: #d4b475;
+}
+
+/* ── Primary buttons → solid gold with dark text ─────────────────────── */
+html.dark[data-color-theme="royal"] .fp-btn-primary {
+  background-color: #c5a059 !important;
+  color: #0a0e17 !important;
+  border: 1px solid #c5a059 !important;
+}
+html.dark[data-color-theme="royal"] .fp-btn-primary:hover {
+  background-color: #d4b475 !important;
+  border-color: #d4b475 !important;
+  box-shadow: 0 8px 20px rgba(197, 160, 89, 0.3);
+}
+
+/* ── Frosted-glass chrome retuned to royal cool-grey ─────────────────── */
+html.dark[data-color-theme="royal"] header[class*="bg-gradient"],
+html.dark[data-color-theme="royal"] header[class*="from-slate"],
+html.dark[data-color-theme="royal"] .fp-tab-nav,
+html.dark[data-color-theme="royal"] nav[class*="fixed"][class*="bottom"],
+html.dark[data-color-theme="royal"] nav[class*="fixed bottom"] {
+  background-color: rgba(10, 14, 23, 0.78) !important;
+  border-color: rgba(45, 55, 72, 0.6) !important;
+}
+
+/* ── Selection + focus → gold ────────────────────────────────────────── */
+html[data-color-theme="royal"] ::selection {
+  background: rgba(197, 160, 89, 0.25);
+}
+html[data-color-theme="royal"] :focus-visible {
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.22);
+}
+
+/* ── Sidebar / nav-item active → subtle gold tint (royal sidebar) ────── */
+html.dark[data-color-theme="royal"] .nav-item.active,
+html.dark[data-color-theme="royal"] [class*="bg-amber-500\/10"] {
+  background-color: rgba(197, 160, 89, 0.1) !important;
+  color: #c5a059 !important;
+}
+
+/* ── Tables: royal row separators + secondary headers ────────────────── */
+html.dark[data-color-theme="royal"] table th {
+  color: #94a3b8 !important;
+  border-bottom-color: #2d3748 !important;
+  font-weight: 500;
+}
+html.dark[data-color-theme="royal"] table td {
+  border-bottom-color: #2d3748 !important;
+}
+html.dark[data-color-theme="royal"] table,
+html.dark[data-color-theme="royal"] .amount {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── KPI value + trend colors ────────────────────────────────────────── */
+html.dark[data-color-theme="royal"] .kpi-value {
+  color: #e0e6ed;
+  font-weight: 700;
+}
+html.dark[data-color-theme="royal"] .kpi-trend.positive {
+  color: #4ade80;
+}
+html.dark[data-color-theme="royal"] .kpi-trend.warning {
+  color: #facc15;
+}
+
+/* ── HaloCard theme-accent border → gold ─────────────────────────────── */
+html.dark[data-color-theme="royal"] .fp-halo-card[style*="accent"],
+html.dark[data-color-theme="royal"] .fp-halo-card .fp-accent-bar {
+  border-color: #c5a059 !important;
+}
+
 html[data-color-theme="eucalyptus"] {
   --fp-accent: #a7c4a0;
   --fp-accent-tint: #f4efe6;
