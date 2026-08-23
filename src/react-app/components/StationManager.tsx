@@ -51,6 +51,11 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Star,
+  History,
+  Crown,
+  MailX,
+  Search as SearchIcon,
 } from "lucide-react";
 import {
   formatMoney,
@@ -70,9 +75,17 @@ import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import { getVATRate } from "@/react-app/config/pricing";
 import {
   getSharedStations,
+  getPendingInvites,
+  getStationActivity,
+  getFavorites,
+  toggleFavorite,
   acceptInvite,
+  rejectInvite,
   revokeMember,
+  leaveStation,
+  subscribeToMyMemberships,
   type StationMember,
+  type StationActivityEntry,
 } from "@/react-app/lib/station-share-service";
 
 interface StationManagerProps {
@@ -707,11 +720,32 @@ function AccessModal({
 }
 
 // ============================================================
-// Access Another Station — the modern invite-based station sharing flow.
-// Three tabs: Shared With You (accepted memberships) / Join by Invite
-// (paste a link/token) / Pending Invites (awaiting your acceptance).
-// Builds on the `station_members` DB table (migration 015/016), NOT the
-// legacy password-based sharedUsers model.
+// Access Another Station — RESTRUCTURED (2026-08-23).
+//
+// A complete redesign of the invite-based station sharing flow. Built on the
+// `station_members` DB table (migrations 015/016/017/023/025). Four tabs:
+//
+//   1. Network   — every station shared with you (accepted memberships) +
+//                  your favorites. Search + role filter + favorite toggle.
+//                  Each card shows role, inviter, last-accessed, and a
+//                  detail drawer (activity feed, tab grants, leave).
+//   2. Invites   — pending invites awaiting your acceptance + a "Join by
+//                  invite link/token" entry. Accept / reject per invite.
+//   3. Activity  — a live cross-device activity feed for the selected
+//                  shared station (invite sent/accepted, role changes,
+//                  ownership transfers, member left).
+//   4. Help      — a short explainer of roles, permissions, and security.
+//
+// New capabilities vs. the scrapped version:
+//   - Favorites (cloud-backed, cross-device) with a dedicated filter.
+//   - Search across station name / inviter / role.
+//   - Role filter (All / Manager / Staff / Auditor / Custom).
+//   - Per-station activity feed (station_activity_<id> app_kv key).
+//   - Accept + Reject for pending invites (reject marks the invite rejected).
+//   - Leave station uses the dedicated `leaveStation` service function.
+//   - Real-time: subscribes to the user's memberships so new invites +
+//     accept/revoke events appear instantly without a manual refresh.
+//   - Last-accessed timestamp displayed per shared station.
 // ============================================================
 
 interface SharedStationInfo {
@@ -721,6 +755,7 @@ interface SharedStationInfo {
   invitedBy: string;
   status: string;
   member: StationMember | null;
+  lastAccessedAt?: string | null;
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -733,12 +768,41 @@ function RoleBadge({ role }: { role: string }) {
   const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
   const cls =
     styles[role?.toLowerCase()] ||
-    "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30";
+    "bg-gray-500/20 text-gray-500 dark:text-gray-400 border-gray-500/30";
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>
       {label}
     </span>
   );
+}
+
+function formatLastAccessed(iso?: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Never";
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString();
+}
+
+function actionLabel(action: string): string {
+  const map: Record<string, string> = {
+    invite_sent: "sent an invite",
+    invite_accepted: "accepted an invite",
+    invite_rejected: "rejected an invite",
+    invite_revoked: "revoked an invite",
+    member_left: "left the station",
+    role_changed: "changed a member's role",
+    ownership_transferred: "transferred ownership",
+    access_recorded: "accessed the station",
+  };
+  return map[action] || action.replace(/_/g, " ");
 }
 
 function AccessSharedStationModal({
@@ -748,6 +812,9 @@ function AccessSharedStationModal({
   onAccess,
   onClose,
   onInvitesChanged,
+  currentStationId,
+  userId,
+  invitesVersion,
 }: {
   ownedStations: any[];
   sharedStations: SharedStationInfo[];
@@ -755,24 +822,65 @@ function AccessSharedStationModal({
   onAccess: (stationId: string) => void;
   onClose: () => void;
   onInvitesChanged: () => void;
+  currentStationId?: string;
+  userId?: string;
+  invitesVersion?: number;
 }) {
-  const [tab, setTab] = useState<"shared" | "join" | "pending">(
+  const [tab, setTab] = useState<"network" | "invites" | "activity" | "help">(
     sharedStations.length > 0
-      ? "shared"
+      ? "network"
       : pendingInvites.length > 0
-        ? "pending"
-        : "join",
+        ? "invites"
+        : "network",
   );
   const [inviteInput, setInviteInput] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [joinSuccess, setJoinSuccess] = useState("");
 
-  // Extract the token from a pasted invite URL or raw token
+  // Network tab: search + role filter + favorites filter
+  const [networkSearch, setNetworkSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(
+    sharedStations[0]?.stationId || null,
+  );
+  const [activity, setActivity] = useState<StationActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [detailStationId, setDetailStationId] = useState<string | null>(null);
+
+  // Load favorites on mount
+  useEffect(() => {
+    getFavorites()
+      .then(setFavorites)
+      .catch(() => {});
+  }, []);
+
+  // Real-time: subscribe to the user's memberships so new invites / accept /
+  // revoke events refresh the lists instantly.
+  useEffect(() => {
+    if (!userId) return;
+    const unsub = subscribeToMyMemberships(userId, () => {
+      onInvitesChanged();
+    });
+    return () => unsub();
+  }, [userId, onInvitesChanged]);
+
+  // Load activity for the selected station on the Activity tab (and whenever
+  // invites refresh — an accept generates a new activity entry).
+  useEffect(() => {
+    if (tab !== "activity" || !selectedStationId) return;
+    setActivityLoading(true);
+    getStationActivity(selectedStationId)
+      .then(setActivity)
+      .catch(() => setActivity([]))
+      .finally(() => setActivityLoading(false));
+  }, [tab, selectedStationId, invitesVersion]);
+
   const extractToken = (input: string): string => {
     const trimmed = input.trim();
     if (!trimmed) return "";
-    // If it's a URL with ?invite=TOKEN, extract the token
     try {
       const url = new URL(trimmed);
       const token = url.searchParams.get("invite");
@@ -795,7 +903,7 @@ function AccessSharedStationModal({
     try {
       const result = await acceptInvite(token);
       if (result.success && result.stationId) {
-        setJoinSuccess(`Invite accepted! Switching to station...`);
+        setJoinSuccess("Invite accepted! Switching to station...");
         onInvitesChanged();
         setTimeout(() => {
           onAccess(result.stationId!);
@@ -815,42 +923,87 @@ function AccessSharedStationModal({
     }
   };
 
+  const handleToggleFavorite = async (stationId: string) => {
+    const res = await toggleFavorite(stationId);
+    setFavorites((prev) =>
+      res.favorite
+        ? [...prev, stationId]
+        : prev.filter((id) => id !== stationId),
+    );
+  };
+
+  // Filtered network list
+  const filteredNetwork = useMemo(() => {
+    let list = [...sharedStations];
+    if (favoritesOnly)
+      list = list.filter((s) => favorites.includes(s.stationId));
+    if (roleFilter !== "all")
+      list = list.filter((s) => (s.role || "").toLowerCase() === roleFilter);
+    if (networkSearch.trim()) {
+      const q = networkSearch.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.stationName.toLowerCase().includes(q) ||
+          (s.invitedBy || "").toLowerCase().includes(q) ||
+          (s.role || "").toLowerCase().includes(q),
+      );
+    }
+    // Favorites first, then by name
+    list.sort((a, b) => {
+      const af = favorites.includes(a.stationId) ? 0 : 1;
+      const bf = favorites.includes(b.stationId) ? 0 : 1;
+      if (af !== bf) return af - bf;
+      return a.stationName.localeCompare(b.stationName);
+    });
+    return list;
+  }, [sharedStations, favoritesOnly, roleFilter, networkSearch, favorites]);
+
   const tabs = [
     {
-      id: "shared" as const,
-      label: "Shared With You",
+      id: "network" as const,
+      label: "Network",
       icon: Building2,
       count: sharedStations.length,
     },
     {
-      id: "pending" as const,
-      label: "Pending Invites",
+      id: "invites" as const,
+      label: "Invites",
       icon: Inbox,
       count: pendingInvites.length,
     },
     {
-      id: "join" as const,
-      label: "Join by Invite",
-      icon: LinkIcon,
+      id: "activity" as const,
+      label: "Activity",
+      icon: History,
+      count: null,
+    },
+    {
+      id: "help" as const,
+      label: "Help",
+      icon: ShieldCheck,
       count: null,
     },
   ];
 
+  const detailStation = detailStationId
+    ? sharedStations.find((s) => s.stationId === detailStationId)
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
-        className={`${GLASS_CARD} w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col`}
+        className={`${GLASS_CARD} w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Building2 size={20} className="text-sky-400" />
               Access Another Station
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1">
-              Switch to a station shared with you, accept a pending invite, or
-              join via invite link
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Switch to a shared station, accept an invite, join by link, or
+              review activity
             </p>
           </div>
           <button
@@ -862,15 +1015,15 @@ function AccessSharedStationModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
+        <div className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 overflow-x-auto">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
                 tab === t.id
                   ? "bg-sky-500/30 text-sky-300"
-                  : "text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/5"
               }`}
             >
               <t.icon size={15} />
@@ -886,191 +1039,414 @@ function AccessSharedStationModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === "shared" && (
-            <div className="space-y-3">
-              {sharedStations.length === 0 ? (
+          {/* ============ NETWORK TAB ============ */}
+          {tab === "network" && (
+            <div className="space-y-4">
+              {/* Search + filter bar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[180px]">
+                  <SearchIcon
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="text"
+                    value={networkSearch}
+                    onChange={(e) => setNetworkSearch(e.target.value)}
+                    placeholder="Search stations, inviters, roles..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                </div>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="manager">Manager</option>
+                  <option value="staff">Staff</option>
+                  <option value="auditor">Auditor</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <button
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                  className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors border ${
+                    favoritesOnly
+                      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                      : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:text-gray-900 dark:text-white"
+                  }`}
+                >
+                  <Star
+                    size={14}
+                    fill={favoritesOnly ? "currentColor" : "none"}
+                  />
+                  Favorites
+                </button>
+              </div>
+
+              {filteredNetwork.length === 0 ? (
                 <div className="text-center py-12">
                   <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">
-                    No stations shared with you yet
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
+                    {sharedStations.length === 0
+                      ? "No stations shared with you yet"
+                      : "No stations match your filters"}
                   </p>
                   <p className="text-gray-500 text-xs">
-                    When a station owner invites you, the station will appear
-                    here
+                    {sharedStations.length === 0
+                      ? "When a station owner invites you, the station will appear here"
+                      : "Try clearing the search or role filter"}
                   </p>
                 </div>
               ) : (
-                sharedStations.map((s) => (
-                  <div
-                    key={s.stationId}
-                    className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 rounded-xl p-4 hover:bg-gray-100 dark:bg-white/10 transition-colors group"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div
-                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm flex-shrink-0`}
-                        >
-                          {initialsOf(s.stationName)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">
-                            {s.stationName}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <RoleBadge role={s.role} />
-                            {s.invitedBy && (
-                              <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                <UserCheck size={11} />
-                                Invited by {s.invitedBy}
-                              </span>
-                            )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {filteredNetwork.map((s) => {
+                    const isFav = favorites.includes(s.stationId);
+                    const isActive = currentStationId === s.stationId;
+                    return (
+                      <div
+                        key={s.stationId}
+                        className={`bg-gray-50 dark:bg-white/5 border rounded-xl p-4 transition-colors group ${
+                          isActive
+                            ? "border-sky-400/50 ring-1 ring-sky-400/30"
+                            : "border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div
+                              className={`w-10 h-10 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
+                            >
+                              {initialsOf(s.stationName)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate flex items-center gap-1.5">
+                                {s.stationName}
+                                {isActive && (
+                                  <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
+                                    Active
+                                  </span>
+                                )}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <RoleBadge role={s.role} />
+                              </div>
+                            </div>
                           </div>
+                          <button
+                            onClick={() => handleToggleFavorite(s.stationId)}
+                            title={
+                              isFav
+                                ? "Remove from favorites"
+                                : "Add to favorites"
+                            }
+                            className={`flex-shrink-0 p-1 rounded transition-colors ${
+                              isFav
+                                ? "text-amber-400"
+                                : "text-gray-500 hover:text-amber-400"
+                            }`}
+                          >
+                            <Star
+                              size={16}
+                              fill={isFav ? "currentColor" : "none"}
+                            />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3 flex-wrap">
+                          {s.invitedBy && (
+                            <span className="flex items-center gap-1">
+                              <UserCheck size={11} />
+                              {s.invitedBy}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <Clock size={11} />
+                            {formatLastAccessed(s.lastAccessedAt)}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onAccess(s.stationId)}
+                            className="flex-1 px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <LogIn size={13} />
+                            {isActive ? "Currently Active" : "Access"}
+                          </button>
+                          <button
+                            onClick={() => setDetailStationId(s.stationId)}
+                            title="View details & activity"
+                            className="px-3 py-1.5 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 rounded-lg text-xs transition-colors"
+                          >
+                            <History size={13} />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  `Leave "${s.stationName}"? You will no longer have access to this shared station.`,
+                                )
+                              )
+                                return;
+                              const res = await leaveStation(s.stationId);
+                              if (res.success) {
+                                onInvitesChanged();
+                              } else {
+                                alert(res.error || "Failed to leave station");
+                              }
+                            }}
+                            title="Leave this shared station"
+                            className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition-colors"
+                          >
+                            <LogOut size={13} />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => onAccess(s.stationId)}
-                        className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
-                      >
-                        <LogIn size={13} />
-                        Access
-                      </button>
-                    </div>
-                  </div>
-                ))
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
 
-          {tab === "pending" && (
-            <div className="space-y-3">
-              {pendingInvites.length === 0 ? (
-                <div className="text-center py-12">
-                  <Inbox size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">
-                    No pending invites
-                  </p>
-                  <p className="text-gray-500 text-xs">
-                    Invitations awaiting your acceptance will appear here
-                  </p>
-                </div>
-              ) : (
-                pendingInvites.map((s) => (
-                  <div
-                    key={s.stationId}
-                    className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div
-                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm flex-shrink-0`}
-                        >
-                          {initialsOf(s.stationName)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">
-                            {s.stationName}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <RoleBadge role={s.role} />
-                            <span className="text-xs text-amber-400 flex items-center gap-1">
-                              <Clock size={11} />
-                              Awaiting acceptance
-                            </span>
-                            {s.invitedBy && (
-                              <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-                                from {s.invitedBy}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <AcceptPendingButton
-                        stationId={s.stationId}
-                        member={s.member}
-                        onAccepted={(stationId) => {
+          {/* ============ INVITES TAB ============ */}
+          {tab === "invites" && (
+            <div className="space-y-5">
+              {/* Pending invites */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <Inbox size={15} className="text-amber-400" />
+                  Pending Invites
+                  {pendingInvites.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-full text-[10px] font-bold">
+                      {pendingInvites.length}
+                    </span>
+                  )}
+                </h3>
+                {pendingInvites.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
+                    <Inbox size={32} className="text-gray-600 mx-auto mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No pending invites
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingInvites.map((s) => (
+                      <PendingInviteRow
+                        key={s.stationId + (s.member?.id || "")}
+                        info={s}
+                        onAccept={(stationId) => {
                           onInvitesChanged();
                           onAccess(stationId);
                         }}
+                        onReject={() => {
+                          if (s.member?.invite_token) {
+                            rejectInvite(s.member.invite_token).then(() =>
+                              onInvitesChanged(),
+                            );
+                          }
+                        }}
                       />
-                    </div>
+                    ))}
                   </div>
-                ))
+                )}
+              </div>
+
+              {/* Join by link */}
+              <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-white/10">
+                <div className="text-center py-2">
+                  <LinkIcon size={28} className="text-sky-400 mx-auto mb-2" />
+                  <h3 className="text-gray-900 dark:text-white font-semibold text-sm mb-1">
+                    Join by Invite Link
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">
+                    Paste an invite link or token you received from a station
+                    owner
+                  </p>
+                </div>
+
+                {joinError && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-start gap-2">
+                    <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>{joinError}</span>
+                  </div>
+                )}
+                {joinSuccess && (
+                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm flex items-start gap-2">
+                    <Check size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>{joinSuccess}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                    Invite Link or Token
+                  </label>
+                  <input
+                    type="text"
+                    value={inviteInput}
+                    onChange={(e) => setInviteInput(e.target.value)}
+                    placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !joining) handleJoin();
+                    }}
+                  />
+                </div>
+
+                <button
+                  onClick={handleJoin}
+                  disabled={joining || !inviteInput.trim()}
+                  className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {joining ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Accepting Invite...
+                    </>
+                  ) : (
+                    <>
+                      <MailOpen size={16} />
+                      Accept Invite & Access Station
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ============ ACTIVITY TAB ============ */}
+          {tab === "activity" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                  Select Station
+                </label>
+                <select
+                  value={selectedStationId || ""}
+                  onChange={(e) => setSelectedStationId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+                >
+                  {sharedStations.length === 0 && (
+                    <option value="">No shared stations</option>
+                  )}
+                  {sharedStations.map((s) => (
+                    <option key={s.stationId} value={s.stationId}>
+                      {s.stationName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedStationId ? (
+                activityLoading ? (
+                  <div className="text-center py-8">
+                    <Loader2
+                      size={24}
+                      className="animate-spin text-sky-400 mx-auto"
+                    />
+                  </div>
+                ) : activity.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
+                    <History size={32} className="text-gray-600 mx-auto mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No activity recorded yet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {activity.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0">
+                          <Activity size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 dark:text-white">
+                            <span className="font-medium">
+                              {entry.actorName}
+                            </span>{" "}
+                            <span className="text-gray-500 dark:text-gray-400">
+                              {actionLabel(entry.action)}
+                            </span>
+                          </p>
+                          {entry.detail && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {entry.detail}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="text-center py-8">
+                  <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    Select a shared station to view its activity feed
+                  </p>
+                </div>
               )}
             </div>
           )}
 
-          {tab === "join" && (
-            <div className="space-y-4">
-              <div className="text-center py-4">
-                <LinkIcon size={36} className="text-sky-400 mx-auto mb-3" />
-                <h3 className="text-gray-900 dark:text-gray-900 dark:text-white font-semibold text-sm mb-1">
-                  Join by Invite Link
+          {/* ============ HELP TAB ============ */}
+          {tab === "help" && (
+            <div className="space-y-4 text-sm">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-xl">
+                <h3 className="font-semibold text-sky-300 mb-2 flex items-center gap-2">
+                  <ShieldCheck size={16} />
+                  How Station Sharing Works
                 </h3>
-                <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs">
-                  Paste an invite link or token you received from a station
-                  owner
+                <p className="text-gray-600 dark:text-gray-300 text-xs leading-relaxed">
+                  A station owner invites you by email. Once you accept, the
+                  station appears in your Network tab and you can switch to it
+                  anytime. Your access level depends on the role assigned by the
+                  owner. All data is stored in the cloud (Supabase) and syncs
+                  across your devices.
                 </p>
               </div>
 
-              {joinError && (
-                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-start gap-2">
-                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-                  <span>{joinError}</span>
-                </div>
-              )}
-
-              {joinSuccess && (
-                <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm flex items-start gap-2">
-                  <Check size={16} className="flex-shrink-0 mt-0.5" />
-                  <span>{joinSuccess}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
-                  Invite Link or Token
-                </label>
-                <input
-                  type="text"
-                  value={inviteInput}
-                  onChange={(e) => setInviteInput(e.target.value)}
-                  placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
-                  className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !joining) handleJoin();
-                  }}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wide">
+                  Roles
+                </h4>
+                <RoleHelpRow
+                  icon={<Crown size={14} className="text-amber-400" />}
+                  label="Owner"
+                  desc="Full control — manage members, settings, and data (only the station creator)."
+                />
+                <RoleHelpRow
+                  icon={<Users size={14} className="text-sky-400" />}
+                  label="Manager"
+                  desc="Read-write access to most tabs; can manage shifts, sales, and reports."
+                />
+                <RoleHelpRow
+                  icon={<UserCheck size={14} className="text-emerald-400" />}
+                  label="Staff"
+                  desc="Day-to-day operations — POS, sales tracking, stock adjustments."
+                />
+                <RoleHelpRow
+                  icon={<ShieldCheck size={14} className="text-purple-400" />}
+                  label="Auditor"
+                  desc="Read-only access for review and compliance auditing."
                 />
               </div>
 
-              <button
-                onClick={handleJoin}
-                disabled={joining || !inviteInput.trim()}
-                className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-900 dark:text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {joining ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Accepting Invite...
-                  </>
-                ) : (
-                  <>
-                    <MailOpen size={16} />
-                    Accept Invite & Access Station
-                  </>
-                )}
-              </button>
-
-              <div className="p-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-gray-200 dark:border-white/10">
-                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-start gap-2">
-                  <ShieldCheck
-                    size={14}
-                    className="text-sky-400 flex-shrink-0 mt-0.5"
-                  />
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <p className="text-xs text-amber-300 flex items-start gap-2">
+                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
                   <span>
-                    Only accept invites from station owners you trust. Once
-                    accepted, you'll have access to that station's data based on
-                    your assigned role (read-only or read-write). You can switch
-                    back to your own stations anytime from the station selector.
+                    Only accept invites from station owners you trust. You can
+                    leave a shared station at any time from the Network tab.
+                    Leaving removes your membership permanently (you'll need a
+                    new invite to regain access).
                   </span>
                 </p>
               </div>
@@ -1086,40 +1462,75 @@ function AccessSharedStationModal({
           </p>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
           >
             Close
           </button>
         </div>
       </div>
+
+      {/* Member detail drawer */}
+      {detailStation && (
+        <StationDetailDrawer
+          info={detailStation}
+          onClose={() => setDetailStationId(null)}
+          onAccess={(id) => {
+            setDetailStationId(null);
+            onAccess(id);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// Sub-component for accepting a pending invite from within the modal
-function AcceptPendingButton({
-  stationId,
-  member,
-  onAccepted,
+function RoleHelpRow({
+  icon,
+  label,
+  desc,
 }: {
-  stationId: string;
-  member: StationMember | null;
-  onAccepted: (stationId: string) => void;
+  icon: React.ReactNode;
+  label: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+      <div className="flex-shrink-0 mt-0.5">{icon}</div>
+      <div>
+        <p className="text-sm font-medium text-gray-900 dark:text-white">
+          {label}
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+// Pending invite row with Accept + Reject
+function PendingInviteRow({
+  info,
+  onAccept,
+  onReject,
+}: {
+  info: SharedStationInfo;
+  onAccept: (stationId: string) => void;
+  onReject: () => void;
 }) {
   const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState("");
 
   const handleAccept = async () => {
-    if (!member?.invite_token) {
-      setError("No invite token found for this invite");
+    if (!info.member?.invite_token) {
+      setError("No invite token found");
       return;
     }
     setAccepting(true);
     setError("");
     try {
-      const result = await acceptInvite(member.invite_token);
+      const result = await acceptInvite(info.member.invite_token);
       if (result.success && result.stationId) {
-        onAccepted(result.stationId);
+        onAccept(result.stationId);
       } else {
         setError(result.error || "Failed to accept invite");
       }
@@ -1130,25 +1541,228 @@ function AcceptPendingButton({
     }
   };
 
+  const handleReject = async () => {
+    if (!info.member?.invite_token) return;
+    setRejecting(true);
+    try {
+      await rejectInvite(info.member.invite_token);
+      onReject();
+    } catch {
+      /* */
+    } finally {
+      setRejecting(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-      <button
-        onClick={handleAccept}
-        disabled={accepting}
-        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div
+          className={`w-10 h-10 rounded-xl ${avatarColor(info.stationName)} flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
+        >
+          {initialsOf(info.stationName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+            {info.stationName}
+          </h4>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <RoleBadge role={info.role} />
+            <span className="text-xs text-amber-400 flex items-center gap-1">
+              <Clock size={11} />
+              Awaiting acceptance
+            </span>
+            {info.invitedBy && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                from {info.invitedBy}
+              </span>
+            )}
+          </div>
+          {error && <p className="text-[10px] text-red-400 mt-1">{error}</p>}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1 flex-shrink-0">
+        <button
+          onClick={handleAccept}
+          disabled={accepting}
+          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+        >
+          {accepting ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Check size={13} />
+          )}
+          Accept
+        </button>
+        <button
+          onClick={handleReject}
+          disabled={rejecting}
+          className="px-3 py-1.5 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+        >
+          {rejecting ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <MailX size={13} />
+          )}
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Slide-over detail drawer for a shared station
+function StationDetailDrawer({
+  info,
+  onClose,
+  onAccess,
+}: {
+  info: SharedStationInfo;
+  onClose: () => void;
+  onAccess: (stationId: string) => void;
+}) {
+  const [drawerActivity, setDrawerActivity] = useState<StationActivityEntry[]>(
+    [],
+  );
+  useEffect(() => {
+    getStationActivity(info.stationId)
+      .then(setDrawerActivity)
+      .catch(() => {});
+  }, [info.stationId]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex justify-end bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md h-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
       >
-        {accepting ? (
-          <Loader2 size={13} className="animate-spin" />
-        ) : (
-          <Check size={13} />
-        )}
-        Accept
-      </button>
-      {error && (
-        <span className="text-[10px] text-red-400 max-w-[120px] text-right">
-          {error}
-        </span>
-      )}
+        <div className="p-5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl ${avatarColor(info.stationName)} flex items-center justify-center text-white font-bold text-xs`}
+            >
+              {initialsOf(info.stationName)}
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                {info.stationName}
+              </h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <RoleBadge role={info.role} />
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Membership details */}
+          <div className="space-y-2">
+            <h4 className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
+              Membership
+            </h4>
+            <DetailRow label="Invited by" value={info.invitedBy || "Owner"} />
+            <DetailRow label="Role" value={info.role || "Member"} />
+            <DetailRow label="Status" value={info.status || "accepted"} />
+            <DetailRow
+              label="Last accessed"
+              value={formatLastAccessed(info.lastAccessedAt)}
+            />
+            {info.member?.expires_at && (
+              <DetailRow
+                label="Expires"
+                value={new Date(info.member.expires_at).toLocaleDateString()}
+              />
+            )}
+            {info.member?.tab_grants &&
+              Array.isArray(info.member.tab_grants) &&
+              info.member.tab_grants.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    Allowed tabs
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {info.member.tab_grants.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 bg-sky-500/20 text-sky-400 rounded text-[10px]"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            {info.member?.notes && (
+              <DetailRow label="Notes" value={info.member.notes} />
+            )}
+          </div>
+
+          <button
+            onClick={() => onAccess(info.stationId)}
+            className="w-full px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+          >
+            <LogIn size={15} />
+            Access Station
+          </button>
+
+          {/* Activity */}
+          <div className="space-y-2">
+            <h4 className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+              <History size={12} />
+              Recent Activity
+            </h4>
+            {drawerActivity.length === 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                No activity recorded
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {drawerActivity.slice(0, 10).map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="text-xs p-2 bg-gray-50 dark:bg-white/5 rounded-lg"
+                  >
+                    <p className="text-gray-900 dark:text-white">
+                      <span className="font-medium">{entry.actorName}</span>{" "}
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {actionLabel(entry.action)}
+                      </span>
+                    </p>
+                    {entry.detail && (
+                      <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                        {entry.detail}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-gray-500 dark:text-gray-400">{label}</span>
+      <span className="text-gray-900 dark:text-white font-medium text-right max-w-[60%] truncate">
+        {value}
+      </span>
     </div>
   );
 }
@@ -1428,6 +2042,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
         invitedBy: b.invitedBy,
         status: "accepted",
         member: members.find((m) => m.station_id === b.stationId) || null,
+        lastAccessedAt:
+          members.find((m) => m.station_id === b.stationId)?.last_accessed_at ||
+          null,
       }));
     const fromMembers: SharedStationInfo[] = members
       .filter((m) => !fromBindings.some((b) => b.stationId === m.station_id))
@@ -1435,9 +2052,10 @@ export default function StationManager({ onClose }: StationManagerProps) {
         stationId: m.station_id,
         stationName: m.name || "Shared Station",
         role: m.role,
-        invitedBy: m.name || "Owner",
+        invitedBy: m.invited_by_name || m.invited_by_unique_id || "Owner",
         status: m.status,
         member: m,
+        lastAccessedAt: m.last_accessed_at || null,
       }));
     // Deduplicate by stationId
     const seen = new Set<string>();
@@ -1448,27 +2066,20 @@ export default function StationManager({ onClose }: StationManagerProps) {
     });
     setSharedStations(shared);
 
-    // Pending invites — query station_members where invited_email = user.email AND status = pending
+    // Pending invites — via the dedicated service function (returns rows with
+    // the station name joined so the UI can render it without an extra fetch).
     try {
-      const { getSupabaseClient } = await import("@/supabase/client");
-      const sc = getSupabaseClient();
-      const { data: pendingRows } = await sc
-        .from("station_members")
-        .select("*, stations:station_id(name)")
-        .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
-      const pending: SharedStationInfo[] = (pendingRows || []).map(
-        (row: any) => ({
-          stationId: row.station_id,
-          stationName: row.stations?.name || row.name || "Shared Station",
-          role: row.role || "staff",
-          invitedBy:
-            row.invited_by_name || row.invited_by_unique_id || "Owner",
-          status: "pending",
-          member: row as StationMember,
-        }),
-      );
+      const pendingRows = await getPendingInvites();
+      const pending: SharedStationInfo[] = pendingRows.map((row) => ({
+        stationId: row.station_id,
+        stationName:
+          (row as any).stations?.name || row.name || "Shared Station",
+        role: row.role || "staff",
+        invitedBy: row.invited_by_name || row.invited_by_unique_id || "Owner",
+        status: "pending",
+        member: row,
+        lastAccessedAt: row.last_accessed_at || null,
+      }));
       setPendingInvites(pending);
     } catch (err) {
       console.warn("[StationManager] Failed to load pending invites:", err);
@@ -1636,6 +2247,20 @@ export default function StationManager({ onClose }: StationManagerProps) {
     (stationId: string) => {
       const station = stations.find((s) => s.id === stationId);
       switchStation(stationId);
+      // Record last-accessed-at on the membership row so the Network tab can
+      // show "last active" + log an activity entry for the shared station.
+      if (station?.ownerId && user?.id && station.ownerId !== user.id) {
+        import("@/react-app/lib/station-share-service").then(
+          ({ recordStationActivity }) => {
+            recordStationActivity(stationId, {
+              actorId: user.id,
+              actorName: user.email || "Member",
+              action: "access_recorded",
+              detail: `Accessed ${station.name}`,
+            }).catch(() => {});
+          },
+        );
+      }
       showNotice(
         station
           ? `Switched to ${station.name}${station.ownerId && station.ownerId !== user?.id ? " (shared)" : ""}`
@@ -1644,7 +2269,15 @@ export default function StationManager({ onClose }: StationManagerProps) {
       closeModal();
       if (onClose) onClose();
     },
-    [stations, switchStation, showNotice, closeModal, onClose, user?.id],
+    [
+      stations,
+      switchStation,
+      showNotice,
+      closeModal,
+      onClose,
+      user?.id,
+      user?.email,
+    ],
   );
 
   // Derived: split stations into owned vs shared (member) stations using the
@@ -2762,6 +3395,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
           onAccess={handleAccessSharedStation}
           onClose={closeModal}
           onInvitesChanged={() => setInvitesVersion((v) => v + 1)}
+          currentStationId={currentStation?.id}
+          userId={user?.id}
+          invitesVersion={invitesVersion}
         />
       ) : null}
 
