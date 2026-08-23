@@ -7067,3 +7067,42 @@ live on https://fuel-app-mobile.pages.dev/. No crashes, no regressions,
 country-aware, cloud-synced. The restructured Station Manager is fully
 integrated to the live site.
 
+
+
+## Session 2026-08-23 — Live TV player playback fix (DEPLOYED LIVE, commit 6952997)
+
+**Symptom**: The Live TV player in the News tab was cycling through channels
+(21 Jump Street then 3ABN French then ...) without ever showing video,
+appearing broken to the user.
+
+**Root cause**: The 10s playback timeout in the HLS effect was destroying
+working hls.js instances and auto-advancing whenever playback did not start
+within 10 seconds. In browsers where autoplay is blocked (headless, strict
+policy), video.play() rejects, the playing event never fires, and the
+timeout fires even though the stream is perfectly valid. A standalone
+test page (hls-test.html) proved the 21 Jump Street stream plays
+perfectly in 0.3s with the same hls.js config + proxy.
+
+**Fix** (src/react-app/components/LiveFeedEmbed.tsx):
+- Replaced the 10s auto-advance timeout with a 30s show play overlay
+  timeout. When playback has not started after 30s, the hls instance is
+  KEPT ALIVE (not destroyed) and a Click to play overlay is shown.
+- Auto-advance now ONLY happens on actual fatal HLS errors (after
+  recovery attempts are exhausted), not on slow playback start.
+- Removed the YouTube-only-channel auto-advance in the 6s
+  blank-detection effect. Now only hides the YouTube iframe to reveal
+  the HLS fallback layer.
+- Applied the same 30s show-overlay (no auto-advance) to native HLS
+  (Safari) and non-HLS fallback paths.
+
+**Verified live** (Cloudflare preview 2bdec3d6): player now stays on the
+selected channel (21 Jump Street) instead of cycling. The video element
+renders with native controls (Play, Fullscreen, Unmute, Cast, etc.) + a
+Click to play overlay (autoplay blocked in headless browser). In a real
+browser, muted autoplay succeeds (proven by standalone test showing
+the movie content at 0:42 / 1:23) and the stream plays automatically.
+
+**Deploy state**: GitHub main 6952997 pushed. Cloudflare Pages LIVE
+(preview 2bdec3d6 + main alias). Vercel: GitHub integration auto-deploys
+when quota resets. Supabase: no schema changes. tsc 0 errors, build 107
+precache, prettier pass.
