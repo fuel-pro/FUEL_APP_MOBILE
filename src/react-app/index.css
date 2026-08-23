@@ -216,6 +216,160 @@ html.dark .dark\:border-slate-300:is(.dark *) {
   border-color: var(--border-light) !important;
 }
 
+/* ── Blue reduction (dark mode) ─────────────────────────────────────────
+   ~1100 blue utility classes across components made the dark UI feel
+   over-saturated with blue (active tabs, buttons, badges, icons, links,
+   borders, gradients). Remap blue → the calm financial-grade palette:
+   gold = the single primary/action accent; neutral text/borders for the
+   rest; info tints stay calm (not vivid blue). !important beats Tailwind.
+   ──────────────────────────────────────────────────────────────────── */
+/* Blue text → off-white (high contrast, no blue hue) */
+html.dark .dark\:text-blue-200:is(.dark *),
+html.dark .dark\:text-blue-300:is(.dark *),
+html.dark .dark\:text-blue-400:is(.dark *),
+html.dark .dark\:text-blue-500:is(.dark *),
+html.dark .dark\:text-blue-600:is(.dark *),
+html.dark .dark\:text-blue-700:is(.dark *),
+html.dark .dark\:text-blue-800:is(.dark *),
+html.dark .dark\:text-blue-900:is(.dark *) {
+  color: #e7ebf1 !important;
+}
+/* Blue backgrounds: primary actions (500/600/700) → gold; dark blue
+   surfaces (800/900) → calm dark hover; light tints (100) → info-dim */
+html.dark .dark\:bg-blue-500:is(.dark *),
+html.dark .dark\:bg-blue-600:is(.dark *),
+html.dark .dark\:bg-blue-700:is(.dark *) {
+  background-color: var(--accent-gold) !important;
+  color: #0a0e17 !important;
+}
+html.dark .dark\:bg-blue-800:is(.dark *),
+html.dark .dark\:bg-blue-900:is(.dark *) {
+  background-color: var(--bg-hover) !important;
+}
+html.dark .dark\:bg-blue-100:is(.dark *) {
+  background-color: var(--status-info-dim) !important;
+}
+/* Blue backgrounds with opacity (active-tab washes bg-blue-500/5, /10, /20)
+   → calm gold tint, not solid gold (keeps the subtle active indicator) */
+html.dark .dark\:bg-blue-500\/5:is(.dark *),
+html.dark .dark\:bg-blue-500\/10:is(.dark *),
+html.dark .dark\:bg-blue-500\/20:is(.dark *),
+html.dark .dark\:bg-blue-600\/5:is(.dark *),
+html.dark .dark\:bg-blue-600\/10:is(.dark *),
+html.dark .dark\:bg-blue-600\/20:is(.dark *) {
+  background-color: rgba(197, 160, 89, 0.1) !important;
+}
+/* Blue borders → neutral calm border */
+html.dark .dark\:border-blue-200:is(.dark *),
+html.dark .dark\:border-blue-300:is(.dark *),
+html.dark .dark\:border-blue-400:is(.dark *),
+html.dark .dark\:border-blue-500:is(.dark *),
+html.dark .dark\:border-blue-600:is(.dark *),
+html.dark .dark\:border-blue-700:is(.dark *),
+html.dark .dark\:border-blue-800:is(.dark *) {
+  border-color: var(--border-light) !important;
+}
+/* Blue focus rings → gold accent */
+html.dark .dark\:ring-blue-300:is(.dark *),
+html.dark .dark\:ring-blue-400:is(.dark *),
+html.dark .dark\:ring-blue-500:is(.dark *),
+html.dark .dark\:focus\:ring-blue-400:is(.dark *),
+html.dark .dark\:focus\:ring-blue-500:is(.dark *) {
+  --tw-ring-color: var(--accent-gold) !important;
+}
+/* Blue gradients → gold/neutral */
+html.dark .dark\:from-blue-400:is(.dark *),
+html.dark .dark\:from-blue-500:is(.dark *),
+html.dark .dark\:from-blue-600:is(.dark *),
+html.dark .dark\:from-blue-700:is(.dark *) {
+  --tw-gradient-from: var(--accent-gold) var(--tw-gradient-from-position);
+  --tw-gradient-to: transparent var(--tw-gradient-to-position);
+}
+html.dark .dark\:to-blue-400:is(.dark *),
+html.dark .dark\:to-blue-500:is(.dark *),
+html.dark .dark\:to-blue-600:is(.dark *),
+html.dark .dark\:to-blue-700:is(.dark *) {
+  --tw-gradient-to: var(--accent-gold) var(--tw-gradient-to-position);
+}
+html.dark .dark\:via-blue-300:is(.dark *),
+html.dark .dark\:via-blue-400:is(.dark *),
+html.dark .dark\:via-blue-500:is(.dark *) {
+  --tw-gradient-via: transparent var(--tw-gradient-via-position);
+}
+/* Hover-blue states → calm gold-hover / neutral-hover */
+html.dark .dark\:hover\:bg-blue-500:is(.dark *):hover,
+html.dark .dark\:hover\:bg-blue-600:is(.dark *):hover,
+html.dark .dark\:hover\:bg-blue-700:is(.dark *):hover {
+  background-color: var(--accent-gold-hover) !important;
+  color: #0a0e17 !important;
+}
+html.dark .dark\:hover\:text-blue-300:is(.dark *):hover,
+html.dark .dark\:hover\:text-blue-400:is(.dark *):hover,
+html.dark .dark\:hover\:text-blue-500:is(.dark *):hover {
+  color: var(--accent-gold) !important;
+}
+
+/* ── Indigo reduction (indigo is blue-family, same calm treatment) ────── */
+html.dark .dark\:text-indigo-200:is(.dark *),
+html.dark .dark\:text-indigo-300:is(.dark *),
+html.dark .dark\:text-indigo-400:is(.dark *),
+html.dark .dark\:text-indigo-500:is(.dark *),
+html.dark .dark\:text-indigo-600:is(.dark *),
+html.dark .dark\:text-indigo-700:is(.dark *),
+html.dark .dark\:text-indigo-800:is(.dark *),
+html.dark .dark\:text-indigo-900:is(.dark *) {
+  color: #e7ebf1 !important;
+}
+html.dark .dark\:bg-indigo-500:is(.dark *),
+html.dark .dark\:bg-indigo-600:is(.dark *),
+html.dark .dark\:bg-indigo-700:is(.dark *) {
+  background-color: var(--accent-gold) !important;
+  color: #0a0e17 !important;
+}
+html.dark .dark\:bg-indigo-800:is(.dark *),
+html.dark .dark\:bg-indigo-900:is(.dark *) {
+  background-color: var(--bg-hover) !important;
+}
+html.dark .dark\:bg-indigo-50:is(.dark *),
+html.dark .dark\:bg-indigo-100:is(.dark *) {
+  background-color: var(--status-info-dim) !important;
+}
+html.dark .dark\:bg-indigo-500\/5:is(.dark *),
+html.dark .dark\:bg-indigo-500\/10:is(.dark *),
+html.dark .dark\:bg-indigo-500\/20:is(.dark *),
+html.dark .dark\:bg-indigo-600\/5:is(.dark *),
+html.dark .dark\:bg-indigo-600\/10:is(.dark *),
+html.dark .dark\:bg-indigo-600\/20:is(.dark *) {
+  background-color: rgba(197, 160, 89, 0.1) !important;
+}
+html.dark .dark\:border-indigo-200:is(.dark *),
+html.dark .dark\:border-indigo-300:is(.dark *),
+html.dark .dark\:border-indigo-400:is(.dark *),
+html.dark .dark\:border-indigo-500:is(.dark *),
+html.dark .dark\:border-indigo-600:is(.dark *),
+html.dark .dark\:border-indigo-700:is(.dark *),
+html.dark .dark\:border-indigo-800:is(.dark *) {
+  border-color: var(--border-light) !important;
+}
+html.dark .dark\:ring-indigo-300:is(.dark *),
+html.dark .dark\:ring-indigo-400:is(.dark *),
+html.dark .dark\:ring-indigo-500:is(.dark *),
+html.dark .dark\:focus\:ring-indigo-400:is(.dark *),
+html.dark .dark\:focus\:ring-indigo-500:is(.dark *) {
+  --tw-ring-color: var(--accent-gold) !important;
+}
+html.dark .dark\:hover\:bg-indigo-500:is(.dark *):hover,
+html.dark .dark\:hover\:bg-indigo-600:is(.dark *):hover,
+html.dark .dark\:hover\:bg-indigo-700:is(.dark *):hover {
+  background-color: var(--accent-gold-hover) !important;
+  color: #0a0e17 !important;
+}
+html.dark .dark\:hover\:text-indigo-300:is(.dark *):hover,
+html.dark .dark\:hover\:text-indigo-400:is(.dark *):hover,
+html.dark .dark\:hover\:text-indigo-500:is(.dark *):hover {
+  color: var(--accent-gold) !important;
+}
+
 /* ── Unified dark surface + component layer (reblend) ───────────────────
    Enforces the reference design rules site-wide in dark mode so the UI
    feels cohesive instead of disorganized:

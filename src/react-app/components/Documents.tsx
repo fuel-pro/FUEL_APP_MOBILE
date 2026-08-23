@@ -629,7 +629,7 @@ export default function Documents() {
     .card { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .card h3 { margin: 0 0 10px 0; color: #22c55e; }
     .card p { margin: 5px 0; color: #555; }
-    .card.user { border-left: 4px solid #3b82f6; }
+    .card.user { border-left: 4px solid #c5a059; }
     .card.assistant { border-left: 4px solid #22c55e; }
     strong { color: #333; }
     .meta { color: #888; font-size: 12px; margin-top: 30px; }

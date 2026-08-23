@@ -165,7 +165,7 @@ const DEFAULT_CONFIG: GeneralSettingsConfig = {
   },
 
   theme: "dark",
-  accentColor: "#3b82f6",
+  accentColor: "#c5a059",
   compactMode: false,
   sidebarCollapsed: false,
   logoUrl: "",
