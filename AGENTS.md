@@ -7779,3 +7779,41 @@ Color themes (ThemeContext, applied via <html data-color-theme="...">):
 7. mint — Mint Lagoon.
 Switchable via the Header "Theme" button (desktop dropdown + mobile panel).
 Persists to cloud (app_color_theme app_kv key, scoped row id) + localStorage.
+
+
+## Session 2026-08-23 — iptv-org integration + VideoLAN VLC player integration (DEPLOYED LIVE, commit f167e36)
+
+The user's two requirements: (1) add iptv-org as an ADDITIONAL channel data source for the News tab Live Channels/Live TV/Live Radio (merged with the existing tvgarden.world source — not replacing it); (2) integrate the VideoLAN VLC media player using "any means necessary". Both delivered.
+
+### iptv-org integration (8000+ additional channels)
+
+- **api/iptv-channels.ts** (Vercel serverless) + **functions/api/iptv-channels.ts** (Cloudflare Pages Function): server-side proxy that fetches the iptv-org master channels.json (~8100 entries), filters to entries with a non-empty .url stream, maps to the LiveChannel shape, returns JSON with CORS headers. Relative path /api/iptv-channels works on both hosts.
+- **LiveStreamService.fetchIptvChannels(countryCode?)**: fetches the proxy, filters by country, dedupes by nanoid so a channel in BOTH tvgarden + iptv-org appears once. Merged via the same fetchLiveChannels(country) Promise.all.
+- iptv-org channels have HLS stream_urls but usually NO youtube_urls, so the YouTube-first auto-select still prefers tvgarden YouTube channels; iptv-org fills the long-tail (news/regional/international) with reliable HLS. The HLS CORS proxy (/api/hls-proxy) handles cross-origin segment fetches.
+
+### VideoLAN VLC player integration ("any means necessary")
+
+The actual VLC native desktop app CANNOT run in a browser (NPAPI plugins removed from all browsers 2015-2020; the only WASM port vlc.js/WebChimera is unmaintained + non-production). So the VLC EXPERIENCE is delivered via the browser-native hls.js + MSE pipeline (already in use), PLUS a genuine vlc:// deeplink handoff to the desktop VLC app when installed.
+
+- **src/react-app/hooks/useVLCKeyboardShortcuts.ts** (NEW): the COMPLETE VLC hotkey set (Space/k=play/pause, f=fullscreen, m=mute, Up/Down=volume 5%, Left/Right=seek 10s, Shift+Left/Right=seek 3s, n/p=next/prev track, l=loop, [/]=speed down/up, ==reset speed, Home/End=seek start/end, 0-9=seek 0-90%). Ignored when typing in form fields. Works globally in fullscreen.
+- **src/react-app/components/VLCStyleControls.tsx** (NEW): custom control bar REPLACING native <video controls>. Orange VLC accent (#FF8800) seek + volume slider thumbs. Play/pause, seek bar (LIVE badge + disabled for live streams), time display, volume + mute, playback speed menu (0.5x-2x), loop toggle, fullscreen, channel name, and an "Open in VLC" button that launches the desktop VLC via vlc://<stream-url> scheme. Auto-hides after 3s of inactivity (like desktop VLC).
+- **src/react-app/components/LiveFeedEmbed.tsx** (MODIFIED): removed native controls attr; added playerContainerRef (native Fullscreen API on the container so the control bar is visible in fullscreen); added goToNextChannel/goToPrevChannel + toggleFullscreen; wired useVLCKeyboardShortcuts + VLCStyleControls. **TDZ FIX**: the first build placed goToNextChannel/goToPrevChannel (referencing filteredChannels) BEFORE the filteredChannels useMemo declaration — JavaScript temporal dead zone threw ReferenceError: Cannot access Be before initialization (minified name) on tab mount = full white-screen crash. Fixed by moving next/prev + keyboard wiring to AFTER the filteredChannels useMemo.
+- **src/react-app/index.css** (MODIFIED): .vlc-seek-bar + .vlc-vol-bar slider thumb styling (orange #FF8800). prefers-reduced-motion support.
+
+### Verification (live, Cloudflare preview 42f19a7d)
+Logged in as founder QA (US station, USD). News > Live TV: LOADED WITHOUT CRASH (was white-screen ReferenceError before TDZ fix). VLC control bar renders (LIVE badge, 1x speed, play/pause, volume, loop, Open-in-VLC, fullscreen). Station dropdown shows merged tvgarden + iptv-org channels. tsc 0 errors, build 108 precache, prettier pass.
+
+### Deploy state 2026-08-23 (commit f167e36)
+- GitHub main: f167e36 (pushed, synced with origin/main; rebased on remote 7bc6bb4).
+- Cloudflare Pages: LIVE (preview 42f19a7d + main alias fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100; resets ~24h). GitHub integration auto-deploys when quota resets.
+- Supabase: no schema changes (frontend + serverless-only). No new external deps (uses existing hls.js).
+
+### Files added/modified
+- src/react-app/hooks/useVLCKeyboardShortcuts.ts — NEW
+- src/react-app/components/VLCStyleControls.tsx — NEW
+- src/react-app/components/LiveFeedEmbed.tsx — MODIFIED (VLC wiring + TDZ fix)
+- src/react-app/index.css — MODIFIED (VLC slider styling)
+- api/iptv-channels.ts — NEW (Vercel serverless iptv-org proxy)
+- functions/api/iptv-channels.ts — NEW (Cloudflare Pages Function)
+- src/react-app/services/LiveStreamService.ts — MODIFIED (merge iptv-org)
