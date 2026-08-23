@@ -6635,6 +6635,35 @@ network fetch). The tvgarden.world API runs entirely in the background.
 - **Supabase**: no schema changes (frontend-only).
 - tsc 0 errors, build success, prettier pass.
 
+## Session 2026-08-23 — YouTube channel playback fix (DEPLOYED LIVE, commit 46cb59c)
+
+### Root cause
+The tvgarden.world API returns YouTube embed URLs with the domain
+`youtube-nocookie.com` (e.g. `https://www.youtube-nocookie.com/embed/VIDEO_ID`),
+NOT `youtube.com`. The old code in `LiveFeedEmbed.tsx` had a regex that only
+matched `youtube.com`, so `activeYouTubeId` always returned `null` for ALL 145
+YouTube channels. The HLS effect returned early (youtube_urls.length > 0) but
+no iframe rendered → **blank video player for ALL YouTube channels**.
+
+### Fix (`src/react-app/components/LiveFeedEmbed.tsx`)
+1. Updated regex: `/(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/`
+2. Updated `includes()` checks to also match `youtube-nocookie.com`.
+3. YouTube iframe `src` now uses `youtube-nocookie.com` + `rel=0`.
+
+### Verification (live, 2026-08-23, Cloudflare preview 11a95582)
+- News → Live TV auto-selected "AAC Television" (YouTube channel).
+- **`<iframe>` element rendered** (was `<video>` before — now correctly detects
+  YouTube URL and renders the iframe embed).
+- 44 channel cards, no error/reconnecting overlays, no blank player.
+- Deployed chunk confirmed: `youtube-nocookie.com/embed` present.
+
+### Deploy state 2026-08-23 (commit 46cb59c)
+- **GitHub main**: 46cb59c (pushed).
+- **Cloudflare Pages**: LIVE (preview 11a95582 + main alias).
+- **Vercel**: BLOCKED by quota; GitHub integration auto-deploys on reset.
+- **Supabase**: no schema changes (frontend-only).
+- tsc 0 errors, build success, prettier pass.
+
 ## Session 2026-08-22 — Customers empty data fix + News Quick Stats + Invoice client creation
 
 ### Customers tab empty data — root cause + fix (DEPLOYED LIVE)
