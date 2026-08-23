@@ -16,9 +16,16 @@ import {
   LogIn,
   Fuel,
   User,
+  Search,
+  Building2,
 } from "lucide-react";
+import {
+  loginWithAccessCode,
+  lookupStation,
+  type StationLookupResult,
+} from "@/react-app/lib/station-access-code-service";
 
-type LoginMode = "email" | "username" | "register";
+type LoginMode = "email" | "username" | "register" | "station";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -116,6 +123,23 @@ export default function AuthLogin() {
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // --- Station Member login (access code) state ---
+  const [stationQuery, setStationQuery] = useState("");
+  const [stationResults, setStationResults] = useState<StationLookupResult[]>(
+    [],
+  );
+  const [selectedStation, setSelectedStation] =
+    useState<StationLookupResult | null>(null);
+  const [stationSearching, setStationSearching] = useState(false);
+  const [stationUsername, setStationUsername] = useState("");
+  const [stationPassword, setStationPassword] = useState("");
+  const [stationLoginLoading, setStationLoginLoading] = useState(false);
+  // Fallback manual entry (when the lookup_station RPC isn't available).
+  const [manualOwnerId, setManualOwnerId] = useState("");
+  const [manualStationId, setManualStationId] = useState("");
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const stationSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear the Google spinner once auth completes (token-flow success path —
   // the failure path clears it in handleGoogleLogin). Also add a safety
@@ -310,6 +334,72 @@ export default function AuthLogin() {
     // onAuthStateChange listener handles the transition.
   };
 
+  // --- Station Member login handlers ---
+
+  // Debounced station search: looks up stations by code or name via the
+  // lookup_station RPC. If the RPC isn't available (migration 026 not
+  // applied), returns [] and the UI shows a "enter manually" fallback.
+  const handleStationSearch = useCallback((value: string) => {
+    setStationQuery(value);
+    setSelectedStation(null);
+    if (stationSearchRef.current) clearTimeout(stationSearchRef.current);
+    const q = value.trim();
+    if (q.length < 2) {
+      setStationResults([]);
+      return;
+    }
+    setStationSearching(true);
+    stationSearchRef.current = setTimeout(async () => {
+      const results = await lookupStation(q);
+      setStationResults(results);
+      setStationSearching(false);
+      // If no results and the RPC returned nothing, hint at manual entry.
+      if (results.length === 0) {
+        setShowManualEntry(true);
+      } else {
+        setShowManualEntry(false);
+      }
+    }, 400);
+  }, []);
+
+  const handleStationLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError("");
+    if (!stationUsername.trim() || !stationPassword) {
+      setLocalError("Please enter your username and password.");
+      return;
+    }
+    // Resolve the station: either from the search selection or the manual
+    // ownerId + stationId fallback entry.
+    let ownerId = selectedStation?.ownerId || manualOwnerId.trim();
+    let stationId = selectedStation?.stationId || manualStationId.trim();
+    if (!ownerId || !stationId) {
+      setLocalError(
+        "Please search for and select your station, or enter the Station Owner ID and Station ID manually.",
+      );
+      return;
+    }
+    setStationLoginLoading(true);
+    try {
+      const session = await loginWithAccessCode(
+        stationUsername.trim(),
+        stationPassword,
+        ownerId,
+        stationId,
+      );
+      // Success — redirect to the Station Access viewer which reads the
+      // session from localStorage and renders the read-only dashboard.
+      navigate("/station-access", { replace: true });
+      void session;
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Station login failed.",
+      );
+    } finally {
+      setStationLoginLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex overflow-hidden">
       {/* Animated background blobs */}
@@ -466,6 +556,14 @@ export default function AuthLogin() {
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${mode === "username" ? "bg-indigo-600 text-white shadow-md" : "text-gray-400 hover:text-gray-300"}`}
               >
                 <User className="w-3.5 h-3.5" /> Username
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("station")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${mode === "station" ? "bg-green-600 text-white shadow-md" : "text-gray-400 hover:text-gray-300"}`}
+                title="Log in with a station-assigned username + password (no signup needed)"
+              >
+                <Building2 className="w-3.5 h-3.5" /> Station
               </button>
             </div>
           )}
@@ -625,6 +723,194 @@ export default function AuthLogin() {
                   </>
                 )}
               </button>
+            </form>
+          )}
+
+          {/* STATION MEMBER LOGIN FORM (access code) */}
+          {mode === "station" && (
+            <form
+              onSubmit={handleStationLogin}
+              className="space-y-4"
+              noValidate
+            >
+              {/* Station search */}
+              <div>
+                <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                  Find Your Station
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    value={stationQuery}
+                    onChange={(e) => {
+                      handleStationSearch(e.target.value);
+                      setLocalError("");
+                    }}
+                    placeholder="Station name or code (e.g. Founder Admin Station)"
+                    className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                    autoFocus
+                  />
+                  {stationSearching && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-600 border-t-gray-300 rounded-full animate-spin" />
+                  )}
+                </div>
+                {/* Search results */}
+                {stationResults.length > 0 && (
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                    {stationResults.map((s) => (
+                      <button
+                        key={s.stationId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStation(s);
+                          setStationQuery(s.stationName);
+                          setStationResults([]);
+                          setLocalError("");
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center gap-2 ${selectedStation?.stationId === s.stationId ? "bg-green-600/20 border border-green-500/50 text-white" : "bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10"}`}
+                      >
+                        <Building2 className="w-3.5 h-3.5 flex-shrink-0 text-green-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">
+                            {s.stationName}
+                          </p>
+                          {s.code && (
+                            <p className="text-[10px] text-gray-500 truncate">
+                              Code: {s.code}
+                            </p>
+                          )}
+                        </div>
+                        {selectedStation?.stationId === s.stationId && (
+                          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Selected station confirmation */}
+                {selectedStation && stationResults.length === 0 && (
+                  <div className="mt-2 px-3 py-2 rounded-lg bg-green-600/10 border border-green-500/30 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <span className="text-xs text-green-300 truncate">
+                      {selectedStation.stationName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStation(null);
+                        setStationQuery("");
+                      }}
+                      className="ml-auto text-[10px] text-gray-400 hover:text-gray-200"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Manual entry fallback (shown when lookup RPC unavailable) */}
+              {showManualEntry &&
+                !selectedStation &&
+                stationQuery.length >= 2 &&
+                !stationSearching && (
+                  <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+                    <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      No stations found by search. Enter the IDs from your
+                      access link manually.
+                    </p>
+                    <input
+                      type="text"
+                      value={manualOwnerId}
+                      onChange={(e) => setManualOwnerId(e.target.value)}
+                      placeholder="Station Owner ID"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-xs placeholder-gray-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={manualStationId}
+                      onChange={(e) => setManualStationId(e.target.value)}
+                      placeholder="Station ID"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-xs placeholder-gray-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                )}
+
+              {/* Username + password */}
+              <div className="border-t border-white/10 pt-3 space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="text"
+                      value={stationUsername}
+                      onChange={(e) => {
+                        setStationUsername(e.target.value);
+                        setLocalError("");
+                      }}
+                      placeholder="Your assigned username"
+                      className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                      autoComplete="username"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={stationPassword}
+                      onChange={(e) => {
+                        setStationPassword(e.target.value);
+                        setLocalError("");
+                      }}
+                      placeholder="Your assigned password"
+                      className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={stationLoginLoading}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all shadow-lg flex items-center justify-center gap-2"
+              >
+                {stationLoginLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="w-4 h-4" />
+                    Access Station
+                  </>
+                )}
+              </button>
+              <p className="text-[11px] text-gray-500 text-center">
+                Log in with the username + password your station owner assigned
+                you. No signup needed — read-only access to approved sections.
+              </p>
             </form>
           )}
 

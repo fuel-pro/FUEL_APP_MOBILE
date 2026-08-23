@@ -112,6 +112,7 @@ import {
   ArrowRightLeft,
   Mail,
   ExternalLink,
+  Eye,
 } from "lucide-react";
 import {
   getAccessCodes,
@@ -2898,15 +2899,37 @@ export default function StationManager({ onClose }: StationManagerProps) {
                           </p>
                         </div>
                       </div>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full ${
-                          c.enabled
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-gray-500/20 text-gray-400"
-                        }`}
-                      >
-                        {c.enabled ? "Active" : "Disabled"}
-                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <a
+                          href={`/#/station-access`}
+                          onClick={(e) => {
+                            // Open the Station Access viewer in a new tab
+                            // so the owner can preview the read-only snapshot
+                            // their members see.
+                            e.preventDefault();
+                            const sid =
+                              accessStationId || currentStation?.id || "";
+                            const oid = user?.id || "";
+                            window.open(
+                              `/#/station-access?owner=${encodeURIComponent(oid)}&station=${encodeURIComponent(sid)}`,
+                              "_blank",
+                            );
+                          }}
+                          className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-lg text-[10px] font-medium inline-flex items-center gap-1"
+                          title="Preview the read-only station snapshot members see"
+                        >
+                          <Eye size={11} /> Preview
+                        </a>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${
+                            c.enabled
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : "bg-gray-500/20 text-gray-400"
+                          }`}
+                        >
+                          {c.enabled ? "Active" : "Disabled"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

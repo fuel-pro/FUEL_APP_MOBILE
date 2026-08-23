@@ -465,3 +465,50 @@ export function getAccessSession(): StationAccessSession | null {
 export function clearAccessSession(): void {
   localStorage.removeItem(SESSION_STORAGE_KEY);
 }
+
+// ---------------------------------------------------------------------------
+// Station lookup — lets a member find their station by code or name WITHOUT
+// knowing the owner UUID + station UUID. Powers the "Station Member" login
+// mode on the main AuthLogin page.
+//
+// Calls the `lookup_station(p_query text)` SECURITY DEFINER RPC (migration
+// 026), which an UNAUTHENTICATED member can invoke. Returns up to 10 matches
+// ranked by exact-code > exact-name > partial. Only stationId/ownerId/
+// stationName/code are returned (no PII).
+//
+// GRACEFUL DEGRADATION: if the RPC doesn't exist yet (migration 026 not
+// applied), the RPC call returns a PostgREST error (PGRST202 / 404). In
+// that case we return an empty array and the UI falls back to the manual
+// ownerId + stationId entry flow.
+// ---------------------------------------------------------------------------
+
+export interface StationLookupResult {
+  stationId: string;
+  ownerId: string;
+  stationName: string;
+  code?: string;
+}
+
+export async function lookupStation(
+  query: string,
+): Promise<StationLookupResult[]> {
+  const q = query.trim();
+  if (!q) return [];
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client.rpc("lookup_station", {
+      p_query: q,
+    });
+    if (error) {
+      // PGRST202 = function not found (migration 026 not applied yet).
+      // Return empty so the UI falls back to manual entry.
+      console.warn("[station-lookup] RPC unavailable:", error.message);
+      return [];
+    }
+    if (!Array.isArray(data)) return [];
+    return data as StationLookupResult[];
+  } catch (e) {
+    console.warn("[station-lookup] failed:", e);
+    return [];
+  }
+}

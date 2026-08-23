@@ -18,12 +18,17 @@ import {
   AlertCircle,
   LayoutDashboard,
   TrendingUp,
+  Search,
+  Building2,
+  CheckCircle2,
 } from "lucide-react";
 import {
   loginWithAccessCode,
   getAccessSession,
   clearAccessSession,
+  lookupStation,
   type StationAccessSession,
+  type StationLookupResult,
 } from "@/react-app/lib/station-access-code-service";
 import {
   getStationSnapshot,
@@ -52,6 +57,13 @@ export default function StationAccess() {
   const [snapshot, setSnapshot] = useState<StationSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [activeView, setActiveView] = useState<string>("dashboard");
+  // Station search (lookup by name/code instead of manual UUID entry).
+  const [stationQuery, setStationQuery] = useState("");
+  const [stationResults, setStationResults] = useState<StationLookupResult[]>(
+    [],
+  );
+  const [stationSearching, setStationSearching] = useState(false);
+  const [showManualIds, setShowManualIds] = useState(false);
 
   useEffect(() => {
     setSession(getAccessSession());
@@ -66,6 +78,34 @@ export default function StationAccess() {
     if (station) setStationId(station);
   }, []);
 
+  // Debounced station search by name or code.
+  const handleStationSearch = useCallback((value: string) => {
+    setStationQuery(value);
+    setStationOwnerId("");
+    setStationId("");
+    const q = value.trim();
+    if (q.length < 2) {
+      setStationResults([]);
+      return;
+    }
+    setStationSearching(true);
+    const t = setTimeout(async () => {
+      const results = await lookupStation(q);
+      setStationResults(results);
+      setStationSearching(false);
+      if (results.length === 0) setShowManualIds(true);
+      else setShowManualIds(false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  const handleSelectStation = (s: StationLookupResult) => {
+    setStationOwnerId(s.ownerId);
+    setStationId(s.stationId);
+    setStationQuery(s.stationName);
+    setStationResults([]);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -75,7 +115,7 @@ export default function StationAccess() {
     }
     if (!stationOwnerId.trim() || !stationId.trim()) {
       setError(
-        "Station owner ID and station ID are required. Use the link provided by the station owner.",
+        "Please search for and select your station, or enter the IDs manually.",
       );
       return;
     }
@@ -635,30 +675,114 @@ export default function StationAccess() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
+          {/* Station search (by name or code) — replaces manual UUID entry */}
           <div>
             <label className="text-xs text-gray-500 mb-1 block">
-              Station Owner ID
+              Find Your Station
             </label>
-            <input
-              type="text"
-              value={stationOwnerId}
-              onChange={(e) => setStationOwnerId(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
-              placeholder="Provided in your access link"
-            />
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                value={stationQuery}
+                onChange={(e) => handleStationSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+                placeholder="Station name or code"
+                autoFocus
+              />
+              {stationSearching && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+              )}
+            </div>
+            {/* Search results */}
+            {stationResults.length > 0 && (
+              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {stationResults.map((s) => (
+                  <button
+                    key={s.stationId}
+                    type="button"
+                    onClick={() => handleSelectStation(s)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors ${stationOwnerId === s.ownerId ? "bg-green-500/10 border border-green-500/30" : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                  >
+                    <Building2
+                      size={14}
+                      className="text-green-600 flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium dark:text-white truncate">
+                        {s.stationName}
+                      </p>
+                      {s.code && (
+                        <p className="text-[10px] text-gray-500 truncate">
+                          Code: {s.code}
+                        </p>
+                      )}
+                    </div>
+                    {stationOwnerId === s.ownerId && (
+                      <CheckCircle2
+                        size={14}
+                        className="text-green-600 flex-shrink-0"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Selected station confirmation */}
+            {stationOwnerId && stationResults.length === 0 && stationQuery && (
+              <div className="mt-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center gap-2">
+                <CheckCircle2
+                  size={14}
+                  className="text-green-600 flex-shrink-0"
+                />
+                <span className="text-xs text-green-700 dark:text-green-400 truncate">
+                  {stationQuery}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStationQuery("");
+                    setStationOwnerId("");
+                    setStationId("");
+                  }}
+                  className="ml-auto text-[10px] text-gray-400 hover:text-gray-600"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+            {/* Manual ID entry fallback */}
+            {showManualIds &&
+              !stationOwnerId &&
+              stationQuery.length >= 2 &&
+              !stationSearching && (
+                <div className="mt-2 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-2">
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                    <AlertCircle size={14} />
+                    No stations found by search. Enter the IDs from your access
+                    link.
+                  </p>
+                  <input
+                    type="text"
+                    value={stationOwnerId}
+                    onChange={(e) => setStationOwnerId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white"
+                    placeholder="Station Owner ID"
+                  />
+                  <input
+                    type="text"
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white"
+                    placeholder="Station ID"
+                  />
+                </div>
+              )}
           </div>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">
-              Station ID
-            </label>
-            <input
-              type="text"
-              value={stationId}
-              onChange={(e) => setStationId(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
-              placeholder="Provided in your access link"
-            />
-          </div>
+
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <label className="text-xs text-gray-500 mb-1 block">Username</label>
             <div className="relative">
