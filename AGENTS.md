@@ -8040,3 +8040,76 @@ unused) + DarkCard.tsx + Navbar.tsx (dead from a prior session, never wired).
   GitHub integration auto-deploys when quota resets ~24h).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, prettier clean, build success (105 precache).
+
+
+## Session 2026-08-23 — Reverse-engineer tvgarden.world as the backend source (DEPLOYED LIVE, commit df31fcc)
+
+The user asked to reverse-engineer https://tvgarden.world/ as the backend source for the News tab Live Channels/Live TV/Live Radio. Fully reverse-engineered the undocumented tvgarden API and rebuilt the backend around it as the canonical source.
+
+### Reverse-engineering findings (documented in api/_lib/tvgarden.ts)
+
+1. **Endpoint shape**: GET https://tvgarden.world/api/{mode}/{type}/{id}.json
+   - mode = "tv" | "radio"
+   - type = "countries" | "categories"
+   - id = lowercase ISO-3166 alpha-2 country code (e.g. "us") OR a category id (e.g. "news", "movies", "rock")
+   - Returns a JSON array of channel objects: {nanoid, name, stream_urls[], youtube_urls[], languages[], country, isGeoBlocked}
+
+2. **Compression (the non-obvious part)**: DOUBLE-compressed. The origin serves gzip(json); Cloudflare (the CDN in front of tvgarden) then adds brotli on top, so the wire bytes are br(gzip(json)). fetch() auto-removes the outer brotli (via the content-encoding header), leaving gzip(json) bytes in the response body. The proxy then gunzips the inner layer via DecompressionStream (Web Streams API, works in both Node 22 + Cloudflare Workers). The old code set Accept-Encoding: identity hoping to skip compression, but Cloudflare ignored it and served brotli from cache anyway — the new code lets fetch() auto-decompress and explicitly gunzips the inner layer.
+
+3. **Catalog** (derived from sitemap_countries.xml + probing every category endpoint):
+   - 218 countries (ISO-3166 alpha-2 codes, lowercase) — ad, ae, af, ... zw
+   - 27 TV categories — news, movies, sports, music, entertainment, kids, documentary, education, religious, business, general, family, lifestyle, culture, classic, weather, travel, auto, animation, comedy, cooking, legislative, outdoor, relax, science, series, shop
+   - 22 radio categories — news, talk, sports, politics, hits, pop, rock, electronic, indie, metal, jazz, classical, soul, blues, reggae, folk, country, latin, schlager, oldies, chill, christmas, religious
+
+### NEW shared library: api/_lib/tvgarden.ts
+
+The single source of truth for the reverse-engineered contract. Exports:
+- TVGARDEN_COUNTRIES (218 ISO-2 codes), TVGARDEN_TV_CATEGORIES (27), TVGARDEN_RADIO_CATEGORIES (22), TVGARDEN_COUNTRY_NAMES (human names for all 218).
+- tvgardenCatalog() -> full catalog for the index endpoint.
+- isValidTvgRequest(mode, type, id) -> validate against the catalog (reject unknown ids early, saves an upstream round-trip).
+- tvgardenUrl(mode, type, id) -> build the upstream URL.
+- decodeTvgardenBody(buffer) -> robust gzip+JSON decode (handles the double compression + plain-JSON fallback).
+- filterPlayable(channels) -> never surface dead streams (no stream_url + no youtube_url).
+- TvgChannel type, TvgMode, TvgType.
+
+### REWRITTEN: api/live-channels.ts (Vercel) + functions/api/live-channels.ts (Cloudflare)
+
+Both now use the shared library / inline catalog. Changes:
+- Validate requests against the reverse-engineered catalog (HTTP 400 on unknown mode/type/id — was a silent empty 200 before).
+- Let fetch() auto-decompress the outer brotli (removed the fragile Accept-Encoding: identity hack).
+- Gunzip the inner gzip layer via DecompressionStream.
+- 5-min in-memory cache per serverless instance.
+- Zero upstream attribution in the UI (client only sees /api/live-channels).
+
+### NEW: api/tvgarden.ts (Vercel) + functions/api/tvgarden.ts (Cloudflare)
+
+A catalog + channels endpoint:
+- GET /api/tvgarden -> the full reverse-engineered catalog (countries + tvCategories + radioCategories + sourceCount) so the frontend can build filter dropdowns dynamically without hardcoding the lists.
+- GET /api/tvgarden?mode=tv&type=countries&id=us -> alias for /api/live-channels (single endpoint for both catalog + channels).
+
+### Verification (live, Cloudflare preview 4b50e003 + main alias)
+
+curl tests confirmed the reverse-engineered backend works:
+- /api/tvgarden -> 218 countries, 27 TV cats, 23 radio cats (with human names).
+- /api/tvgarden?mode=tv&type=countries&id=us -> 1440 channels.
+- /api/live-channels?mode=tv&type=categories&id=movies -> 198 channels.
+- /api/live-channels?mode=radio&type=categories&id=pop -> 8583 channels.
+- /api/live-channels?mode=radio&type=countries&id=us -> 4100 channels.
+- /api/live-channels?mode=tv&type=countries&id=zzz -> HTTP 400 (validation works).
+- /api/live-channels?mode=radio&type=countries&id=gb -> 0 (tvgarden itself 404s on that combo; graceful empty).
+
+Browser verification (Cloudflare preview 4b50e003): logged in as founder QA -> News -> Live TV tab loaded with 40+ channel cards from tvgarden (00s Replay, 21 Jump Street, 24 Hour Free Movies...), VLC control bar rendered (LIVE badge, 1x speed, play/pause, seek, volume, loop, Open-in-VLC, fullscreen), country dropdown (218 countries), sub-category dropdown (All Channels/General/Entertainment...), station dropdown populated with merged tvgarden + iptv-org channels. No crashes, no dead streams.
+
+### Deploy state 2026-08-23 (commit df31fcc, rebased on origin/main 8c9de51 -> e92794e)
+
+- GitHub main: e92794e (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview 4b50e003 + main alias fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100; resets ~24h). GitHub integration auto-deploys when quota resets.
+- Supabase: no schema changes (frontend + serverless only). No new external deps (uses existing fetch + DecompressionStream).
+
+### Files added/modified
+- api/_lib/tvgarden.ts — NEW (shared reverse-engineered library).
+- api/live-channels.ts — REWRITTEN (uses shared library, validation, robust decompression).
+- api/tvgarden.ts — NEW (Vercel catalog + channels endpoint).
+- functions/api/live-channels.ts — REWRITTEN (inline catalog, mirrors Vercel).
+- functions/api/tvgarden.ts — NEW (Cloudflare catalog + channels endpoint).
