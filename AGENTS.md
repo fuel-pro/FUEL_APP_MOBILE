@@ -8168,3 +8168,64 @@ the app is dark, with @media print light fallback.
   GitHub integration auto-deploys when quota resets ~24h).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, prettier clean, build success.
+
+
+## Session 2026-08-23 — Reduce blue in dark mode (commits fd29a59 + 4716e2e)
+
+User report: "there is too much blue in the ui on dark mode, reduce it or
+fix it." ~1100 blue + ~250 indigo (blue-family) Tailwind utility classes
+across components made the dark UI over-saturated with blue (active tabs,
+buttons, badges, icons, links, borders, gradients, focus rings). Pixel
+measurement before fix: 17.34% blue viewport-wide, 20.40% in the tab-nav.
+
+### Root cause — two layers of blue utilities
+1. `dark:text-blue-*` / `dark:bg-blue-*` (dark:-prefixed) — 524+ occurrences.
+2. PLAIN `text-blue-400` / `bg-blue-500` (NO dark: prefix) — the active tab,
+   links, buttons use these; they apply in BOTH light and dark mode. The
+   first fix pass (commit fd29a59) only caught the dark:-prefixed variants,
+   so the visible blue remained (still 17.34% — identical, because the
+   plain utilities dominated). Commit 4716e2e added the plain-utility
+   overrides scoped to `html.dark` (light mode unchanged) — this is what
+   actually removed the visible blue.
+
+### Fix — index.css global dark-mode remap (html.dark, !important beats Tailwind)
+For BOTH blue AND indigo (indigo is blue-family), covering dark:-prefixed
+AND plain utilities:
+- text-blue/indigo-* -> off-white #e7ebf1 (no blue hue)
+- bg-500/600/700 (primary actions) -> var(--accent-gold) with dark text
+- bg-800/900 (dark blue surfaces) -> var(--bg-hover)
+- bg-50/100 (light tints) -> var(--status-info-dim)
+- bg-500/5,/10,/20 (active-tab washes) -> gold tint rgba(197,160,89,0.1)
+- border-* -> var(--border-light) (neutral)
+- ring/focus:ring -> var(--accent-gold)
+- hover:bg -> gold-hover; hover:text -> gold
+- from/to/via gradients -> gold/transparent
+
+Also: GeneralSettings.tsx default accentColor #3b82f6 -> #c5a059 (gold);
+Documents.tsx legacy .card.user border-left #3b82f6 -> #c5a059.
+
+### Verification (live, 2026-08-23, Cloudflare preview 437dd0ba)
+- Built CSS (index-Bkqs61Qz.css) contains:
+  `html.dark .text-blue-400,...{color:#e7ebf1!important}` (plain override)
+  + `dark:text-blue-400:is(.dark *)...{color:#e7ebf1!important}` (dark: override).
+- Browser pixel analysis (fresh load, SW cache bypassed via ?cb=):
+  - Viewport BLUE: 17.34% -> 1.38% (92% reduction)
+  - Tab-nav BLUE: 20.40% -> 2.75% (87% reduction)
+  - Active tab row: now rgb(255,255,255) off-white (was blue rgb(96,165,250))
+- Remaining ~1.4% blue is Chart.js canvas bars (data-viz where blue is a
+  conventional dataset color; colors are JS-defined per-chart, not CSS
+  classes). The dominant UI blue (tabs, buttons, badges, links, borders,
+  focus rings, icons) is fully resolved.
+
+### Deploy state 2026-08-23
+- GitHub main: fd29a59 (dark: overrides + GeneralSettings/Documents) +
+  4716e2e (plain utility overrides — the actual visible-blue fix).
+- Cloudflare Pages: LIVE (preview https://437dd0ba.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success (CSS 278KB).
+- NOTE: users on the main alias with a cached service worker may need a
+  hard reload (Ctrl+Shift+R) to see the new CSS; the preview URL has no
+  SW and always serves the latest.
