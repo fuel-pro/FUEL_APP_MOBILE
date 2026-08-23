@@ -51,18 +51,18 @@ import SubTabBar from "@/react-app/components/SubTabBar";
 import DocumentConverter from "@/react-app/components/DocumentConverter";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "M-PESA Receipt": "#10b981",
-  Invoice: "#3b82f6",
-  "Delivery Note": "#f59e0b",
-  Payroll: "#8b5cf6",
-  "Sales Report": "#06b6d4",
-  "Expense Claim": "#ef4444",
-  Compliance: "#ec4899",
-  Inventory: "#14b8a6",
-  "Fuel Document": "#f97316",
-  Legal: "#6366f1",
-  Report: "#0ea5e9",
-  General: "#94a3b8",
+  "M-PESA Receipt": "var(--blend-green)",
+  Invoice: "var(--blend-blue)",
+  "Delivery Note": "var(--blend-amber)",
+  Payroll: "var(--blend-blue)",
+  "Sales Report": "var(--blend-blue)",
+  "Expense Claim": "var(--blend-red)",
+  Compliance: "var(--blend-red)",
+  Inventory: "var(--blend-green)",
+  "Fuel Document": "var(--blend-amber)",
+  Legal: "var(--blend-blue)",
+  Report: "var(--blend-blue)",
+  General: "var(--blend-text-secondary)",
 };
 
 const CATEGORY_ICONS: Record<string, typeof FileText> = {
@@ -552,7 +552,7 @@ export default function DocumentCenter() {
       style={{
         padding: 16,
         fontFamily: "system-ui, sans-serif",
-        color: "#e2e8f0",
+        color: "var(--blend-border)",
       }}
     >
       {/* Header */}
@@ -562,15 +562,18 @@ export default function DocumentCenter() {
             margin: "0 0 6px",
             fontSize: 20,
             fontWeight: 700,
-            color: "#fff",
+            color: "var(--blend-text-primary)",
             display: "flex",
             alignItems: "center",
             gap: 10,
           }}
         >
-          <Layers size={22} style={{ color: "#f59e0b" }} /> Document Center
+          <Layers size={22} style={{ color: "var(--blend-amber)" }} /> Document
+          Center
         </h2>
-        <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
+        <p
+          style={{ margin: 0, fontSize: 12, color: "var(--blend-text-muted)" }}
+        >
           Upload, organize, and manage your fuel station documents
         </p>
       </div>
@@ -604,26 +607,26 @@ export default function DocumentCenter() {
               icon={<FileText size={16} />}
               label="Documents"
               value={String(stats.count)}
-              color="#3b82f6"
+              color="var(--blend-blue)"
             />
             <StatCard
               icon={<HardDrive size={16} />}
               label="Storage Used"
               value={formatSize(stats.storage)}
-              color="#10b981"
+              color="var(--blend-green)"
             />
             <StatCard
               icon={<CheckCircle2 size={16} />}
               label="Uploaded"
               value={String(doneUploads)}
-              color="#8b5cf6"
+              color="var(--blend-blue)"
             />
             {errorUploads > 0 && (
               <StatCard
                 icon={<AlertTriangle size={16} />}
                 label="Errors"
                 value={String(errorUploads)}
-                color="#ef4444"
+                color="var(--blend-red)"
               />
             )}
           </div>
@@ -640,7 +643,7 @@ export default function DocumentCenter() {
             }}
             tabIndex={0}
             style={{
-              border: `2px dashed ${isDragOver ? "#f59e0b" : "#334155"}`,
+              border: `2px dashed ${isDragOver ? "var(--blend-amber)" : "var(--blend-text-secondary)"}`,
               borderRadius: 12,
               padding: "28px 20px",
               textAlign: "center",
@@ -678,11 +681,19 @@ export default function DocumentCenter() {
             <FileUp
               size={32}
               style={{
-                color: isDragOver ? "#f59e0b" : "#475569",
+                color: isDragOver
+                  ? "var(--blend-amber)"
+                  : "var(--blend-text-secondary)",
                 marginBottom: 8,
               }}
             />
-            <p style={{ margin: "0 0 12px", fontSize: 14, color: "#94a3b8" }}>
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontSize: 14,
+                color: "var(--blend-text-secondary)",
+              }}
+            >
               {isDragOver
                 ? "Drop files or folders here"
                 : "Drag & drop files or folders here — you can paste too"}
@@ -699,8 +710,8 @@ export default function DocumentCenter() {
                 onClick={() => fileInputRef.current?.click()}
                 style={{
                   padding: "10px 18px",
-                  background: "#f59e0b",
-                  color: "#000",
+                  background: "var(--blend-amber)",
+                  color: "var(--blend-surface-dark)",
                   border: "none",
                   borderRadius: 8,
                   fontSize: 13,
@@ -718,8 +729,8 @@ export default function DocumentCenter() {
                 style={{
                   padding: "10px 18px",
                   background: "transparent",
-                  color: "#f59e0b",
-                  border: "1px solid #f59e0b",
+                  color: "var(--blend-amber)",
+                  border: "1px solid var(--blend-amber)",
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 600,
@@ -732,7 +743,13 @@ export default function DocumentCenter() {
                 <FolderUp size={15} /> Select Folder
               </button>
             </div>
-            <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 11,
+                color: "var(--blend-text-secondary)",
+              }}
+            >
               Supports PDF, Word, Excel, Images, CSV, Text, ZIP — Max 100MB per
               file
             </p>
@@ -746,7 +763,7 @@ export default function DocumentCenter() {
                 background: "rgba(30,30,35,0.6)",
                 borderRadius: 10,
                 padding: 12,
-                border: "1px solid #334155",
+                border: "1px solid var(--blend-text-secondary)",
               }}
             >
               <div
@@ -758,11 +775,15 @@ export default function DocumentCenter() {
                 }}
               >
                 <span
-                  style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--blend-border)",
+                  }}
                 >
                   Upload Queue{" "}
                   {activeUploads > 0 && (
-                    <span style={{ color: "#f59e0b" }}>
+                    <span style={{ color: "var(--blend-amber)" }}>
                       ({activeUploads} active)
                     </span>
                   )}
@@ -771,7 +792,7 @@ export default function DocumentCenter() {
                   onClick={clearCompleted}
                   style={{
                     fontSize: 11,
-                    color: "#64748b",
+                    color: "var(--blend-text-muted)",
                     background: "none",
                     border: "none",
                     cursor: "pointer",
@@ -804,22 +825,33 @@ export default function DocumentCenter() {
                     }}
                   >
                     {item.status === "queued" && (
-                      <span style={{ color: "#64748b", flexShrink: 0 }}>
+                      <span
+                        style={{
+                          color: "var(--blend-text-muted)",
+                          flexShrink: 0,
+                        }}
+                      >
                         <Loader2 size={12} />
                       </span>
                     )}
                     {item.status === "uploading" && (
-                      <span style={{ color: "#f59e0b", flexShrink: 0 }}>
+                      <span
+                        style={{ color: "var(--blend-amber)", flexShrink: 0 }}
+                      >
                         <Loader2 size={12} className="spin" />
                       </span>
                     )}
                     {item.status === "done" && (
-                      <span style={{ color: "#8DCF74", flexShrink: 0 }}>
+                      <span
+                        style={{ color: "var(--blend-green)", flexShrink: 0 }}
+                      >
                         <CheckCircle2 size={12} />
                       </span>
                     )}
                     {item.status === "error" && (
-                      <span style={{ color: "#ef4444", flexShrink: 0 }}>
+                      <span
+                        style={{ color: "var(--blend-red)", flexShrink: 0 }}
+                      >
                         <AlertTriangle size={12} />
                       </span>
                     )}
@@ -829,7 +861,7 @@ export default function DocumentCenter() {
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
-                        color: "#cbd5e1",
+                        color: "var(--blend-text-muted)",
                       }}
                     >
                       {item.file.name}
@@ -850,20 +882,25 @@ export default function DocumentCenter() {
                           style={{
                             height: "100%",
                             width: `${item.progress}%`,
-                            background: "#035BFE",
+                            background: "var(--blend-blue)",
                             borderRadius: 2,
                             transition: "width 0.3s ease",
                           }}
                         />
                       </div>
                     )}
-                    <span style={{ color: "#475569", flexShrink: 0 }}>
+                    <span
+                      style={{
+                        color: "var(--blend-text-secondary)",
+                        flexShrink: 0,
+                      }}
+                    >
                       {formatSize(item.file.size)}
                     </span>
                     {item.folderPath && (
                       <span
                         style={{
-                          color: "#64748b",
+                          color: "var(--blend-text-muted)",
                           fontSize: 10,
                           background: "#1e293b",
                           padding: "2px 6px",
@@ -877,7 +914,7 @@ export default function DocumentCenter() {
                     {item.status === "error" && (
                       <span
                         style={{
-                          color: "#ef4444",
+                          color: "var(--blend-red)",
                           fontSize: 10,
                           flexShrink: 0,
                         }}
@@ -909,7 +946,7 @@ export default function DocumentCenter() {
                   left: 10,
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#475569",
+                  color: "var(--blend-text-secondary)",
                 }}
               />
               <input
@@ -921,9 +958,9 @@ export default function DocumentCenter() {
                   width: "100%",
                   padding: "8px 10px 8px 32px",
                   background: "#1a1a1f",
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   borderRadius: 8,
-                  color: "#e2e8f0",
+                  color: "var(--blend-border)",
                   fontSize: 13,
                   outline: "none",
                   boxSizing: "border-box",
@@ -939,7 +976,7 @@ export default function DocumentCenter() {
                     transform: "translateY(-50%)",
                     background: "none",
                     border: "none",
-                    color: "#475569",
+                    color: "var(--blend-text-secondary)",
                     cursor: "pointer",
                     padding: 2,
                   }}
@@ -953,9 +990,9 @@ export default function DocumentCenter() {
               style={{
                 padding: 8,
                 background: "#1a1a1f",
-                border: "1px solid #334155",
+                border: "1px solid var(--blend-text-secondary)",
                 borderRadius: 8,
-                color: "#94a3b8",
+                color: "var(--blend-text-secondary)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -968,9 +1005,9 @@ export default function DocumentCenter() {
               style={{
                 padding: 8,
                 background: "#1a1a1f",
-                border: "1px solid #334155",
+                border: "1px solid var(--blend-text-secondary)",
                 borderRadius: 8,
-                color: "#94a3b8",
+                color: "var(--blend-text-secondary)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -986,9 +1023,9 @@ export default function DocumentCenter() {
                 style={{
                   padding: "8px 12px",
                   background: "#1a1a1f",
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   borderRadius: 8,
-                  color: "#94a3b8",
+                  color: "var(--blend-text-secondary)",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -1035,8 +1072,10 @@ export default function DocumentCenter() {
                     cursor: "pointer",
                     border: "none",
                     flexShrink: 0,
-                    background: isActive ? "#f59e0b" : "#1e293b",
-                    color: isActive ? "#000" : "#94a3b8",
+                    background: isActive ? "var(--blend-amber)" : "#1e293b",
+                    color: isActive
+                      ? "var(--blend-surface-dark)"
+                      : "var(--blend-text-secondary)",
                   }}
                 >
                   {cat}{" "}
@@ -1056,7 +1095,13 @@ export default function DocumentCenter() {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--blend-text-muted)",
+                fontWeight: 600,
+              }}
+            >
               Folders:
             </span>
             <button
@@ -1064,9 +1109,9 @@ export default function DocumentCenter() {
               style={{
                 padding: "5px 10px",
                 background: "#1e293b",
-                border: "1px solid #334155",
+                border: "1px solid var(--blend-text-secondary)",
                 borderRadius: 6,
-                color: "#f59e0b",
+                color: "var(--blend-amber)",
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -1084,7 +1129,7 @@ export default function DocumentCenter() {
                 alignItems: "center",
                 gap: 4,
                 fontSize: 11,
-                color: "#64748b",
+                color: "var(--blend-text-muted)",
               }}
             >
               Upload to:
@@ -1094,9 +1139,9 @@ export default function DocumentCenter() {
                 style={{
                   padding: "4px 6px",
                   background: "#1a1a1f",
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   borderRadius: 6,
-                  color: "#e2e8f0",
+                  color: "var(--blend-border)",
                   fontSize: 11,
                   outline: "none",
                 }}
@@ -1125,9 +1170,9 @@ export default function DocumentCenter() {
                   style={{
                     padding: "5px 8px",
                     background: "#1a1a1f",
-                    border: "1px solid #334155",
+                    border: "1px solid var(--blend-text-secondary)",
                     borderRadius: 6,
-                    color: "#e2e8f0",
+                    color: "var(--blend-border)",
                     fontSize: 11,
                     outline: "none",
                     width: 150,
@@ -1137,10 +1182,10 @@ export default function DocumentCenter() {
                   onClick={handleCreateFolder}
                   style={{
                     padding: "5px 10px",
-                    background: "#f59e0b",
+                    background: "var(--blend-amber)",
                     border: "none",
                     borderRadius: 6,
-                    color: "#000",
+                    color: "var(--blend-surface-dark)",
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1161,7 +1206,7 @@ export default function DocumentCenter() {
                 border: "1px solid rgba(16,185,129,0.3)",
                 borderRadius: 6,
                 fontSize: 11,
-                color: "#10b981",
+                color: "var(--blend-green)",
               }}
             >
               {folderActionMsg}
@@ -1174,7 +1219,7 @@ export default function DocumentCenter() {
               style={{
                 textAlign: "center",
                 padding: "40px 20px",
-                color: "#475569",
+                color: "var(--blend-text-secondary)",
               }}
             >
               <File size={40} style={{ marginBottom: 10, opacity: 0.3 }} />
@@ -1288,7 +1333,7 @@ function StatCard({
         background: "rgba(30,30,35,0.6)",
         borderRadius: 10,
         padding: 12,
-        border: "1px solid #334155",
+        border: "1px solid var(--blend-text-secondary)",
         display: "flex",
         alignItems: "center",
         gap: 10,
@@ -1310,13 +1355,19 @@ function StatCard({
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: "var(--blend-text-primary)",
+          }}
+        >
           {value}
         </div>
         <div
           style={{
             fontSize: 10,
-            color: "#64748b",
+            color: "var(--blend-text-muted)",
             textTransform: "uppercase",
             letterSpacing: 0.5,
           }}
@@ -1387,7 +1438,7 @@ function FolderGroup({
     <div
       style={{
         background: "rgba(30,30,35,0.6)",
-        border: "1px solid #334155",
+        border: "1px solid var(--blend-text-secondary)",
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -1406,11 +1457,20 @@ function FolderGroup({
         }}
       >
         {expanded ? (
-          <ChevronDown size={14} style={{ color: "#94a3b8", flexShrink: 0 }} />
+          <ChevronDown
+            size={14}
+            style={{ color: "var(--blend-text-secondary)", flexShrink: 0 }}
+          />
         ) : (
-          <ChevronRight size={14} style={{ color: "#94a3b8", flexShrink: 0 }} />
+          <ChevronRight
+            size={14}
+            style={{ color: "var(--blend-text-secondary)", flexShrink: 0 }}
+          />
         )}
-        <FolderIcon size={16} style={{ color: "#f59e0b", flexShrink: 0 }} />
+        <FolderIcon
+          size={16}
+          style={{ color: "var(--blend-amber)", flexShrink: 0 }}
+        />
         {renaming && !isUnfiled ? (
           <div
             style={{ display: "flex", alignItems: "center", gap: 4 }}
@@ -1428,9 +1488,9 @@ function FolderGroup({
               style={{
                 padding: "3px 6px",
                 background: "#1a1a1f",
-                border: "1px solid #f59e0b",
+                border: "1px solid var(--blend-amber)",
                 borderRadius: 4,
-                color: "#e2e8f0",
+                color: "var(--blend-border)",
                 fontSize: 12,
                 outline: "none",
                 width: 160,
@@ -1440,10 +1500,10 @@ function FolderGroup({
               onClick={onSubmitRename}
               style={{
                 padding: "3px 8px",
-                background: "#f59e0b",
+                background: "var(--blend-amber)",
                 border: "none",
                 borderRadius: 4,
-                color: "#000",
+                color: "var(--blend-surface-dark)",
                 fontSize: 10,
                 cursor: "pointer",
               }}
@@ -1452,14 +1512,20 @@ function FolderGroup({
             </button>
           </div>
         ) : (
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--blend-border)",
+            }}
+          >
             {folderName}
           </span>
         )}
         <span
           style={{
             fontSize: 10,
-            color: "#64748b",
+            color: "var(--blend-text-muted)",
             background: "#1e293b",
             padding: "1px 7px",
             borderRadius: 10,
@@ -1479,7 +1545,7 @@ function FolderGroup({
               style={{
                 background: "none",
                 border: "none",
-                color: "#475569",
+                color: "var(--blend-text-secondary)",
                 cursor: "pointer",
                 padding: 2,
                 display: "flex",
@@ -1493,7 +1559,7 @@ function FolderGroup({
               style={{
                 background: "none",
                 border: "none",
-                color: "#475569",
+                color: "var(--blend-text-secondary)",
                 cursor: "pointer",
                 padding: 2,
                 display: "flex",
@@ -1508,17 +1574,19 @@ function FolderGroup({
             style={{ marginLeft: "auto", display: "flex", gap: 4 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <span style={{ fontSize: 10, color: "#94a3b8" }}>
+            <span
+              style={{ fontSize: 10, color: "var(--blend-text-secondary)" }}
+            >
               Move all files to Unfiled?
             </span>
             <button
               onClick={onConfirmDelete}
               style={{
                 padding: "2px 7px",
-                background: "#ef4444",
+                background: "var(--blend-red)",
                 border: "none",
                 borderRadius: 4,
-                color: "#fff",
+                color: "var(--blend-text-primary)",
                 fontSize: 10,
                 cursor: "pointer",
               }}
@@ -1530,9 +1598,9 @@ function FolderGroup({
               style={{
                 padding: "2px 7px",
                 background: "#1e293b",
-                border: "1px solid #334155",
+                border: "1px solid var(--blend-text-secondary)",
                 borderRadius: 4,
-                color: "#94a3b8",
+                color: "var(--blend-text-secondary)",
                 fontSize: 10,
                 cursor: "pointer",
               }}
@@ -1549,7 +1617,13 @@ function FolderGroup({
           style={{ padding: "4px 12px 10px", borderTop: "1px solid #1e293b" }}
         >
           {pageDocs.length === 0 ? (
-            <p style={{ fontSize: 11, color: "#475569", padding: "8px 0" }}>
+            <p
+              style={{
+                fontSize: 11,
+                color: "var(--blend-text-secondary)",
+                padding: "8px 0",
+              }}
+            >
               This folder is empty — upload or move files into it.
             </p>
           ) : viewMode === "grid" ? (
@@ -1607,7 +1681,7 @@ function FolderGroup({
                 gap: 10,
                 paddingTop: 10,
                 fontSize: 11,
-                color: "#64748b",
+                color: "var(--blend-text-muted)",
               }}
             >
               <button
@@ -1616,9 +1690,12 @@ function FolderGroup({
                 style={{
                   padding: "3px 9px",
                   background: "#1e293b",
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   borderRadius: 5,
-                  color: page === 0 ? "#334155" : "#e2e8f0",
+                  color:
+                    page === 0
+                      ? "var(--blend-text-secondary)"
+                      : "var(--blend-border)",
                   cursor: page === 0 ? "default" : "pointer",
                   fontSize: 11,
                 }}
@@ -1634,9 +1711,12 @@ function FolderGroup({
                 style={{
                   padding: "3px 9px",
                   background: "#1e293b",
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   borderRadius: 5,
-                  color: page >= totalPages - 1 ? "#334155" : "#e2e8f0",
+                  color:
+                    page >= totalPages - 1
+                      ? "var(--blend-text-secondary)"
+                      : "var(--blend-border)",
                   cursor: page >= totalPages - 1 ? "default" : "pointer",
                   fontSize: 11,
                 }}
@@ -1669,7 +1749,7 @@ function DocGridCard({
   onMoveDoc?: (d: DocMetadata, folder: string) => void;
 }) {
   const Icon = getFileIcon(doc.type, doc.name);
-  const color = CATEGORY_COLORS[doc.category] || "#94a3b8";
+  const color = CATEGORY_COLORS[doc.category] || "var(--blend-text-secondary)";
   const CatIcon = CATEGORY_ICONS[doc.category] || FileText;
   return (
     <div
@@ -1678,15 +1758,19 @@ function DocGridCard({
         background: "rgba(30,30,35,0.6)",
         borderRadius: 10,
         padding: 12,
-        border: "1px solid #334155",
+        border: "1px solid var(--blend-text-secondary)",
         cursor: "pointer",
         transition: "border-color 0.2s",
         display: "flex",
         flexDirection: "column",
         gap: 8,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#475569")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#334155")}
+      onMouseEnter={(e) =>
+        (e.currentTarget.style.borderColor = "var(--blend-text-secondary)")
+      }
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.borderColor = "var(--blend-text-secondary)")
+      }
     >
       <div
         style={{
@@ -1705,7 +1789,7 @@ function DocGridCard({
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "var(--blend-text-secondary)",
               cursor: "pointer",
               padding: 2,
             }}
@@ -1720,7 +1804,7 @@ function DocGridCard({
             style={{
               background: "none",
               border: "none",
-              color: "#475569",
+              color: "var(--blend-text-secondary)",
               cursor: "pointer",
               padding: 2,
             }}
@@ -1733,7 +1817,7 @@ function DocGridCard({
         style={{
           fontSize: 12,
           fontWeight: 500,
-          color: "#e2e8f0",
+          color: "var(--blend-border)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1747,7 +1831,7 @@ function DocGridCard({
           alignItems: "center",
           gap: 6,
           fontSize: 10,
-          color: "#475569",
+          color: "var(--blend-text-secondary)",
         }}
       >
         <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -1755,7 +1839,7 @@ function DocGridCard({
         </span>
         <span>{formatSize(doc.size)}</span>
       </div>
-      <div style={{ fontSize: 10, color: "#475569" }}>
+      <div style={{ fontSize: 10, color: "var(--blend-text-secondary)" }}>
         {new Date(doc.uploadedAt).toLocaleDateString()}
       </div>
       {allFolders && onMoveDoc && (
@@ -1766,9 +1850,9 @@ function DocGridCard({
           style={{
             padding: "3px 4px",
             background: "#1a1a1f",
-            border: "1px solid #334155",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 5,
-            color: "#94a3b8",
+            color: "var(--blend-text-secondary)",
             fontSize: 10,
             outline: "none",
             cursor: "pointer",
@@ -1805,7 +1889,7 @@ function DocListRow({
   onMoveDoc?: (d: DocMetadata, folder: string) => void;
 }) {
   const Icon = getFileIcon(doc.type, doc.name);
-  const color = CATEGORY_COLORS[doc.category] || "#94a3b8";
+  const color = CATEGORY_COLORS[doc.category] || "var(--blend-text-secondary)";
   return (
     <div
       onClick={() => onSelect(doc)}
@@ -1816,13 +1900,17 @@ function DocListRow({
         padding: "8px 12px",
         background: "rgba(30,30,35,0.6)",
         borderRadius: 8,
-        border: "1px solid #334155",
+        border: "1px solid var(--blend-text-secondary)",
         cursor: "pointer",
         fontSize: 12,
         transition: "border-color 0.2s",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#475569")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#334155")}
+      onMouseEnter={(e) =>
+        (e.currentTarget.style.borderColor = "var(--blend-text-secondary)")
+      }
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.borderColor = "var(--blend-text-secondary)")
+      }
     >
       <Icon size={16} style={{ color, flexShrink: 0 }} />
       <span
@@ -1832,7 +1920,7 @@ function DocListRow({
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
           fontWeight: 500,
-          color: "#e2e8f0",
+          color: "var(--blend-border)",
         }}
       >
         {doc.name}
@@ -1850,10 +1938,22 @@ function DocListRow({
       >
         {doc.category}
       </span>
-      <span style={{ color: "#475569", whiteSpace: "nowrap", flexShrink: 0 }}>
+      <span
+        style={{
+          color: "var(--blend-text-secondary)",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
         {formatSize(doc.size)}
       </span>
-      <span style={{ color: "#475569", whiteSpace: "nowrap", flexShrink: 0 }}>
+      <span
+        style={{
+          color: "var(--blend-text-secondary)",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
         {new Date(doc.uploadedAt).toLocaleDateString()}
       </span>
       {allFolders && onMoveDoc && (
@@ -1864,9 +1964,9 @@ function DocListRow({
           style={{
             padding: "3px 4px",
             background: "#1a1a1f",
-            border: "1px solid #334155",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 5,
-            color: "#94a3b8",
+            color: "var(--blend-text-secondary)",
             fontSize: 10,
             outline: "none",
             cursor: "pointer",
@@ -1891,7 +1991,7 @@ function DocListRow({
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "var(--blend-text-secondary)",
             cursor: "pointer",
             padding: 3,
           }}
@@ -1906,7 +2006,7 @@ function DocListRow({
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "var(--blend-text-secondary)",
             cursor: "pointer",
             padding: 3,
           }}
@@ -1930,7 +2030,7 @@ function DocDetailPanel({
   onDownload: (d: DocMetadata) => void;
 }) {
   const Icon = getFileIcon(doc.type, doc.name);
-  const color = CATEGORY_COLORS[doc.category] || "#94a3b8";
+  const color = CATEGORY_COLORS[doc.category] || "var(--blend-text-secondary)";
   return (
     <div
       style={{
@@ -1942,7 +2042,7 @@ function DocDetailPanel({
         height: "100vh",
         background: "rgba(15,15,20,0.98)",
         backdropFilter: "blur(12px)",
-        borderLeft: "1px solid #334155",
+        borderLeft: "1px solid var(--blend-text-secondary)",
         zIndex: 1000,
         padding: 20,
         overflowY: "auto",
@@ -1958,7 +2058,13 @@ function DocDetailPanel({
           marginBottom: 20,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 15, color: "#fff" }}>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 15,
+            color: "var(--blend-text-primary)",
+          }}
+        >
           Document Details
         </h3>
         <button
@@ -1966,7 +2072,7 @@ function DocDetailPanel({
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "var(--blend-text-secondary)",
             cursor: "pointer",
             padding: 4,
           }}
@@ -1994,7 +2100,7 @@ function DocDetailPanel({
           style={{
             fontSize: 14,
             fontWeight: 600,
-            color: "#fff",
+            color: "var(--blend-text-primary)",
             margin: "0 0 4px",
             wordBreak: "break-all",
           }}
@@ -2040,8 +2146,8 @@ function DocDetailPanel({
           style={{
             flex: 1,
             padding: 10,
-            background: "#f59e0b",
-            color: "#000",
+            background: "var(--blend-amber)",
+            color: "var(--blend-surface-dark)",
             border: "none",
             borderRadius: 8,
             fontSize: 13,
@@ -2063,8 +2169,8 @@ function DocDetailPanel({
           style={{
             padding: 10,
             background: "transparent",
-            color: "#ef4444",
-            border: "1px solid #ef4444",
+            color: "var(--blend-red)",
+            border: "1px solid var(--blend-red)",
             borderRadius: 8,
             fontSize: 13,
             cursor: "pointer",
@@ -2095,10 +2201,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         borderBottom: "1px solid #1e293b",
       }}
     >
-      <span style={{ color: "#475569" }}>{label}</span>
+      <span style={{ color: "var(--blend-text-secondary)" }}>{label}</span>
       <span
         style={{
-          color: "#e2e8f0",
+          color: "var(--blend-border)",
           fontWeight: 500,
           maxWidth: "60%",
           textAlign: "right",

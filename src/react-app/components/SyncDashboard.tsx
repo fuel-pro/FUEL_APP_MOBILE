@@ -188,7 +188,7 @@ export default function SyncDashboard() {
       style={{
         padding: 16,
         fontFamily: "system-ui, sans-serif",
-        color: "#e2e8f0",
+        color: "var(--blend-border)",
       }}
     >
       {/* Header */}
@@ -198,15 +198,18 @@ export default function SyncDashboard() {
             margin: "0 0 6px",
             fontSize: 20,
             fontWeight: 700,
-            color: "#fff",
+            color: "var(--blend-text-primary)",
             display: "flex",
             alignItems: "center",
             gap: 10,
           }}
         >
-          <RefreshCw size={22} style={{ color: "#f59e0b" }} /> Cross-Device Sync
+          <RefreshCw size={22} style={{ color: "var(--blend-amber)" }} />{" "}
+          Cross-Device Sync
         </h2>
-        <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
+        <p
+          style={{ margin: 0, fontSize: 12, color: "var(--blend-text-muted)" }}
+        >
           Sync data across all your devices and browsers instantly
         </p>
       </div>
@@ -224,25 +227,25 @@ export default function SyncDashboard() {
           icon={state.isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
           label="Connection"
           value={state.isOnline ? "Online" : "Offline"}
-          color={state.isOnline ? "#10b981" : "#ef4444"}
+          color={state.isOnline ? "var(--blend-green)" : "var(--blend-red)"}
         />
         <StatCard
           icon={<Clock size={16} />}
           label="Pending Sync"
           value={String(state.pendingCount)}
-          color="#f59e0b"
+          color="var(--blend-amber)"
         />
         <StatCard
           icon={<HardDrive size={16} />}
           label="Storage Used"
           value={formatSize(stats.totalStorage)}
-          color="#3b82f6"
+          color="var(--blend-blue)"
         />
         <StatCard
           icon={<CheckCircle2 size={16} />}
           label="Data Items"
           value={String(stats.totalDocs)}
-          color="#8b5cf6"
+          color="var(--blend-blue)"
         />
       </div>
 
@@ -252,17 +255,23 @@ export default function SyncDashboard() {
           background: "rgba(30,30,35,0.6)",
           borderRadius: 10,
           padding: 12,
-          border: "1px solid #334155",
+          border: "1px solid var(--blend-text-secondary)",
           marginBottom: 16,
         }}
       >
-        <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--blend-text-muted)",
+            marginBottom: 4,
+          }}
+        >
           Device ID (unique to this browser)
         </div>
         <div
           style={{
             fontSize: 12,
-            color: "#94a3b8",
+            color: "var(--blend-text-secondary)",
             fontFamily: "monospace",
             wordBreak: "break-all",
           }}
@@ -281,8 +290,10 @@ export default function SyncDashboard() {
           style={{
             padding: "10px 18px",
             background:
-              isSyncing || pending.length === 0 ? "#374151" : "#f59e0b",
-            color: "#000",
+              isSyncing || pending.length === 0
+                ? "var(--blend-text-secondary)"
+                : "var(--blend-amber)",
+            color: "var(--blend-surface-dark)",
             border: "none",
             borderRadius: 8,
             fontSize: 13,
@@ -306,8 +317,8 @@ export default function SyncDashboard() {
           style={{
             padding: "10px 18px",
             background: "#1a1a1f",
-            color: "#e2e8f0",
-            border: "1px solid #334155",
+            color: "var(--blend-border)",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 8,
             fontSize: 13,
             fontWeight: 600,
@@ -324,8 +335,8 @@ export default function SyncDashboard() {
           style={{
             padding: "10px 18px",
             background: "#1a1a1f",
-            color: "#e2e8f0",
-            border: "1px solid #334155",
+            color: "var(--blend-border)",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 8,
             fontSize: 13,
             fontWeight: 600,
@@ -349,8 +360,8 @@ export default function SyncDashboard() {
           style={{
             padding: "10px 18px",
             background: "transparent",
-            color: "#ef4444",
-            border: "1px solid #ef4444",
+            color: "var(--blend-red)",
+            border: "1px solid var(--blend-red)",
             borderRadius: 8,
             fontSize: 13,
             cursor: "pointer",
@@ -374,9 +385,9 @@ export default function SyncDashboard() {
             minHeight: 80,
             padding: 10,
             background: "#1a1a1f",
-            border: "1px solid #334155",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 8,
-            color: "#e2e8f0",
+            color: "var(--blend-border)",
             fontSize: 12,
             fontFamily: "monospace",
             resize: "vertical",
@@ -389,8 +400,8 @@ export default function SyncDashboard() {
             style={{
               marginTop: 8,
               padding: "8px 16px",
-              background: "#10b981",
-              color: "#fff",
+              background: "var(--blend-green)",
+              color: "var(--blend-text-primary)",
               border: "none",
               borderRadius: 8,
               fontSize: 12,
@@ -409,7 +420,7 @@ export default function SyncDashboard() {
           style={{
             fontSize: 14,
             fontWeight: 600,
-            color: "#fff",
+            color: "var(--blend-text-primary)",
             margin: "0 0 10px",
           }}
         >
@@ -420,7 +431,7 @@ export default function SyncDashboard() {
             style={{
               textAlign: "center",
               padding: 24,
-              color: "#475569",
+              color: "var(--blend-text-secondary)",
               fontSize: 13,
             }}
           >
@@ -447,14 +458,14 @@ export default function SyncDashboard() {
                   padding: "8px 12px",
                   background: "rgba(30,30,35,0.6)",
                   borderRadius: 8,
-                  border: "1px solid #334155",
+                  border: "1px solid var(--blend-text-secondary)",
                   fontSize: 12,
                 }}
               >
-                <span style={{ color: "#f59e0b" }}>
+                <span style={{ color: "var(--blend-amber)" }}>
                   <RefreshCw size={12} />
                 </span>
-                <span style={{ flex: 1, color: "#e2e8f0" }}>
+                <span style={{ flex: 1, color: "var(--blend-border)" }}>
                   {item.collection}
                 </span>
                 <span
@@ -470,15 +481,17 @@ export default function SyncDashboard() {
                           : "rgba(59,130,246,0.1)",
                     color:
                       item.operation === "create"
-                        ? "#34d399"
+                        ? "var(--blend-green)"
                         : item.operation === "delete"
-                          ? "#f87171"
-                          : "#60a5fa",
+                          ? "var(--blend-red)"
+                          : "var(--blend-blue)",
                   }}
                 >
                   {item.operation}
                 </span>
-                <span style={{ color: "#475569", fontSize: 10 }}>
+                <span
+                  style={{ color: "var(--blend-text-secondary)", fontSize: 10 }}
+                >
                   {new Date(item.timestamp).toLocaleTimeString()}
                 </span>
               </div>
@@ -493,31 +506,35 @@ export default function SyncDashboard() {
           background: "rgba(30,30,35,0.6)",
           borderRadius: 10,
           padding: 12,
-          border: "1px solid #334155",
+          border: "1px solid var(--blend-text-secondary)",
           fontSize: 11,
-          color: "#64748b",
+          color: "var(--blend-text-muted)",
           lineHeight: 1.6,
         }}
       >
-        <strong style={{ color: "#94a3b8" }}>
+        <strong style={{ color: "var(--blend-text-secondary)" }}>
           How Cross-Device Sync Works:
         </strong>
         <ul style={{ margin: "6px 0 0", paddingLeft: 16 }}>
           <li>
-            <strong style={{ color: "#f59e0b" }}>Same Browser:</strong> Data
-            syncs instantly across all tabs via BroadcastChannel
+            <strong style={{ color: "var(--blend-amber)" }}>
+              Same Browser:
+            </strong>{" "}
+            Data syncs instantly across all tabs via BroadcastChannel
           </li>
           <li>
-            <strong style={{ color: "#f59e0b" }}>Different Devices:</strong>{" "}
+            <strong style={{ color: "var(--blend-amber)" }}>
+              Different Devices:
+            </strong>{" "}
             Export data as JSON from one device, import on another
           </li>
           <li>
-            <strong style={{ color: "#f59e0b" }}>Offline:</strong> All changes
-            queue in IndexedDB and sync when you reconnect
+            <strong style={{ color: "var(--blend-amber)" }}>Offline:</strong>{" "}
+            All changes queue in IndexedDB and sync when you reconnect
           </li>
           <li>
-            <strong style={{ color: "#f59e0b" }}>Storage:</strong> Data persists
-            in IndexedDB even after browser close
+            <strong style={{ color: "var(--blend-amber)" }}>Storage:</strong>{" "}
+            Data persists in IndexedDB even after browser close
           </li>
         </ul>
       </div>
@@ -531,10 +548,10 @@ export default function SyncDashboard() {
             right: 20,
             padding: "10px 16px",
             background: "#1a1a1f",
-            border: "1px solid #334155",
+            border: "1px solid var(--blend-text-secondary)",
             borderRadius: 8,
             fontSize: 13,
-            color: "#e2e8f0",
+            color: "var(--blend-border)",
             zIndex: 9999,
             animation: "slideUp 0.2s ease",
           }}
@@ -569,7 +586,7 @@ function StatCard({
         background: "rgba(30,30,35,0.6)",
         borderRadius: 10,
         padding: 12,
-        border: "1px solid #334155",
+        border: "1px solid var(--blend-text-secondary)",
         display: "flex",
         alignItems: "center",
         gap: 10,
@@ -591,13 +608,19 @@ function StatCard({
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: "var(--blend-text-primary)",
+          }}
+        >
           {value}
         </div>
         <div
           style={{
             fontSize: 10,
-            color: "#64748b",
+            color: "var(--blend-text-muted)",
             textTransform: "uppercase",
             letterSpacing: 0.5,
           }}

@@ -165,15 +165,22 @@ export default function Paywall({ onClose }: PaywallProps) {
                 margin: 0,
                 fontSize: 18,
                 fontWeight: 700,
-                color: "#fff",
+                color: "var(--blend-text-primary)",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
               }}
             >
-              <Lock size={20} style={{ color: "#f59e0b" }} /> Choose Your Plan
+              <Lock size={20} style={{ color: "var(--blend-amber)" }} /> Choose
+              Your Plan
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b7280" }}>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: 12,
+                color: "var(--blend-text-muted)",
+              }}
+            >
               {sub.status === "trial"
                 ? "Your trial is active. Upgrade anytime."
                 : "Select a plan to unlock full features."}
@@ -184,7 +191,7 @@ export default function Paywall({ onClose }: PaywallProps) {
             style={{
               background: "none",
               border: "none",
-              color: "#6b7280",
+              color: "var(--blend-text-muted)",
               cursor: "pointer",
               padding: 4,
               borderRadius: 8,
@@ -217,13 +224,15 @@ export default function Paywall({ onClose }: PaywallProps) {
                     <Icon size={18} style={{ color: currentTierData.color }} />
                   );
                 })()}
-                <span style={{ fontSize: 13, color: "#e5e7eb" }}>
+                <span style={{ fontSize: 13, color: "var(--blend-border)" }}>
                   Current:{" "}
                   <strong style={{ color: currentTierData.color }}>
                     {currentTierData.name}
                   </strong>
                   {sub.status === "trial" && (
-                    <span style={{ color: "#f59e0b", marginLeft: 8 }}>
+                    <span
+                      style={{ color: "var(--blend-amber)", marginLeft: 8 }}
+                    >
                       (Trial)
                     </span>
                   )}
@@ -260,7 +269,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                     }}
                     onMouseEnter={(e) => {
                       if (selectedTier !== tier.key)
-                        e.currentTarget.style.borderColor = "#374151";
+                        e.currentTarget.style.borderColor =
+                          "var(--blend-text-secondary)";
                     }}
                     onMouseLeave={(e) => {
                       if (selectedTier !== tier.key)
@@ -288,7 +298,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                           style={{
                             fontSize: 13,
                             fontWeight: 700,
-                            color: "#fff",
+                            color: "var(--blend-text-primary)",
                           }}
                         >
                           {tier.name}
@@ -316,7 +326,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                         <span
                           style={{
                             fontSize: 11,
-                            color: "#6b7280",
+                            color: "var(--blend-text-muted)",
                             fontWeight: 400,
                           }}
                         >
@@ -327,14 +337,18 @@ export default function Paywall({ onClose }: PaywallProps) {
                     <div
                       style={{
                         fontSize: 11,
-                        color: "#6b7280",
+                        color: "var(--blend-text-muted)",
                         lineHeight: 1.4,
                       }}
                     >
                       {tier.description}
                     </div>
                     <div
-                      style={{ fontSize: 10, color: "#4b5563", marginTop: 4 }}
+                      style={{
+                        fontSize: 10,
+                        color: "var(--blend-text-muted)",
+                        marginTop: 4,
+                      }}
                     >
                       <span
                         style={{
@@ -371,7 +385,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                           key={i}
                           style={{
                             fontSize: 10,
-                            color: "#9ca3af",
+                            color: "var(--blend-text-secondary)",
                             display: "flex",
                             alignItems: "flex-start",
                             gap: 4,
@@ -419,7 +433,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                     flex: 1,
                     padding: 12,
                     background: "#1f2937",
-                    color: "#fff",
+                    color: "var(--blend-text-primary)",
                     border: "none",
                     borderRadius: 10,
                     fontSize: 14,
@@ -440,8 +454,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                     style={{
                       flex: 1,
                       padding: 12,
-                      background: "#f59e0b",
-                      color: "#000",
+                      background: "var(--blend-amber)",
+                      color: "var(--blend-surface-dark)",
                       border: "none",
                       borderRadius: 10,
                       fontSize: 14,
@@ -460,8 +474,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                     style={{
                       padding: 12,
                       background: "transparent",
-                      color: "#6b7280",
-                      border: "1px solid #374151",
+                      color: "var(--blend-text-muted)",
+                      border: "1px solid var(--blend-text-secondary)",
                       borderRadius: 10,
                       fontSize: 14,
                       fontWeight: 600,
@@ -480,8 +494,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                   style={{
                     flex: 1,
                     padding: 12,
-                    background: "#f59e0b",
-                    color: "#000",
+                    background: "var(--blend-amber)",
+                    color: "var(--blend-surface-dark)",
                     border: "none",
                     borderRadius: 10,
                     fontSize: 14,
@@ -509,7 +523,7 @@ export default function Paywall({ onClose }: PaywallProps) {
               style={{
                 background: "none",
                 border: "none",
-                color: "#6b7280",
+                color: "var(--blend-text-muted)",
                 cursor: "pointer",
                 fontSize: 12,
                 marginBottom: 12,
@@ -535,7 +549,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                 style={{
                   fontSize: 13,
                   fontWeight: 700,
-                  color: "#fff",
+                  color: "var(--blend-text-primary)",
                   marginBottom: 4,
                 }}
               >
@@ -551,9 +565,19 @@ export default function Paywall({ onClose }: PaywallProps) {
                 {isKenya
                   ? `Ksh ${selectedTierData.priceKES.toLocaleString()}`
                   : `$${selectedTierData.priceUSD.toLocaleString()}`}
-                <span style={{ fontSize: 12, color: "#6b7280" }}>/month</span>
+                <span
+                  style={{ fontSize: 12, color: "var(--blend-text-muted)" }}
+                >
+                  /month
+                </span>
               </div>
-              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--blend-text-muted)",
+                  marginTop: 4,
+                }}
+              >
                 ${selectedTierData.priceUSD}/month USD equivalent
               </div>
             </div>
@@ -566,7 +590,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#e5e7eb",
+                      color: "var(--blend-border)",
                       marginBottom: 6,
                       display: "block",
                     }}
@@ -590,9 +614,9 @@ export default function Paywall({ onClose }: PaywallProps) {
                       width: "100%",
                       padding: "10px 14px",
                       background: "#0f1117",
-                      border: `1px solid ${error ? "#ef4444" : "#374151"}`,
+                      border: `1px solid ${error ? "var(--blend-red)" : "var(--blend-text-secondary)"}`,
                       borderRadius: 10,
-                      color: "#fff",
+                      color: "var(--blend-text-primary)",
                       fontSize: 14,
                       outline: "none",
                       boxSizing: "border-box",
@@ -601,7 +625,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                   <span
                     style={{
                       fontSize: 10,
-                      color: "#4b5563",
+                      color: "var(--blend-text-muted)",
                       marginTop: 4,
                       display: "block",
                     }}
@@ -630,10 +654,14 @@ export default function Paywall({ onClose }: PaywallProps) {
                     style={{ marginTop: 2 }}
                   />
                   <span
-                    style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}
+                    style={{
+                      fontSize: 11,
+                      color: "var(--blend-text-secondary)",
+                      lineHeight: 1.4,
+                    }}
                   >
                     I agree to the{" "}
-                    <a href="#/terms" style={{ color: "#f59e0b" }}>
+                    <a href="#/terms" style={{ color: "var(--blend-amber)" }}>
                       Terms of Service
                     </a>{" "}
                     and authorize Ksh{" "}
@@ -650,7 +678,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                       borderRadius: 8,
                       marginBottom: 12,
                       fontSize: 12,
-                      color: "#f87171",
+                      color: "var(--blend-red)",
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
@@ -666,8 +694,11 @@ export default function Paywall({ onClose }: PaywallProps) {
                   style={{
                     width: "100%",
                     padding: 14,
-                    background: !phone || !agreed ? "#374151" : "#48bb78",
-                    color: "#fff",
+                    background:
+                      !phone || !agreed
+                        ? "var(--blend-text-secondary)"
+                        : "var(--blend-green)",
+                    color: "var(--blend-text-primary)",
                     border: "none",
                     borderRadius: 10,
                     fontSize: 15,
@@ -686,7 +717,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                 <p
                   style={{
                     fontSize: 10,
-                    color: "#4b5563",
+                    color: "var(--blend-text-muted)",
                     textAlign: "center",
                     marginTop: 12,
                     display: "flex",
@@ -713,18 +744,26 @@ export default function Paywall({ onClose }: PaywallProps) {
               >
                 <AlertTriangle
                   size={18}
-                  style={{ color: "#f59e0b", marginTop: 1, flexShrink: 0 }}
+                  style={{
+                    color: "var(--blend-amber)",
+                    marginTop: 1,
+                    flexShrink: 0,
+                  }}
                 />
                 <div>
                   <p
-                    style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "var(--blend-amber)",
+                    }}
                   >
                     M-PESA is available in Kenya only
                   </p>
                   <p
                     style={{
                       fontSize: 11,
-                      color: "#fcd34d",
+                      color: "var(--blend-amber)",
                       marginTop: 4,
                       lineHeight: 1.4,
                     }}
@@ -743,19 +782,25 @@ export default function Paywall({ onClose }: PaywallProps) {
         {step === "processing" && (
           <div style={{ padding: 48, textAlign: "center" }}>
             <div style={{ animation: "pulse 1.5s infinite", marginBottom: 16 }}>
-              <Smartphone size={48} style={{ color: "#f59e0b" }} />
+              <Smartphone size={48} style={{ color: "var(--blend-amber)" }} />
             </div>
             <h3
               style={{
                 fontSize: 16,
                 fontWeight: 700,
-                color: "#fff",
+                color: "var(--blend-text-primary)",
                 margin: "0 0 8px",
               }}
             >
               M-PESA Prompt Sent
             </h3>
-            <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 16px" }}>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--blend-text-secondary)",
+                margin: "0 0 16px",
+              }}
+            >
               Check your phone and enter your M-PESA PIN
             </p>
             <div
@@ -772,14 +817,20 @@ export default function Paywall({ onClose }: PaywallProps) {
               <div
                 style={{
                   height: "100%",
-                  background: "#f59e0b",
+                  background: "var(--blend-amber)",
                   borderRadius: 3,
                   animation: "progressBar 3s ease-in-out forwards",
                   width: "100%",
                 }}
               />
             </div>
-            <p style={{ fontSize: 11, color: "#4b5563", marginTop: 12 }}>
+            <p
+              style={{
+                fontSize: 11,
+                color: "var(--blend-text-muted)",
+                marginTop: 12,
+              }}
+            >
               Waiting for confirmation...
             </p>
           </div>
@@ -793,20 +844,20 @@ export default function Paywall({ onClose }: PaywallProps) {
                 width: 64,
                 height: 64,
                 borderRadius: 32,
-                background: "#10b98120",
+                background: "var(--blend-green)20",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 margin: "0 auto 16px",
               }}
             >
-              <CheckCircle2 size={32} style={{ color: "#10b981" }} />
+              <CheckCircle2 size={32} style={{ color: "var(--blend-green)" }} />
             </div>
             <h3
               style={{
                 fontSize: 18,
                 fontWeight: 700,
-                color: "#fff",
+                color: "var(--blend-text-primary)",
                 margin: "0 0 8px",
               }}
             >
@@ -814,7 +865,13 @@ export default function Paywall({ onClose }: PaywallProps) {
                 ? "Trial Activated!"
                 : "Payment Successful!"}
             </h3>
-            <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 16px" }}>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--blend-text-secondary)",
+                margin: "0 0 16px",
+              }}
+            >
               {selectedTierData.key === "free"
                 ? "Your 7-day free trial is now active. Enjoy full access!"
                 : `Welcome to ${selectedTierData.name}! Your subscription is active.`}
@@ -827,11 +884,11 @@ export default function Paywall({ onClose }: PaywallProps) {
                   borderRadius: 8,
                   marginBottom: 16,
                   fontSize: 11,
-                  color: "#6b7280",
+                  color: "var(--blend-text-muted)",
                 }}
               >
                 Receipt:{" "}
-                <span style={{ color: "#e5e7eb", fontWeight: 600 }}>
+                <span style={{ color: "var(--blend-border)", fontWeight: 600 }}>
                   {sub.mpesaReceipt}
                 </span>
               </div>
@@ -841,8 +898,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                 onClick={onClose}
                 style={{
                   padding: "10px 24px",
-                  background: "#f59e0b",
-                  color: "#000",
+                  background: "var(--blend-amber)",
+                  color: "var(--blend-surface-dark)",
                   border: "none",
                   borderRadius: 10,
                   fontSize: 14,
@@ -868,7 +925,7 @@ export default function Paywall({ onClose }: PaywallProps) {
             <p
               style={{
                 fontSize: 10,
-                color: "#4b5563",
+                color: "var(--blend-text-muted)",
                 margin: 0,
                 display: "flex",
                 alignItems: "center",

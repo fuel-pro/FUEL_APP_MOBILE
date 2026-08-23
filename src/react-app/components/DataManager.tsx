@@ -284,28 +284,28 @@ export default function DataManager() {
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
             background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
-            color: #eee;
+            color: var(--blend-border);
             min-height: 100vh;
             padding: 20px;
         }
         .container { max-width: 1200px; margin: 0 auto; }
         .header {
-            background: linear-gradient(135deg, #1a3a5f 0%, #2980b9 100%);
+            background: linear-gradient(135deg, var(--blend-blue) 0%, var(--blend-blue) 100%);
             padding: 30px;
             border-radius: 16px;
             margin-bottom: 30px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.3);
         }
-        .header h1 { color: #f0d78a; font-size: 2.5rem; margin-bottom: 10px; }
-        .header p { color: #fff; opacity: 0.9; }
+        .header h1 { color: var(--blend-amber); font-size: 2.5rem; margin-bottom: 10px; }
+        .header p { color: var(--blend-text-primary); opacity: 0.9; }
         .notice {
-            background: #2c5282;
+            background: var(--blend-blue);
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 20px;
-            border-left: 4px solid #f0d78a;
+            border-left: 4px solid var(--blend-amber);
         }
-        .notice h3 { color: #f0d78a; margin-bottom: 10px; }
+        .notice h3 { color: var(--blend-amber); margin-bottom: 10px; }
         .notice ul { padding-left: 20px; line-height: 1.8; }
         .card {
             background: rgba(44, 44, 44, 0.8);
@@ -316,9 +316,9 @@ export default function DataManager() {
             box-shadow: 0 8px 30px rgba(0,0,0,0.2);
             border: 1px solid rgba(240, 215, 138, 0.2);
         }
-        .card h2 { color: #f0d78a; margin-bottom: 15px; font-size: 1.5rem; }
+        .card h2 { color: var(--blend-amber); margin-bottom: 15px; font-size: 1.5rem; }
         .btn {
-            background: linear-gradient(135deg, #f0d78a 0%, #d4af37 100%);
+            background: linear-gradient(135deg, var(--blend-amber) 0%, var(--blend-amber) 100%);
             color: #1a1a1a;
             border: none;
             padding: 12px 24px;
@@ -341,13 +341,13 @@ export default function DataManager() {
             margin-top: 20px;
         }
         .data-item {
-            background: rgba(240, 215, 138, 0.1);
+            background: var(--blend-amber-bg);
             padding: 15px;
             border-radius: 12px;
             border: 1px solid rgba(240, 215, 138, 0.3);
         }
-        .data-item strong { color: #f0d78a; display: block; margin-bottom: 5px; }
-        .data-item span { color: #eee; font-size: 1.2rem; }
+        .data-item strong { color: var(--blend-amber); display: block; margin-bottom: 5px; }
+        .data-item span { color: var(--blend-border); font-size: 1.2rem; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -360,7 +360,7 @@ export default function DataManager() {
         }
         th {
             background: rgba(240, 215, 138, 0.2);
-            color: #f0d78a;
+            color: var(--blend-amber);
             font-weight: 600;
         }
         tr:hover { background: rgba(240, 215, 138, 0.05); }
@@ -378,9 +378,9 @@ export default function DataManager() {
             font-size: 0.85rem;
             font-weight: 600;
         }
-        .status.success { background: #10b981; color: white; }
-        .status.warning { background: #f59e0b; color: white; }
-        .status.error { background: #ef4444; color: white; }
+        .status.success { background: var(--blend-green); color: white; }
+        .status.warning { background: var(--blend-amber); color: white; }
+        .status.error { background: var(--blend-red); color: white; }
         @media print {
             .btn, .export-section { display: none; }
         }
@@ -472,10 +472,10 @@ export default function DataManager() {
                           .join("")}
                     </tbody>
                 </table>
-                ${state.deliveryData.rows.length > 50 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 50 of ${state.deliveryData.rows.length} deliveries</p>` : ""}
+                ${state.deliveryData.rows.length > 50 ? `<p style="margin-top: 10px; color: var(--blend-amber);">Showing 50 of ${state.deliveryData.rows.length} deliveries</p>` : ""}
             </div>
             `
-                : '<p style="color: #999;">No delivery data available</p>'
+                : '<p style="color: var(--blend-text-muted);">No delivery data available</p>'
             }
         </div>
 
@@ -491,26 +491,26 @@ export default function DataManager() {
                     ([_id, client]: [string, any]) => `
                     <div class="data-item">
                         <strong>${client.name}</strong>
-                        <span style="font-size: 0.9rem; color: #999;">${client.contact || "No contact"}</span>
+                        <span style="font-size: 0.9rem; color: var(--blend-text-muted);">${client.contact || "No contact"}</span>
                     </div>
                 `,
                   )
                   .join("")}
             </div>
-            ${Object.keys(state.clients).length > 20 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 20 of ${Object.keys(state.clients).length} clients</p>` : ""}
+            ${Object.keys(state.clients).length > 20 ? `<p style="margin-top: 10px; color: var(--blend-amber);">Showing 20 of ${Object.keys(state.clients).length} clients</p>` : ""}
             `
-                : '<p style="color: #999;">No clients registered</p>'
+                : '<p style="color: var(--blend-text-muted);">No clients registered</p>'
             }
         </div>
 
         <div class="export-section">
-            <h3 style="color: #60a5fa; margin-bottom: 15px;">Export Your Data</h3>
+            <h3 style="color: var(--blend-blue); margin-bottom: 15px;">Export Your Data</h3>
             <button class="btn" onclick="exportAsJSON()">Download JSON</button>
             <button class="btn" onclick="exportAsCSV()">Download CSV</button>
             <button class="btn" onclick="window.print()">Print Report</button>
         </div>
 
-        <div class="card" style="margin-top: 30px; background: rgba(240, 215, 138, 0.1);">
+        <div class="card" style="margin-top: 30px; background: var(--blend-amber-bg);">
             <h2>Technical Details</h2>
             <div class="data-grid">
                 <div class="data-item">
