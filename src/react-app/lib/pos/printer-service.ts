@@ -648,9 +648,19 @@ class PrinterService {
     if (printWindow) {
       // The receipt text is inserted via textContent (not interpolated into
       // the HTML string) so receipt content can never inject markup/script.
+      const rootDark =
+        typeof document !== "undefined" &&
+        document.documentElement.classList.contains("dark");
       printWindow.document.write(`
-        <html>
-          <head><title>Print</title></head>
+        <html class="${rootDark ? "fp-dark" : ""}">
+          <head><title>Print</title>
+          <style>
+            :root{--fp-bg:#0a0e17;--fp-card:#111625;--fp-border:#252c3f;--fp-text:#e7ebf1;}
+            html.fp-dark,html.fp-dark body{background:var(--fp-bg);color:var(--fp-text);}
+            html.fp-dark pre{color:var(--fp-text);}
+            @media print{html.fp-dark,html.fp-dark body,html.fp-dark pre{background:#fff;color:#000;}}
+          </style>
+          </head>
           <body>
             <pre id="content" style="font-family: monospace; white-space: pre-wrap;"></pre>
             <script>window.print(); window.close();</script>

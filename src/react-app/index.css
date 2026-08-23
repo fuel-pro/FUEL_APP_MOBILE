@@ -172,6 +172,50 @@ html.dark .dark\:text-slate-600:is(.dark *) {
   color: #94a3b8 !important;
 }
 
+/* ── Dark-surface leak fix (documents + cards stay dark) ─────────────────
+   524 occurrences of `dark:bg-white` across the codebase (the
+   `bg-white dark:bg-white dark:bg-gray-800` typo) kept document/card
+   surfaces white in dark mode. Neutralize ALL light-surface dark: leaks
+   to the calm dark surface tokens so documents, cards, tables, and panels
+   blend with the reblended UI. !important beats the Tailwind defaults.
+   ──────────────────────────────────────────────────────────────────── */
+html.dark .dark\:bg-white:is(.dark *) {
+  background-color: var(--bg-card) !important;
+}
+html.dark .dark\:bg-gray-50:is(.dark *),
+html.dark .dark\:bg-gray-100:is(.dark *),
+html.dark .dark\:bg-slate-50:is(.dark *),
+html.dark .dark\:bg-slate-100:is(.dark *) {
+  background-color: var(--bg-card) !important;
+}
+html.dark .dark\:bg-gray-200:is(.dark *),
+html.dark .dark\:bg-slate-200:is(.dark *) {
+  background-color: var(--bg-hover) !important;
+}
+/* Tinted status surfaces (-50) → their dim status token (calm, not white) */
+html.dark .dark\:bg-blue-50:is(.dark *) {
+  background-color: var(--status-info-dim) !important;
+}
+html.dark .dark\:bg-green-50:is(.dark *),
+html.dark .dark\:bg-emerald-50:is(.dark *) {
+  background-color: var(--status-positive-dim) !important;
+}
+html.dark .dark\:bg-amber-50:is(.dark *),
+html.dark .dark\:bg-yellow-50:is(.dark *) {
+  background-color: var(--status-warning-dim) !important;
+}
+html.dark .dark\:bg-red-50:is(.dark *),
+html.dark .dark\:bg-rose-50:is(.dark *) {
+  background-color: var(--status-negative-dim) !important;
+}
+/* Light borders that leak → calm dark border */
+html.dark .dark\:border-gray-200:is(.dark *),
+html.dark .dark\:border-gray-300:is(.dark *),
+html.dark .dark\:border-slate-200:is(.dark *),
+html.dark .dark\:border-slate-300:is(.dark *) {
+  border-color: var(--border-light) !important;
+}
+
 /* ── Unified dark surface + component layer (reblend) ───────────────────
    Enforces the reference design rules site-wide in dark mode so the UI
    feels cohesive instead of disorganized:
