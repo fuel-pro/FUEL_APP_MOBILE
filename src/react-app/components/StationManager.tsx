@@ -60,6 +60,7 @@ import {
   leaveStation,
   getStationMembers,
   inviteMember,
+  transferOwnership,
   subscribeToMyMemberships,
   recordStationActivity,
   type StationMember,
@@ -105,7 +106,17 @@ import {
   Database,
   AlertTriangle,
   MoreHorizontal,
+  UserPlus,
+  Shield,
+  KeyRound,
+  ArrowRightLeft,
+  Mail,
+  ExternalLink,
 } from "lucide-react";
+import {
+  getAccessCodes,
+  type StationAccessCode,
+} from "@/react-app/lib/station-access-code-service";
 
 // ============================================================
 // Constants & helpers (module scope)
@@ -117,6 +128,17 @@ const GLASS_CARD =
 const DEFAULT_STATION_KEY = "fuelpro_default_station";
 const STATION_SORT_PREF_KEY = "fuelpro_station_sort";
 const SUBTAB_KEY = "fuelpro_stationmgr_subtab";
+
+/** Deep-link from Station Manager into a main-app tab (e.g. Team Manager).
+ * Closes the Station Manager modal first, then dispatches the changeTab event
+ * so Home.tsx switches the active tab. */
+function goToMainTab(tabId: string, onClose?: () => void): void {
+  if (onClose) onClose();
+  // defer so the modal unmounts before the tab switch renders
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
+  }, 60);
+}
 
 function getDefaultTaxRate(): number {
   try {
@@ -168,7 +190,13 @@ function actionLabel(action: string): string {
 // ============================================================
 
 type SubTab =
-  "overview" | "stations" | "network" | "analytics" | "activity" | "settings";
+  | "overview"
+  | "stations"
+  | "access"
+  | "network"
+  | "analytics"
+  | "activity"
+  | "settings";
 
 type FilterStatus = "all" | "active" | "inactive" | "maintenance" | "favorites";
 type SortBy = "recent" | "name" | "revenue" | "oldest";
@@ -342,6 +370,7 @@ function StationCard({
   onQR,
   onToggleFavorite,
   onSetDefault,
+  onTransfer,
 }: {
   station: any;
   isCurrent: boolean;
@@ -357,6 +386,7 @@ function StationCard({
   onQR: () => void;
   onToggleFavorite: () => void;
   onSetDefault: () => void;
+  onTransfer: () => void;
 }) {
   const data = station.data || {};
   const totalRev = stationTotalRevenue(data);
@@ -457,6 +487,15 @@ function StationCard({
                     className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
                   >
                     <Crown size={12} /> Set as Default
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onTransfer();
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
+                  >
+                    <ArrowRightLeft size={12} /> Transfer Ownership
                   </button>
                   <button
                     onClick={() => {
@@ -723,13 +762,17 @@ function StationFormModal({
 function ShareModal({
   station,
   onInvite,
+  onBulkInvite,
   onRevoke,
   onClose,
+  openTeamManager: openTeamManagerProp,
 }: {
   station: any;
   onInvite: (email: string, role: string, name?: string) => Promise<void>;
+  onBulkInvite?: (emails: string[], role: string) => Promise<void>;
   onRevoke: (memberId: string) => Promise<void>;
   onClose: () => void;
+  openTeamManager?: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("staff");
@@ -738,6 +781,8 @@ function ShareModal({
   const [error, setError] = useState("");
   const [members, setMembers] = useState<StationMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkEmails, setBulkEmails] = useState("");
 
   const loadMembers = useCallback(async () => {
     if (!station?.id) return;
@@ -775,6 +820,31 @@ function ShareModal({
     }
   };
 
+  const handleBulkInviteSubmit = async () => {
+    if (!onBulkInvite) return;
+    const emails = bulkEmails
+      .split(/[\s,;]+/)
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0 && e.includes("@"));
+    if (emails.length === 0) {
+      setError(
+        "Enter at least one valid email (comma, space, or newline separated)",
+      );
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onBulkInvite(emails, role);
+      setBulkEmails("");
+      await loadMembers();
+    } catch (e: any) {
+      setError(e?.message || "Bulk invite failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
@@ -805,27 +875,53 @@ function ShareModal({
 
         {/* Invite form */}
         <div className={`${GLASS_CARD} p-4 mb-4`}>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <Send size={14} className="text-sky-400" />
-            Invite a Member
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Send size={14} className="text-sky-400" />
+              {bulkMode ? "Bulk Invite Members" : "Invite a Member"}
+            </h3>
+            {onBulkInvite && (
+              <button
+                onClick={() => {
+                  setBulkMode(!bulkMode);
+                  setError("");
+                }}
+                className="text-xs text-sky-500 hover:text-sky-400 flex items-center gap-1"
+              >
+                <UserPlus size={12} />
+                {bulkMode ? "Single invite" : "Bulk invite"}
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="member@email.com"
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+            {bulkMode ? (
+              <textarea
+                value={bulkEmails}
+                onChange={(e) => setBulkEmails(e.target.value)}
+                placeholder={
+                  "Enter emails separated by commas, spaces, or new lines:\nmember1@email.com, member2@email.com\nmember3@email.com"
+                }
+                rows={4}
+                className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm resize-y"
               />
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Name (optional)"
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
-              />
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="member@email.com"
+                  className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Name (optional)"
+                  className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                />
+              </div>
+            )}
             <div className="flex gap-3">
               <select
                 value={role}
@@ -837,12 +933,16 @@ function ShareModal({
                 <option value="auditor">Auditor</option>
               </select>
               <button
-                onClick={handleInvite}
+                onClick={bulkMode ? handleBulkInviteSubmit : handleInvite}
                 disabled={busy}
                 className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Send size={14} />
-                {busy ? "Sending..." : "Send Invite"}
+                {busy
+                  ? "Sending..."
+                  : bulkMode
+                    ? "Send Bulk Invites"
+                    : "Send Invite"}
               </button>
             </div>
           </div>
@@ -904,7 +1004,14 @@ function ShareModal({
           )}
         </div>
 
-        <div className="flex justify-end mt-6">
+        <div className="flex items-center justify-between mt-6 gap-3 flex-wrap">
+          <button
+            onClick={() => openTeamManagerProp?.()}
+            className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 rounded-xl text-xs font-medium flex items-center gap-1.5"
+          >
+            <ExternalLink size={13} />
+            Open Team Manager
+          </button>
           <button
             onClick={onClose}
             className="px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl text-sm"
@@ -1120,7 +1227,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
   // Modal state
   const [modal, setModal] = useState<{
-    type: "create" | "edit" | "share" | "qr" | "delete" | "clone";
+    type: "create" | "edit" | "share" | "qr" | "delete" | "clone" | "transfer";
     station?: any;
   } | null>(null);
 
@@ -1133,6 +1240,14 @@ export default function StationManager({ onClose }: StationManagerProps) {
   const [inviteLinkInput, setInviteLinkInput] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
+
+  // Access dashboard data (two-way: members of MY stations + access codes)
+  const [accessMembers, setAccessMembers] = useState<StationMember[]>([]);
+  const [accessCodes, setAccessCodes] = useState<StationAccessCode[]>([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessStationId, setAccessStationId] = useState<string>(
+    () => currentStation?.id || "",
+  );
 
   // Activity log
   const [activityEntries, setActivityEntries] = useState<
@@ -1238,6 +1353,53 @@ export default function StationManager({ onClose }: StationManagerProps) {
     });
     return unsub;
   }, [user?.id]);
+
+  // ---- Access dashboard: load members + access codes for the selected station ----
+  const loadAccessData = useCallback(async () => {
+    const sid = accessStationId || currentStation?.id;
+    if (!sid) return;
+    setAccessLoading(true);
+    try {
+      const [members, codes] = await Promise.all([
+        getStationMembers(sid).catch(() => [] as StationMember[]),
+        getAccessCodes(sid).catch(() => [] as StationAccessCode[]),
+      ]);
+      setAccessMembers(members);
+      setAccessCodes(codes);
+    } catch (err) {
+      console.warn("[StationManager] access load failed:", err);
+    } finally {
+      setAccessLoading(false);
+    }
+  }, [accessStationId, currentStation?.id]);
+
+  useEffect(() => {
+    if (activeSubTab === "access") {
+      loadAccessData();
+    }
+  }, [activeSubTab, accessStationId, loadAccessData, networkRefreshKey]);
+
+  // Keep accessStationId synced when current station changes
+  useEffect(() => {
+    if (currentStation?.id && !accessStationId) {
+      setAccessStationId(currentStation.id);
+    }
+  }, [currentStation?.id, accessStationId]);
+
+  // ---- Access summary (counts for the sub-tab badge) ----
+  const accessSummary = useMemo(() => {
+    const accepted = accessMembers.filter(
+      (m) => m.status === "accepted" || m.status === "active",
+    ).length;
+    const pending = accessMembers.filter((m) => m.status === "pending").length;
+    const activeCodes = accessCodes.filter((c) => c.enabled).length;
+    return {
+      totalMembers: accepted,
+      pendingInvites: pending,
+      totalCodes: accessCodes.length,
+      activeCodes,
+    };
+  }, [accessMembers, accessCodes]);
 
   // ---- Activity log: load across all owned stations ----
   useEffect(() => {
@@ -1644,6 +1806,102 @@ export default function StationManager({ onClose }: StationManagerProps) {
     setModal({ type: "clone", station });
   }, []);
 
+  // ---- Transfer Ownership (opens modal — select from existing members) ----
+  const handleTransferOwnership = useCallback((station: any) => {
+    setModal({ type: "transfer", station });
+  }, []);
+
+  // ---- Confirm Transfer Ownership (to an existing member by user_id) ----
+  const handleConfirmTransfer = useCallback(
+    async (newOwnerId: string, newOwnerName: string) => {
+      if (!modal?.station || !user?.id) return;
+      if (
+        !confirm(
+          `Transfer ownership of "${modal.station.name}" to ${newOwnerName}? You will become a manager. This cannot be undone.`,
+        )
+      )
+        return;
+      try {
+        const result = await transferOwnership(
+          modal.station.id,
+          newOwnerId,
+          user.id,
+        );
+        if (!result.success) {
+          showNotice(`Transfer failed: ${result.error}`);
+          return;
+        }
+        showNotice(
+          `Ownership of "${modal.station.name}" transferred to ${newOwnerName}`,
+        );
+        recordStationActivity(modal.station.id, {
+          actorId: user.id,
+          actorName: user.email || "Owner",
+          action: "ownership_transferred",
+          detail: `Transferred to ${newOwnerName}`,
+        }).catch(() => {});
+        setNetworkRefreshKey((k) => k + 1);
+        closeModal();
+      } catch (e: any) {
+        showNotice(`Transfer failed: ${e?.message || "error"}`);
+      }
+    },
+    [modal?.station, user?.id, user?.email, showNotice, closeModal],
+  );
+
+  // ---- Bulk Invite (multiple emails at once) ----
+  const handleBulkInvite = useCallback(
+    async (emails: string[], role: string) => {
+      if (!modal?.station || !user?.id || emails.length === 0) return;
+      const results: { email: string; ok: boolean; error?: string }[] = [];
+      for (const email of emails) {
+        try {
+          const r = await inviteMember(
+            modal.station.id,
+            email,
+            role,
+            undefined,
+            {
+              invitedByUserId: user.id,
+              invitedByName: user.email || "Owner",
+            },
+          );
+          results.push({ email, ok: r.success, error: r.error });
+        } catch (e: any) {
+          results.push({ email, ok: false, error: e?.message });
+        }
+      }
+      const ok = results.filter((r) => r.ok).length;
+      const fail = results.length - ok;
+      showNotice(
+        fail > 0
+          ? `Invited ${ok}/${results.length}${fail > 0 ? ` (${fail} failed)` : ""}`
+          : `Invited ${ok} member${ok !== 1 ? "s" : ""}`,
+      );
+      // reload members in the share modal
+      setNetworkRefreshKey((k) => k + 1);
+    },
+    [modal?.station, user?.id, user?.email, showNotice],
+  );
+
+  // ---- Open Share modal from the Access sub-tab ----
+  const handleShareFromAccess = useCallback(() => {
+    const sid = accessStationId || currentStation?.id;
+    if (!sid) return;
+    const station = stations.find((s) => s.id === sid);
+    if (station) setModal({ type: "share", station });
+  }, [accessStationId, currentStation?.id, stations]);
+
+  // ---- Deep-link to Team Manager (closes Station Manager, switches tab) ----
+  const handleOpenTeamManager = useCallback(() => {
+    goToMainTab("team", onClose);
+  }, [onClose]);
+
+  // ---- Refresh access data ----
+  const handleRefreshAccess = useCallback(() => {
+    loadAccessData();
+  }, [loadAccessData]);
+
   const handleExport = useCallback(
     (station: any) => {
       downloadJson(`${station.name.replace(/\s+/g, "_")}_export.json`, station);
@@ -1786,6 +2044,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
       label: "Stations",
       icon: Layers,
       count: ownedStations.length,
+    },
+    {
+      id: "access",
+      label: "Access",
+      icon: Shield,
+      count: accessSummary.totalMembers + accessSummary.totalCodes,
     },
     {
       id: "network",
@@ -1982,6 +2246,15 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 <Building2 size={20} className="text-sky-400" />
                 <span className="text-xs font-medium text-gray-900 dark:text-white">
                   Access Shared
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveSubTab("access")}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <Shield size={20} className="text-indigo-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Manage Access
                 </span>
               </button>
               <button
@@ -2348,6 +2621,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                         onQR={() => setModal({ type: "qr", station: s })}
                         onToggleFavorite={() => handleToggleFavorite(s.id)}
                         onSetDefault={() => handleSetDefault(s.id)}
+                        onTransfer={() => handleTransferOwnership(s)}
                       />
                     </div>
                   ))}
@@ -2355,6 +2629,312 @@ export default function StationManager({ onClose }: StationManagerProps) {
               )}
             </div>
           </>
+        )}
+
+        {/* ===================== ACCESS SUB-TAB ===================== */}
+        {/* Unified two-way access dashboard: who can access YOUR stations
+            (members + access codes) — intertwined with Team Manager. */}
+        {activeSubTab === "access" && (
+          <div className="space-y-6">
+            {/* Station selector for the access dashboard */}
+            <div className={`${GLASS_CARD} p-4`}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Shield size={18} className="text-indigo-400 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                      Station Access Dashboard
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Manage who can access this station — members & access
+                      codes
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={accessStationId}
+                    onChange={(e) => setAccessStationId(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 max-w-[180px]"
+                  >
+                    {ownedStations.length === 0 && (
+                      <option value="">No stations</option>
+                    )}
+                    {ownedStations.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleRefreshAccess}
+                    disabled={accessLoading}
+                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-xs flex items-center gap-1"
+                  >
+                    <RefreshCw
+                      size={13}
+                      className={accessLoading ? "animate-spin" : ""}
+                    />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Access summary stat cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                label="Active Members"
+                value={String(accessSummary.totalMembers)}
+                icon={Users}
+                accent="text-emerald-400"
+              />
+              <StatCard
+                label="Pending Invites"
+                value={String(accessSummary.pendingInvites)}
+                icon={Mail}
+                accent="text-amber-400"
+              />
+              <StatCard
+                label="Access Codes"
+                value={String(accessSummary.totalCodes)}
+                icon={KeyRound}
+                accent="text-sky-400"
+              />
+              <StatCard
+                label="Active Codes"
+                value={String(accessSummary.activeCodes)}
+                icon={Shield}
+                accent="text-indigo-400"
+              />
+            </div>
+
+            {/* Quick actions — intertwined with Team Manager */}
+            <SectionHeader icon={Zap} title="Quick Actions" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <button
+                onClick={handleShareFromAccess}
+                disabled={!accessStationId}
+                className="px-3 py-3 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 text-sky-500 dark:text-sky-400 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5"
+              >
+                <UserPlus size={18} />
+                Invite Member
+              </button>
+              <button
+                onClick={handleOpenTeamManager}
+                className="px-3 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5"
+              >
+                <ExternalLink size={18} />
+                Team Manager
+              </button>
+              <button
+                onClick={() => {
+                  if (accessStationId) {
+                    const station = stations.find(
+                      (s) => s.id === accessStationId,
+                    );
+                    if (station) handleTransferOwnership(station);
+                  }
+                }}
+                disabled={!accessStationId}
+                className="px-3 py-3 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50 text-amber-500 dark:text-amber-400 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5"
+              >
+                <ArrowRightLeft size={18} />
+                Transfer Ownership
+              </button>
+              <button
+                onClick={handleOpenTeamManager}
+                className="px-3 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 dark:text-purple-400 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5"
+              >
+                <KeyRound size={18} />
+                Access Codes
+              </button>
+            </div>
+
+            {/* Members of this station (who I've shared with) */}
+            <div>
+              <SectionHeader
+                icon={Users}
+                title="Members with Access"
+                count={accessMembers.length}
+              />
+              {accessLoading ? (
+                <div className={`${GLASS_CARD} p-6 text-center`}>
+                  <RefreshCw
+                    size={20}
+                    className="animate-spin text-gray-500 mx-auto mb-2"
+                  />
+                  <p className="text-xs text-gray-500">Loading members...</p>
+                </div>
+              ) : accessMembers.length === 0 ? (
+                <div className={`${GLASS_CARD} p-6 text-center`}>
+                  <Users size={28} className="text-gray-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    No members yet. Invite someone to grant them access to this
+                    station.
+                  </p>
+                  <button
+                    onClick={handleShareFromAccess}
+                    className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5"
+                  >
+                    <UserPlus size={13} />
+                    Invite Member
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {accessMembers.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`${GLASS_CARD} p-3 flex items-center justify-between gap-3`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-lg ${avatarColor(m.name || m.invited_email || "M")} flex items-center justify-center text-white font-bold text-xs flex-shrink-0`}
+                        >
+                          {initialsOf(m.name || m.invited_email || "M")}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {m.name || m.invited_email || "Unknown"}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">
+                            {m.invited_email || m.member_email || ""}
+                            {m.last_accessed_at && (
+                              <span className="ml-2">
+                                · last seen {relativeTime(m.last_accessed_at)}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <RoleBadge role={m.role} />
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            m.status === "accepted" || m.status === "active"
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : m.status === "pending"
+                                ? "bg-amber-500/20 text-amber-400"
+                                : "bg-gray-500/20 text-gray-400"
+                          }`}
+                        >
+                          {m.status}
+                        </span>
+                        <button
+                          onClick={() => handleRevokeMember(m.id)}
+                          title="Revoke access"
+                          className="w-7 h-7 rounded text-red-400 hover:bg-red-500/10 flex items-center justify-center"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Access Codes for this station */}
+            <div>
+              <SectionHeader
+                icon={KeyRound}
+                title="Access Codes (No-Signup Access)"
+                count={accessCodes.length}
+              />
+              {accessLoading ? (
+                <div className={`${GLASS_CARD} p-6 text-center`}>
+                  <RefreshCw
+                    size={20}
+                    className="animate-spin text-gray-500 mx-auto mb-2"
+                  />
+                  <p className="text-xs text-gray-500">Loading codes...</p>
+                </div>
+              ) : accessCodes.length === 0 ? (
+                <div className={`${GLASS_CARD} p-6 text-center`}>
+                  <KeyRound size={28} className="text-gray-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                    No access codes yet. Create one in Team Manager to grant
+                    no-signup read-only access.
+                  </p>
+                  <button
+                    onClick={handleOpenTeamManager}
+                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5"
+                  >
+                    <ExternalLink size={13} />
+                    Open Team Manager
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {accessCodes.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`${GLASS_CARD} p-3 flex items-center justify-between gap-3`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 flex-shrink-0">
+                          <KeyRound size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {c.memberName || c.username}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">
+                            @{c.username}
+                            {c.allowedTabs && c.allowedTabs.length > 0 && (
+                              <span className="ml-2">
+                                · {c.allowedTabs.length} tabs
+                              </span>
+                            )}
+                            {c.readOnly && (
+                              <span className="ml-2">· read-only</span>
+                            )}
+                            {c.accessCount !== undefined && (
+                              <span className="ml-2">
+                                · {c.accessCount}x accessed
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          c.enabled
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-gray-500/20 text-gray-400"
+                        }`}
+                      >
+                        {c.enabled ? "Active" : "Disabled"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Intertwined tip */}
+            <div className={`${GLASS_CARD} p-4 border-l-4 border-indigo-500`}>
+              <div className="flex items-start gap-3">
+                <ExternalLink
+                  size={16}
+                  className="text-indigo-400 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-xs font-medium text-gray-900 dark:text-white">
+                    Integrated with Team Manager
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    This access dashboard is synchronized with the Team Manager
+                    tab. Members invited here appear in Team Manager, and access
+                    codes created in Team Manager appear here. Use the{" "}
+                    <strong>Team Manager</strong> button above to manage roles,
+                    permissions, shifts, and detailed access-code configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ===================== NETWORK SUB-TAB ===================== */}
@@ -3078,8 +3658,10 @@ export default function StationManager({ onClose }: StationManagerProps) {
         <ShareModal
           station={modal.station}
           onInvite={handleInvite}
+          onBulkInvite={handleBulkInvite}
           onRevoke={handleRevokeMember}
           onClose={closeModal}
+          openTeamManager={handleOpenTeamManager}
         />
       )}
       {modal?.type === "qr" && (
@@ -3095,6 +3677,150 @@ export default function StationManager({ onClose }: StationManagerProps) {
           onCancel={closeModal}
         />
       )}
+      {modal?.type === "transfer" && modal.station && (
+        <TransferOwnershipModal
+          station={modal.station}
+          onConfirm={handleConfirmTransfer}
+          onClose={closeModal}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TransferOwnershipModal — transfer station ownership to an existing member
+// ============================================================
+
+function TransferOwnershipModal({
+  station,
+  onConfirm,
+  onClose,
+}: {
+  station: any;
+  onConfirm: (newOwnerId: string, newOwnerName: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [members, setMembers] = useState<StationMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!station?.id) return;
+    getStationMembers(station.id)
+      .then((m) => {
+        // Only accepted/active members with a user_id can receive ownership
+        const eligible = m.filter(
+          (mem) =>
+            (mem.status === "accepted" || mem.status === "active") &&
+            mem.user_id,
+        );
+        setMembers(eligible);
+      })
+      .catch(() => setMembers([]))
+      .finally(() => setLoading(false));
+  }, [station?.id]);
+
+  const handleTransfer = async () => {
+    if (!selectedId) return;
+    const member = members.find((m) => m.user_id === selectedId);
+    if (!member) return;
+    setBusy(true);
+    try {
+      await onConfirm(
+        member.user_id!,
+        member.name || member.invited_email || "Member",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div
+        className={`${GLASS_CARD} w-full max-w-md p-6 max-h-[90vh] overflow-y-auto`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ArrowRightLeft size={18} className="text-amber-400" />
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              Transfer Ownership
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Transfer ownership of <strong>{station?.name}</strong> to one of its
+          accepted members. You will become a manager. This action cannot be
+          undone.
+        </p>
+        {loading ? (
+          <p className="text-xs text-gray-500">Loading members...</p>
+        ) : members.length === 0 ? (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-xs">
+            No eligible members to transfer to. Invite a member first (via the
+            Share button), then they can accept and become eligible for
+            ownership transfer.
+          </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            {members.map((m) => (
+              <label
+                key={m.id}
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border transition-all ${
+                  selectedId === m.user_id
+                    ? "bg-sky-500/10 border-sky-500/40"
+                    : "bg-gray-100 dark:bg-white/5 border-transparent hover:border-white/20"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="transfer-target"
+                  checked={selectedId === m.user_id}
+                  onChange={() => setSelectedId(m.user_id!)}
+                  className="accent-sky-500"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {m.name || m.invited_email || "Unknown"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 truncate">
+                    {m.invited_email || m.member_email || ""}
+                  </p>
+                </div>
+                <RoleBadge role={m.role} />
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleTransfer}
+            disabled={!selectedId || busy}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center gap-2"
+          >
+            {busy ? (
+              <RefreshCw size={14} className="animate-spin" />
+            ) : (
+              <ArrowRightLeft size={14} />
+            )}
+            Transfer Ownership
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -49,6 +49,7 @@ import {
   GitBranch,
   Phone,
   IdCard,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -1323,6 +1324,15 @@ export default function TeamManager() {
               className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
             >
               <Download size={13} /> Export
+            </button>
+            <button
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("open-station-manager"))
+              }
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+              title="Open Station Manager — manage stations & access"
+            >
+              <Building2 size={13} /> Stations
             </button>
           </div>
         </div>

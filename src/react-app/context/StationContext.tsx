@@ -1634,6 +1634,27 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       if (found) {
         setCurrentStation(found);
         localStorage.setItem(CURRENT_STATION_KEY, id);
+        // Update last_accessed_at on station_members (cross-device "last seen"
+        // for shared stations). Fire-and-forget — never blocks the switch.
+        // Owner-owned stations have no station_members row, so the update is a
+        // no-op (PGRST116 "no rows" is expected + harmless).
+        try {
+          supabase
+            .from("station_members")
+            .update({ last_accessed_at: new Date().toISOString() })
+            .eq("station_id", id)
+            .then(({ error }) => {
+              if (error && error.code !== "PGRST116") {
+                // non-fatal; log for diagnostics
+                console.warn(
+                  "[StationContext] last_accessed_at update:",
+                  error.message,
+                );
+              }
+            });
+        } catch {
+          /* ignore — best-effort telemetry */
+        }
       }
     },
     [stations],

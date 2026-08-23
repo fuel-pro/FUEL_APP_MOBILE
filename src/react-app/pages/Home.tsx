@@ -333,6 +333,18 @@ function HomeContent() {
     return () => window.removeEventListener("changeTab", handleChangeTab);
   }, [broadcast]);
 
+  // Listen for requests to open the Station Manager modal (dispatched by
+  // Team Manager and other components that want to deep-link into it).
+  useEffect(() => {
+    const handleOpenStationManager = () => setShowStationManager(true);
+    window.addEventListener("open-station-manager", handleOpenStationManager);
+    return () =>
+      window.removeEventListener(
+        "open-station-manager",
+        handleOpenStationManager,
+      );
+  }, []);
+
   // Automation notification toast — listens for `automation:notify`
   // CustomEvents fired by the automation engine (e.g. auto-reorder created)
   // and surfaces them as a transient toast near the bottom of the page.
