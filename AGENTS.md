@@ -6774,3 +6774,62 @@ area shows content (not blank).
 
 ### Deploy state
 - GitHub main: 6a9a817 (pushed). Cloudflare LIVE. Vercel BLOCKED by quota (resets ~2026-08-24). Supabase: no schema changes.
+
+
+## Session 2026-08-23 (cont.) — Fix "can't see updates live" + stale Vite cache safeguard (commit 6f69bbf)
+
+### Root cause of "I can't see the updates live"
+
+**Cloudflare (https://fuel-app-mobile.pages.dev/)**: was serving index-CduhOVO7.js
+— a build from a parallel session that had a STALE Vite cache
+(`node_modules/.vite/`). Vite produced the SAME content hash for DIFFERENT chunk
+content (the source had the new station-sharing code, but the cached transform
+output didn't), so Cloudflare Pages deduped/skipped uploading the new chunk and
+served the OLD cached chunk to users. The deployed chunk was MISSING all the
+Access Another Station restructure markers (subscribeToMyMemberships, leaveStation,
+toggleFavorite, getStationActivity).
+
+**Vercel (https://fuel-app-mobile.vercel.app/)**: still serving index-DmD7mw3N.js
+built from commit dfe043cb38 ("fix: HLS CORS proxy") — BEFORE the restructure
+commit 28ebe5d. The restructure was NEVER deployed to Vercel because the
+api-deployments-free-per-day quota (100/day) is exhausted across all 4 tokens.
+The GitHub webhook integration also counts against this quota, so pushes to main
+no longer trigger auto-deploys until the quota resets.
+
+### Fix applied
+
+1. **Clean rebuild**: `rm -rf node_modules/.vite dist` + `npm run build` ->
+   index-BHT2xCQP.js with ALL markers. Redeployed to Cloudflare Pages.
+   VERIFIED LIVE: https://fuel-app-mobile.pages.dev/ now serves index-BHT2xCQP.js
+   with subscribeToMyMemberships, leaveStation, toggleFavorite, getStationActivity.
+
+2. **Build safeguard (commit 6f69bbf)**: added `clean:cache` script
+   (`rimraf node_modules/.vite dist`) and wired it into build, build:vercel,
+   build:static so EVERY production build starts with a clean Vite cache. This
+   prevents the stale-transform-cache issue from EVER recurring — content hashes
+   will always reflect the current source. rimraf 6.1.3 is already a transitive
+   dep; confirmed working.
+
+### Deploy state 2026-08-23 (after fix)
+
+- **Cloudflare Pages**: LIVE (main alias https://fuel-app-mobile.pages.dev
+  serving index-BHT2xCQP.js with all restructure markers). Verified via browser:
+  login as founder QA -> Station Manager -> Access Another Station -> 4-tab
+  modal (Network/Invites/Activity/Help) with search + role filter + favorites
+  + Join-by-link + activity selector. POS sale completed
+  (INV20260823000001UYOD $11.00 cash, country-aware US receipt).
+- **Vercel production**: BLOCKED by api-deployments-free-per-day (100/100
+  exhausted across all 4 tokens; resets 2026-08-24 05:39 UTC). The GitHub
+  integration will auto-deploy commit 6f69bbf (includes restructure + cache
+  safeguard) when the quota resets (~24h). All deploy paths blocked: prebuilt,
+  git-source API, CLI, GitHub webhook.
+- **GitHub main**: 6f69bbf (pushed, synced with origin/main).
+- **Supabase**: migration 025 still pending DB access (apply via Dashboard SQL
+  Editor; app degrades gracefully without it).
+
+### Lesson for future sessions
+ALWAYS run `rm -rf node_modules/.vite dist` before building for deploy. The
+build script now does this automatically, but if building manually (e.g.
+`npx vite build` directly), clear the cache first. A stale .vite cache is
+the #1 cause of "deployed but can't see updates" — the chunk hash looks
+unchanged so the deploy platform serves the old cached file.
