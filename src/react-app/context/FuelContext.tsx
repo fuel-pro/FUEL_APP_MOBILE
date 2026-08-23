@@ -860,6 +860,15 @@ const initialState: FuelState = {
       order: 30,
       visible: true,
     },
+    {
+      id: "settings",
+      label: "Settings",
+      originalLabel: "Settings",
+      description:
+        "Admin control center — manage tabs, features, integrations, branding, security & system config",
+      order: 31,
+      visible: true,
+    },
   ],
   employees: [],
   payrollRecords: [],

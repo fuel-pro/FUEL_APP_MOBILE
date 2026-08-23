@@ -36,6 +36,7 @@ import {
   PackageSearch,
   FileText,
   Store,
+  Settings,
 } from "lucide-react";
 
 interface TabNavigationProps {
@@ -94,6 +95,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     terminal: <Store size={16} />,
     automation: <Activity size={16} />,
     "price-finder": <Globe size={16} />,
+    settings: <Settings size={16} />,
   };
 
   // Check scroll position for arrow visibility

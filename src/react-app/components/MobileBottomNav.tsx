@@ -23,6 +23,7 @@ import {
   Wrench,
   Monitor,
   Receipt,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { usePermissions } from "@/react-app/context/PermissionContext";
@@ -173,6 +174,12 @@ export default function MobileBottomNav({
       label: "Terminal",
       icon: Monitor,
       color: "text-cyan-400",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      color: "text-blue-500",
     },
   ].filter((item) => isTabAllowed(item.id));
 

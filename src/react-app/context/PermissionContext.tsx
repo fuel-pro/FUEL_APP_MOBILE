@@ -173,6 +173,7 @@ export const TAB_PERMISSION_MAP: Record<string, keyof PermissionConfig> = {
   fueltypes: "canManageFuelTypes",
   team: "canViewEmployees",
   documents: "canViewDocuments",
+  settings: "canViewSettings",
 };
 
 // Action → domain → permission-key map for the canDo() action-level gate.
@@ -270,6 +271,7 @@ export const DEFAULT_ROLE_TABS: Record<UserRole, string[]> = {
     "fueltypes",
     "team",
     "documents",
+    "settings",
   ],
   manager: [
     "dashboard",
@@ -299,6 +301,7 @@ export const DEFAULT_ROLE_TABS: Record<UserRole, string[]> = {
     "fueltypes",
     "team",
     "documents",
+    "settings",
   ],
   staff: [
     "dashboard",
