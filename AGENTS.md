@@ -7521,3 +7521,162 @@ widest selection. NO upstream attribution in the UI.
   GitHub integration auto-deploys when quota resets ~24h).
 - Supabase: no schema changes (frontend + serverless only).
 - tsc 0 errors, build 108 precache, prettier pass.
+## Session 2026-08-23 — Framer-inspired dark theme aesthetic (commit pending)
+
+Integrated a sleek Framer-style dark-mode aesthetic (ultra-dark `#0a0a0a`
+surfaces, subtle borders, smooth glowing `#035bfe` accents) into the live
+site. Implemented exactly the 3 files requested, adapted to slot into the
+existing architecture without breaking light mode or the live Header.
+
+### Files
+
+1. **`src/react-app/styles/dark-theme.css`** (NEW): design tokens
+   (`--dt-bg-main` `#0a0a0a`, `--dt-bg-card` `#121212`,
+   `--dt-bg-card-hover` `#181818`, `--dt-bg-input` `#161616`,
+   `--dt-border-subtle` `#222222`, `--dt-border-active` `#333333`,
+   `--dt-border-focus` `#035bfe`, text tiers `#ffffff`/`#a1a1aa`/`#71717a`,
+   `--dt-accent-glow` `rgba(3,91,254,0.15)`, radii, motion curves) declared
+   on `:root`. Sleek 6px scrollbar (global). Surface application scoped
+   under `html.dark` so the existing light/dark toggle is untouched: dark
+   mode body bg upgraded from the old `#111827` to the layered `#0a0a0a`
+   palette, cards `.card`/`.fp-halo-card` to `#121212` with subtle borders,
+   inputs to `#161616` with focus glow, table rows to `#181818` hover.
+   Also ships opt-in utility classes (`.fp-dt-surface`, `.fp-dt-glass`,
+   `.fp-dt-glow`, `.fp-dt-inner-glow`, `.fp-dt-text-*`) for components that
+   want the aesthetic without the legacy `.card` class.
+2. **`src/react-app/components/ui/DarkCard.tsx`** (NEW): reusable
+   dark-mode card — hover elevation, subtle `#222`->`#333` borders, inner
+   gradient glow on hover, badge + priceTag meta bar, title that glows
+   `#035bfe` on hover, "Explore details ->" footer accent indicator.
+   Props: title/subtitle/priceTag/badgeText/children/onClick. Placed in
+   the existing `components/ui/` reusable-component directory.
+3. **`src/react-app/components/ui/Navbar.tsx`** (NEW, exports
+   `DarkNavbar`): floating glassmorphism header (`bg-[#0a0a0a]/80
+   backdrop-blur-md`), brand logo, nav links, Sign In + All-Access Pass
+   buttons. Created as a standalone reusable component (the main app
+   shell keeps its integrated `Header.tsx` which already inherits the
+   dark-theme tokens).
+
+### Integration
+
+- `src/react-app/main.tsx`: `import "@/react-app/styles/dark-theme.css";`
+  added AFTER `index.css` so the `#0a0a0a` surfaces override the old
+  `#111827` dark block (CSS source order + equal specificity -> later wins).
+- No Supabase schema changes (frontend-only).
+- Light mode is completely untouched — all surface rules are scoped under
+  `html.dark`; the `:root` tokens are declared but only consumed in dark
+  mode (plus the global scrollbar, which is mode-neutral).
+
+### Key fixes (per the spec's "Key Fix Breakdown")
+
+1. **Surface palette**: replaced pure-black/`#111827` with layered
+   `#0a0a0a`/`#121212`/`#181818` for depth without harsh cutoff.
+2. **Subtle borders**: low-contrast `#222`->`#333` instead of white lines.
+3. **Typography contrast**: three text tiers (`#ffffff`/`#a1a1aa`/`#71717a`).
+
+### Deploy state 2026-08-23
+
+- GitHub main: commit pending (awaiting user authorization to commit/push).
+- Cloudflare/Vercel: NOT yet deployed (awaiting commit + deploy).
+- Supabase: no schema changes (frontend-only).
+- `node_modules` not installed in this sandbox, so `tsc`/build could not be
+  run locally; files verified via balanced-brace check + manual review.
+  The new TSX files are simple (pure presentational components with no
+  external imports beyond `react`) and the CSS is plain CSS imported via
+  the standard `@/` alias, so they integrate cleanly with the existing
+  Vite + Tailwind pipeline.
+
+
+## Session 2026-08-23 — Max owner control + pre-fill all data in Settings (commit pending)
+
+Gave the station owner/manager FULL control over every setting + pre-filled
+ALL already-available data so there's no double entry + added a new
+"Company Profile" sub-tab. Work is in the LIVE rendered GeneralSettings.tsx
+(the "settings" tab via Home.tsx), NOT the dead SettingsPanel.tsx.
+
+### 1. PRE-FILL all available data (no double entry)
+
+Added a `prefilledConfig` useMemo in the main GeneralSettings component that
+merges the station/company data the user ALREADY entered (via the setup
+wizard, Header "Edit Info", or station creation) into the GeneralSettings
+config on first open, so the General tab fields are populated instead of
+blank. The cloud config row wins when it has a value; otherwise falls back
+to `state.companyData` / `currentStation`:
+- stationName <- companyData.name / currentStation.name
+- stationAddress <- companyData.physicalAddress / currentStation.location
+- stationPhone <- companyData.contacts / currentStation.phone
+- stationEmail <- companyData.email / currentStation.email
+- timezone <- currentStation.timezone / browser
+- logoUrl <- companyData.logo / currentStation.logo
+- currency <- companyData.companyCurrency / currentStation.currency / detected
+- taxRate <- currentStation.taxRate / country VAT default
+- receiptHeader/receiptFooter/invoicePrefix <- companyData.name / etrInvoicePrefix
+
+### 2. NEW "Company Profile" sub-tab (full owner control over CompanyData)
+
+Added a 2nd sub-tab "Company Profile" (Building icon) that edits the
+AUTHORITATIVE `state.companyData` directly via `dispatch(SET_COMPANY_DATA)`.
+Every field the owner sets here is read by invoices, receipts, reports, the
+Header "Edit Info" form, and exports — so there is ONE place to tweak every
+company detail. Sections:
+- Company Logo (upload to Supabase Storage via uploadStationLogo, cross-device;
+  remove button; mirrors to config.logoUrl)
+- Business Identity (name, email, phone/contacts, PO Box)
+- Physical Address (address, town/city, county/state/province, country code)
+- Tax & Compliance (Tax ID/KRA PIN, VAT Reg No, ETR Serial No, CU Serial No,
+  ETR Invoice Prefix)
+- Bank Details (bank name, branch, account holder, account number)
+
+Fields are PRE-FILLED from existing companyData (no double entry). Live
+single-field save on blur + "Save All" button. Company-name + invoice-prefix
+edits two-way sync into the general config (stationName / invoicePrefix).
+
+### 3. Two-way sync (settings <-> companyData)
+
+Added `syncCompanyData(patch)` + `updateAndSync(key, value, companyPatch?)`
+helpers in the main component. Wired into:
+- General tab: Station Name -> companyData.name; Currency ->
+  companyData.companyCurrency + companyData.currency (symbol)
+- Finance tab: Currency Code -> companyData.companyCurrency + .currency;
+  Tax Rate -> prefs.vatRate (already)
+- Company Profile tab: every field -> companyData (live + Save All)
+So a currency/tax/name change made in Settings reaches invoices, receipts,
+reports, and the Header form — no more separate re-entry.
+
+### 4. Removed owner-locking (full control, no limits)
+
+Per "do not limit their ability/control", removed every `disabled={!isOwner}`
+in the SecurityTab (session timeout, max login attempts, IP whitelist) and
+the `!isOwner` guard on the 2FA toggle. The owner (and any manager with the
+settings grant) can now edit ALL security fields. 2FA toggle now works for
+the owner with a success toast. Session-timeout min lowered 5->0 (0 = never).
+
+### Files changed
+- `src/react-app/components/GeneralSettings.tsx` (+499/-19 lines):
+  - imports: useStations, uploadStationLogo, toastSuccess/toastError,
+    CompanyData type, Building/CreditCard/MapPin/FileText/ImageIcon/Loader2 icons
+  - main component: currentStation + prefilledConfig + syncCompanyData +
+    updateAndSync
+  - new CompanyProfileTab component (full CompanyData editing + logo upload)
+  - GeneralTab + FinanceTab signatures gain updateAndSync; currency/name/tax
+    handlers now two-way sync into companyData
+  - SecurityTab: disabled attrs removed (full owner control)
+  - "company" sub-tab added to subTabs array + render switch
+
+### Verification (local, 2026-08-23)
+- `npx tsc --noEmit` -> 0 errors
+- `npx eslint` (changed files) -> 0 errors (2 harmless unused-arg warnings:
+  `config` in CompanyProfileTab, `isOwner` in SecurityTab — noUnusedLocals:false)
+- `npx prettier --write` -> all formatted
+- `npx vitest run` -> 19/19 pass
+- `npm run build` -> success (108 precache; GeneralSettings-BYB15zUN.js chunk
+  with all markers confirmed: "Company Profile", "Bank Details",
+  "Physical Address", "Tax & Compliance", "Save All Changes",
+  syncCompanyData, updateAndSync)
+
+### Deploy state 2026-08-23
+- GitHub main: commit pending (awaiting user authorization to commit/push).
+- Cloudflare/Vercel: NOT yet deployed (awaiting commit + deploy).
+- Supabase: no schema changes (frontend-only; companyData persists via the
+  existing FuelContext compact blob in app_kv; general_settings_v1 cloud key
+  unchanged).

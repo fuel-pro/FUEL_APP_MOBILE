@@ -1,0 +1,197 @@
+/*
+ * Dark Theme Aesthetic — Framer-inspired dark-mode UI
+ * Ultra-dark #0a0a0a surfaces, subtle borders, smooth glowing accents.
+ *
+ * Design tokens are declared on :root so they are available everywhere.
+ * Surface application (body bg, card bg, etc.) is scoped under html.dark
+ * so the existing light/dark toggle continues to work: light mode is
+ * untouched, dark mode gets the sleeker layered palette below.
+ */
+
+:root {
+  /* Layered dark surfaces (no pure black) */
+  --dt-bg-main: #0a0a0a;
+  --dt-bg-card: #121212;
+  --dt-bg-card-hover: #181818;
+  --dt-bg-input: #161616;
+
+  /* Subtle low-contrast borders */
+  --dt-border-subtle: #222222;
+  --dt-border-active: #333333;
+  --dt-border-focus: #035bfe;
+
+  /* Text opacity tiers */
+  --dt-text-primary: #ffffff;
+  --dt-text-secondary: #a1a1aa;
+  --dt-text-muted: #71717a;
+
+  /* Accent + glow */
+  --dt-accent-blue: #035bfe;
+  --dt-accent-glow: rgba(3, 91, 254, 0.15);
+
+  /* Radii */
+  --dt-radius-sm: 8px;
+  --dt-radius-md: 14px;
+  --dt-radius-lg: 20px;
+
+  /* Motion */
+  --dt-transition-fast: 0.15s ease;
+  --dt-transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===== Sleek dark scrollbar (global, both modes) ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--dt-bg-main, #0a0a0a);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--dt-border-subtle, #222222);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dt-border-active, #333333);
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--dt-border-subtle, #222222) transparent;
+}
+
+/* ===== Dark mode surface enhancement =====
+ * Replaces the previous #111827 dark surfaces with the layered
+ * #0a0a0a / #121212 / #181818 palette for depth without harsh cutoff. */
+html.dark body {
+  background-color: var(--dt-bg-main);
+  color: var(--dt-text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Poppins",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.dark body::before {
+  background: radial-gradient(
+    circle at center,
+    var(--dt-accent-glow) 0%,
+    rgba(3, 91, 254, 0.03) 50%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+
+/* Typography contrast tiers in dark mode */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark h5,
+html.dark h6 {
+  color: var(--dt-text-primary);
+}
+
+/* Cards: layered dark surface + subtle border */
+html.dark .card,
+html.dark .fp-halo-card {
+  background-color: var(--dt-bg-card);
+  border-color: var(--dt-border-subtle);
+}
+
+html.dark .card:hover,
+html.dark .fp-halo-card:hover {
+  border-color: var(--dt-border-active);
+}
+
+/* Inputs: dark field bg + focus glow */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: var(--dt-bg-input);
+  border-color: var(--dt-border-subtle);
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: var(--dt-border-focus);
+  box-shadow: 0 0 0 3px var(--dt-accent-glow);
+  outline: none;
+}
+
+/* Tables: subtle row separation */
+html.dark th,
+html.dark td {
+  border-color: var(--dt-border-subtle);
+}
+
+html.dark tr:hover {
+  background-color: var(--dt-bg-card-hover);
+}
+
+/* ===== Reusable dark-theme utility classes =====
+ * Opt-in helpers for components that want the sleek aesthetic
+ * regardless of the legacy .card class. */
+.fp-dt-surface {
+  background-color: var(--dt-bg-card);
+  border: 1px solid var(--dt-border-subtle);
+  border-radius: var(--dt-radius-lg);
+}
+
+.fp-dt-surface-hover:hover {
+  background-color: var(--dt-bg-card-hover);
+  border-color: var(--dt-border-active);
+}
+
+.fp-dt-border {
+  border-color: var(--dt-border-subtle);
+}
+
+.fp-dt-text-primary {
+  color: var(--dt-text-primary);
+}
+
+.fp-dt-text-secondary {
+  color: var(--dt-text-secondary);
+}
+
+.fp-dt-text-muted {
+  color: var(--dt-text-muted);
+}
+
+.fp-dt-accent {
+  color: var(--dt-accent-blue);
+}
+
+.fp-dt-glow {
+  box-shadow: 0 0 24px var(--dt-accent-glow);
+}
+
+.fp-dt-glass {
+  background-color: rgba(10, 10, 10, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--dt-border-subtle);
+}
+
+/* Inner gradient glow used by DarkCard */
+.fp-dt-inner-glow {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03) 0%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dark body,
+  html.dark .card,
+  html.dark .fp-halo-card,
+  html.dark input,
+  html.dark select,
+  html.dark textarea {
+    transition: none !important;
+  }
+}

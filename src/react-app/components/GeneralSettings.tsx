@@ -61,12 +61,21 @@ import {
   Cloud,
   ChevronUp,
   ChevronDown,
+  Building,
+  CreditCard,
+  MapPin,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
 import SubTabBar, { SubTab } from "@/react-app/components/SubTabBar";
-import { useFuel } from "@/react-app/context/FuelContext";
+import { useFuel, CompanyData } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { useTenant } from "@/react-app/context/TenantContext";
+import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   useUserPrefs,
   UserPreferences,
@@ -295,6 +304,7 @@ export default function GeneralSettings() {
   const { state, dispatch } = useFuel();
   const { canDo } = usePermissions();
   const { user } = useAuth();
+  const { currentStation } = useStations();
   const { featureFlags } = useTenant();
   const { prefs, update: updatePrefs } = useUserPrefs();
   const { toast, show } = useToast();
@@ -311,10 +321,60 @@ export default function GeneralSettings() {
   const configRef = useRef(config);
   configRef.current = config;
 
-  // Permission gate — admin/owner only
+  // Permission gate — admin/owner only. Owner has FULL control (no field is
+  // locked); managers/staff with the "settings" grant can view + edit too.
   const canManageSettings =
     canDo("manage", "settings") || canDo("view", "settings");
   const isOwner = canDo("manage", "settings");
+
+  // ─── PRE-FILL from existing data (prevents double entry) ──────────────────
+  // Merge the station/company data the user ALREADY entered (via the setup
+  // wizard, Header "Edit Info", or station creation) into the GeneralSettings
+  // config, so the fields are populated on first open instead of blank. The
+  // cloud config row wins when it has a value; otherwise we fall back to the
+  // authoritative `state.companyData` / `currentStation` fields.
+  const prefilledConfig = useMemo<GeneralSettingsConfig>(() => {
+    const cd = state.companyData;
+    const st = currentStation;
+    return {
+      ...config,
+      stationName: config.stationName || cd.name || st?.name || "",
+      stationAddress:
+        config.stationAddress || cd.physicalAddress || st?.location || "",
+      stationPhone: config.stationPhone || cd.contacts || st?.phone || "",
+      stationEmail: config.stationEmail || cd.email || st?.email || "",
+      timezone:
+        config.timezone ||
+        st?.timezone ||
+        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+        "UTC",
+      logoUrl: config.logoUrl || cd.logo || st?.logo || "",
+      currency:
+        config.currency ||
+        cd.companyCurrency ||
+        st?.currency ||
+        getDetectedCurrency(),
+      taxRate:
+        config.taxRate ||
+        (typeof st?.taxRate === "number" ? st.taxRate : 0) ||
+        getVATRate(st?.country || getDetectedCountryCode()),
+      taxLabel: config.taxLabel || "VAT",
+      receiptHeader:
+        config.receiptHeader || cd.name || st?.name || "FuelPro Station",
+      receiptFooter:
+        config.receiptFooter ||
+        `Thank you for choosing ${cd.name || st?.name || "FuelPro"}!`,
+      invoicePrefix: config.invoicePrefix || cd.etrInvoicePrefix || "INV",
+    };
+  }, [config, state.companyData, currentStation]);
+
+  // Keep the live config in sync with the pre-filled values (one-shot per
+  // load/station change) so edits persist to cloud with the merged data.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && config === prefilledConfig) return;
+    setConfig(prefilledConfig);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledConfig]);
 
   // Load config from cloud
   useEffect(() => {
@@ -393,6 +453,35 @@ export default function GeneralSettings() {
     [saveConfig],
   );
 
+  // ─── Two-way sync: currency/tax/name changes also write to the ───────────
+  // authoritative `state.companyData` so invoices, receipts, reports, and the
+  // Header "Edit Info" form all read the SAME values the owner set here.
+  // (CompanyData is the source of truth for printed/exported documents.)
+  const syncCompanyData = useCallback(
+    (patch: Partial<CompanyData>) => {
+      const merged = { ...state.companyData, ...patch };
+      // Clean empty strings so mergeCompanyData keeps existing values.
+      (Object.keys(merged) as (keyof CompanyData)[]).forEach((k) => {
+        if (merged[k] === "") delete (merged as any)[k];
+      });
+      dispatch({ type: "SET_COMPANY_DATA", payload: merged });
+    },
+    [state.companyData, dispatch],
+  );
+
+  // Update a config field AND mirror it into companyData when relevant.
+  const updateAndSync = useCallback(
+    <K extends keyof GeneralSettingsConfig>(
+      key: K,
+      value: GeneralSettingsConfig[K],
+      companyPatch?: Partial<CompanyData>,
+    ) => {
+      update(key, value);
+      if (companyPatch) syncCompanyData(companyPatch);
+    },
+    [update, syncCompanyData],
+  );
+
   // Reset to defaults
   const resetConfig = useCallback(() => {
     if (!confirm("Reset ALL settings to defaults? This cannot be undone."))
@@ -439,6 +528,7 @@ export default function GeneralSettings() {
   const subTabs: SubTab[] = useMemo(
     () => [
       { id: "general", label: "General", icon: Settings },
+      { id: "company", label: "Company Profile", icon: Building },
       { id: "tabs", label: "Tab Manager", icon: LayoutGrid },
       { id: "features", label: "Features", icon: ToggleLeft },
       { id: "appearance", label: "Appearance", icon: Palette },
@@ -549,8 +639,20 @@ export default function GeneralSettings() {
           <GeneralTab
             config={config}
             update={update}
+            updateAndSync={updateAndSync}
             prefs={prefs}
             updatePrefs={updatePrefs}
+            show={show}
+          />
+        )}
+        {activeSubTab === "company" && (
+          <CompanyProfileTab
+            companyData={state.companyData}
+            syncCompanyData={syncCompanyData}
+            config={config}
+            update={update}
+            updateAndSync={updateAndSync}
+            user={user}
             show={show}
           />
         )}
@@ -579,6 +681,7 @@ export default function GeneralSettings() {
           <FinanceTab
             config={config}
             update={update}
+            updateAndSync={updateAndSync}
             prefs={prefs}
             updatePrefs={updatePrefs}
             show={show}
@@ -636,11 +739,384 @@ export default function GeneralSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SUB-TAB: COMPANY PROFILE  (NEW — full owner control over CompanyData)
+// ═══════════════════════════════════════════════════════════════════════════
+// Edits the authoritative `state.companyData` directly via SET_COMPANY_DATA.
+// Every field the owner sets here is read by invoices, receipts, reports, the
+// Header "Edit Info" form, and exports — so there is ONE place to tweak every
+// company detail. Fields are PRE-FILLED from existing companyData (no double
+// entry). No field is locked for the owner.
+function CompanyProfileTab({
+  companyData,
+  syncCompanyData,
+  config,
+  update,
+  updateAndSync,
+  user,
+  show,
+}: {
+  companyData: CompanyData;
+  syncCompanyData: (patch: Partial<CompanyData>) => void;
+  config: GeneralSettingsConfig;
+  update: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+  ) => void;
+  updateAndSync: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+    companyPatch?: Partial<CompanyData>,
+  ) => void;
+  user: { id?: string; email?: string } | null;
+  show: (msg: string, type?: "success" | "error" | "info") => void;
+}) {
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Local working copy mirroring companyData so inputs feel instant.
+  const [form, setForm] = useState<CompanyData>(companyData);
+  useEffect(() => {
+    setForm(companyData);
+  }, [companyData]);
+
+  const set = <K extends keyof CompanyData>(key: K, value: CompanyData[K]) => {
+    setForm((f) => ({ ...f, [key]: value }));
+  };
+
+  // Commit a single field to the authoritative companyData (live save).
+  const commit = <K extends keyof CompanyData>(
+    key: K,
+    value: CompanyData[K],
+  ) => {
+    syncCompanyData({ [key]: value } as Partial<CompanyData>);
+  };
+
+  // Commit all fields at once (Save button).
+  const saveAll = () => {
+    syncCompanyData(form);
+    toastSuccess("Company profile saved & synced across devices");
+    show("Company profile saved & synced across devices", "success");
+  };
+
+  const onLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) {
+      toastError("Could not upload logo — please re-login and retry");
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const result = await uploadStationLogo(file, user.id);
+      set("logo", result.url);
+      commit("logo", result.url);
+      update("logoUrl", result.url); // mirror into general config
+      toastSuccess("Logo uploaded & saved");
+    } catch (err: any) {
+      toastError(err?.message || "Logo upload failed");
+      show("Logo upload failed", "error");
+    } finally {
+      setUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeLogo = () => {
+    set("logo", "");
+    commit("logo", "");
+    update("logoUrl", "");
+    show("Logo removed", "info");
+  };
+
+  return (
+    <div className="p-5 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Company Profile
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Full control over every company detail used in invoices, receipts,
+            reports &amp; exports. Changes save to the cloud instantly.
+          </p>
+        </div>
+        <button
+          onClick={saveAll}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <Save size={14} /> Save All
+        </button>
+      </div>
+
+      {/* Logo */}
+      <SectionCard title="Company Logo" icon={ImageIcon}>
+        <div className="flex items-center gap-4 flex-wrap">
+          {form.logo ? (
+            <img
+              src={form.logo}
+              alt="Company logo"
+              className="w-24 h-24 rounded-xl object-cover border border-gray-200 dark:border-gray-700"
+            />
+          ) : (
+            <div className="w-24 h-24 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400">
+              <ImageIcon size={28} />
+            </div>
+          )}
+          <div className="flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              onChange={onLogoChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingLogo}
+              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+            >
+              {uploadingLogo ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              {uploadingLogo ? "Uploading…" : "Upload Logo"}
+            </button>
+            {form.logo && (
+              <button
+                onClick={removeLogo}
+                className="px-3 py-2 text-sm bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                Remove
+              </button>
+            )}
+            <p className="text-xs text-gray-400">
+              Stored in Supabase Storage (cross-device). PNG/JPEG/SVG/WebP.
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Business Identity */}
+      <SectionCard title="Business Identity" icon={Building}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Company Name">
+            <input
+              className={inputClass}
+              value={form.name}
+              onChange={(e) => {
+                set("name", e.target.value);
+                updateAndSync("stationName", e.target.value, {
+                  name: e.target.value,
+                });
+              }}
+              onBlur={(e) => commit("name", e.target.value)}
+              placeholder="Registered company name"
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              className={inputClass}
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
+              onBlur={(e) => commit("email", e.target.value)}
+              placeholder="info@company.com"
+            />
+          </Field>
+          <Field label="Phone / Contacts">
+            <input
+              className={inputClass}
+              value={form.contacts}
+              onChange={(e) => set("contacts", e.target.value)}
+              onBlur={(e) => commit("contacts", e.target.value)}
+              placeholder="+1 555 000 0000"
+            />
+          </Field>
+          <Field label="PO Box / Postal Address">
+            <input
+              className={inputClass}
+              value={form.poBox}
+              onChange={(e) => set("poBox", e.target.value)}
+              onBlur={(e) => commit("poBox", e.target.value)}
+              placeholder="P.O. Box 12345"
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* Address */}
+      <SectionCard title="Physical Address" icon={MapPin}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Physical Address">
+            <input
+              className={inputClass}
+              value={form.physicalAddress}
+              onChange={(e) => set("physicalAddress", e.target.value)}
+              onBlur={(e) => commit("physicalAddress", e.target.value)}
+              placeholder="Street address"
+            />
+          </Field>
+          <Field label="Town / City">
+            <input
+              className={inputClass}
+              value={form.town}
+              onChange={(e) => set("town", e.target.value)}
+              onBlur={(e) => commit("town", e.target.value)}
+              placeholder="Nairobi / New York"
+            />
+          </Field>
+          <Field label="County / State / Province">
+            <input
+              className={inputClass}
+              value={form.county}
+              onChange={(e) => set("county", e.target.value)}
+              onBlur={(e) => commit("county", e.target.value)}
+              placeholder="County, State or Province"
+            />
+          </Field>
+          <Field
+            label="Country Code"
+            hint="ISO 2-letter (US, KE, GB, DE…) — drives tax regime & currency"
+          >
+            <input
+              className={inputClass}
+              value={form.country || ""}
+              onChange={(e) =>
+                set("country", e.target.value.toUpperCase().slice(0, 2))
+              }
+              onBlur={(e) =>
+                commit("country", e.target.value.toUpperCase().slice(0, 2))
+              }
+              maxLength={2}
+              placeholder="US"
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* Tax & Compliance */}
+      <SectionCard title="Tax & Compliance" icon={FileText}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field
+            label="Tax ID / KRA PIN"
+            hint="Kenya: KRA PIN (P000000000X). Others: VAT/Tax/EIN number"
+          >
+            <input
+              className={inputClass}
+              value={form.kraPin}
+              onChange={(e) => set("kraPin", e.target.value)}
+              onBlur={(e) => commit("kraPin", e.target.value)}
+              placeholder="P051234567X"
+            />
+          </Field>
+          <Field label="VAT Registration No.">
+            <input
+              className={inputClass}
+              value={form.vatRegNo}
+              onChange={(e) => set("vatRegNo", e.target.value)}
+              onBlur={(e) => commit("vatRegNo", e.target.value)}
+              placeholder="VRN"
+            />
+          </Field>
+          <Field
+            label="ETR Serial No."
+            hint="Kenya eTIMS Electronic Tax Register (optional)"
+          >
+            <input
+              className={inputClass}
+              value={form.etrSerialNo}
+              onChange={(e) => set("etrSerialNo", e.target.value)}
+              onBlur={(e) => commit("etrSerialNo", e.target.value)}
+              placeholder="ETR-00000000"
+            />
+          </Field>
+          <Field label="CU Serial No." hint="Control Unit serial (optional)">
+            <input
+              className={inputClass}
+              value={form.cuSerialNo}
+              onChange={(e) => set("cuSerialNo", e.target.value)}
+              onBlur={(e) => commit("cuSerialNo", e.target.value)}
+              placeholder="CU-00000000"
+            />
+          </Field>
+          <Field label="ETR Invoice Prefix">
+            <input
+              className={inputClass}
+              value={form.etrInvoicePrefix}
+              onChange={(e) => {
+                set("etrInvoicePrefix", e.target.value);
+                updateAndSync("invoicePrefix", e.target.value, {
+                  etrInvoicePrefix: e.target.value,
+                });
+              }}
+              onBlur={(e) => commit("etrInvoicePrefix", e.target.value)}
+              placeholder="INV"
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* Bank Details */}
+      <SectionCard title="Bank Details" icon={CreditCard}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Bank Name">
+            <input
+              className={inputClass}
+              value={form.bankName}
+              onChange={(e) => set("bankName", e.target.value)}
+              onBlur={(e) => commit("bankName", e.target.value)}
+              placeholder="e.g. Equity Bank"
+            />
+          </Field>
+          <Field label="Branch">
+            <input
+              className={inputClass}
+              value={form.branchName}
+              onChange={(e) => set("branchName", e.target.value)}
+              onBlur={(e) => commit("branchName", e.target.value)}
+              placeholder="Branch name"
+            />
+          </Field>
+          <Field label="Account Holder">
+            <input
+              className={inputClass}
+              value={form.accountHolder}
+              onChange={(e) => set("accountHolder", e.target.value)}
+              onBlur={(e) => commit("accountHolder", e.target.value)}
+              placeholder="Account holder name"
+            />
+          </Field>
+          <Field label="Account Number">
+            <input
+              className={inputClass}
+              value={form.accountNumber}
+              onChange={(e) => set("accountNumber", e.target.value)}
+              onBlur={(e) => commit("accountNumber", e.target.value)}
+              placeholder="0000000000"
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      <div className="flex justify-end">
+        <button
+          onClick={saveAll}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <Save size={14} /> Save All Changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SUB-TAB: GENERAL
 // ═══════════════════════════════════════════════════════════════════════════
 function GeneralTab({
   config,
   update,
+  updateAndSync,
   prefs,
   updatePrefs,
   show,
@@ -649,6 +1125,11 @@ function GeneralTab({
   update: <K extends keyof GeneralSettingsConfig>(
     key: K,
     value: GeneralSettingsConfig[K],
+  ) => void;
+  updateAndSync: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+    companyPatch?: Partial<CompanyData>,
   ) => void;
   prefs: UserPreferences;
   updatePrefs: (patch: Partial<UserPreferences>) => Promise<void>;
@@ -686,7 +1167,11 @@ function GeneralTab({
             <input
               className={inputClass}
               value={config.stationName}
-              onChange={(e) => update("stationName", e.target.value)}
+              onChange={(e) =>
+                updateAndSync("stationName", e.target.value, {
+                  name: e.target.value,
+                })
+              }
               placeholder="e.g. Global Energy Station"
             />
           </Field>
@@ -797,12 +1282,14 @@ function GeneralTab({
               className={inputClass}
               value={config.currency}
               onChange={(e) => {
-                update("currency", e.target.value.toUpperCase());
+                const code = e.target.value.toUpperCase();
+                updateAndSync("currency", code, {
+                  companyCurrency: code,
+                  currency: getCurrencySymbol(code),
+                });
                 updatePrefs({
-                  currency: e.target.value.toUpperCase(),
-                  currencySymbol: getCurrencySymbol(
-                    e.target.value.toUpperCase(),
-                  ),
+                  currency: code,
+                  currencySymbol: getCurrencySymbol(code),
                 });
               }}
               maxLength={3}
@@ -1515,6 +2002,7 @@ function AppearanceTab({
 function FinanceTab({
   config,
   update,
+  updateAndSync,
   prefs,
   updatePrefs,
   show,
@@ -1523,6 +2011,11 @@ function FinanceTab({
   update: <K extends keyof GeneralSettingsConfig>(
     key: K,
     value: GeneralSettingsConfig[K],
+  ) => void;
+  updateAndSync: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+    companyPatch?: Partial<CompanyData>,
   ) => void;
   prefs: UserPreferences;
   updatePrefs: (patch: Partial<UserPreferences>) => Promise<void>;
@@ -1556,8 +2049,9 @@ function FinanceTab({
                 className={inputClass}
                 value={config.taxRate}
                 onChange={(e) => {
-                  update("taxRate", parseFloat(e.target.value) || 0);
-                  updatePrefs({ vatRate: parseFloat(e.target.value) || 0 });
+                  const rate = parseFloat(e.target.value) || 0;
+                  update("taxRate", rate);
+                  updatePrefs({ vatRate: rate });
                 }}
               />
             </Field>
@@ -1583,12 +2077,14 @@ function FinanceTab({
               className={inputClass}
               value={config.currency}
               onChange={(e) => {
-                update("currency", e.target.value.toUpperCase());
+                const code = e.target.value.toUpperCase();
+                updateAndSync("currency", code, {
+                  companyCurrency: code,
+                  currency: getCurrencySymbol(code),
+                });
                 updatePrefs({
-                  currency: e.target.value.toUpperCase(),
-                  currencySymbol: getCurrencySymbol(
-                    e.target.value.toUpperCase(),
-                  ),
+                  currency: code,
+                  currencySymbol: getCurrencySymbol(code),
                 });
               }}
               maxLength={3}
@@ -1990,32 +2486,32 @@ function SecurityTab({
           <Toggle
             checked={config.requireTwoFactor}
             onChange={(v) => {
-              if (!isOwner) {
-                show("Only the owner can change 2FA requirements", "error");
-                return;
-              }
               update("requireTwoFactor", v);
+              show(
+                v
+                  ? "2FA requirement enabled for all team members"
+                  : "2FA requirement disabled",
+                "success",
+              );
             }}
             label="Require Two-Factor Authentication (2FA)"
             description="All team members must enable 2FA before accessing the station"
-            disabled={!isOwner}
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <Field
             label="Session Timeout (minutes)"
-            hint="Auto-logout after inactivity"
+            hint="Auto-logout after inactivity (0 = never)"
           >
             <input
               type="number"
-              min="5"
+              min="0"
               max="1440"
               className={inputClass}
               value={config.sessionTimeoutMinutes}
               onChange={(e) =>
-                update("sessionTimeoutMinutes", parseInt(e.target.value) || 30)
+                update("sessionTimeoutMinutes", parseInt(e.target.value) || 0)
               }
-              disabled={!isOwner}
             />
           </Field>
           <Field label="Max Login Attempts" hint="Before account lockout">
@@ -2028,7 +2524,6 @@ function SecurityTab({
               onChange={(e) =>
                 update("maxLoginAttempts", parseInt(e.target.value) || 5)
               }
-              disabled={!isOwner}
             />
           </Field>
         </div>
@@ -2044,7 +2539,6 @@ function SecurityTab({
             value={config.ipWhitelist}
             onChange={(e) => update("ipWhitelist", e.target.value)}
             placeholder="e.g. 192.168.1.0/24, 10.0.0.5"
-            disabled={!isOwner}
           />
         </Field>
         <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex items-start gap-2">
