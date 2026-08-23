@@ -558,12 +558,11 @@ export default function LiveFeedEmbed({
       }
     };
 
-    // Safety timeout: if the video hasn't started playing within 10 seconds
-    // of the HLS effect firing, auto-advance to the next channel. This
-    // catches streams where the manifest loads but segments never buffer
-    // (non-fatal errors that don't trigger the recovery path) AND streams
-    // where recovery is spinning (the timeout fires regardless of recovery
-    // state since it's set once and never reset).
+    // Safety timeout: if the video hasn't started playing within 30 seconds
+    // of the HLS effect firing, show the click-to-play overlay. We do NOT
+    // auto-advance on timeout — the stream may be valid but slow to buffer,
+    // or the browser may be blocking autoplay (the user can click play).
+    // Auto-advance only happens on actual fatal HLS errors (see ERROR handler).
     // Declared here, assigned after the hls instance is created.
     let playbackStarted = false;
     const onPlaying = () => {
@@ -600,15 +599,17 @@ export default function LiveFeedEmbed({
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
       // Start the playback safety timeout now that hls is defined.
+      // 30s: generous window for slow streams + buffering. Does NOT
+      // auto-advance — just shows the click-to-play overlay so the user
+      // can start playback manually (browser autoplay policy fallback).
       playbackTimeout = setTimeout(() => {
         if (!playbackStarted && hlsRef.current === hls) {
-          hls.destroy();
-          hlsRef.current = null;
+          // Don't destroy hls — keep it alive so clicking play works.
+          // Just show the overlay (autoplay was likely blocked).
+          setShowPlayOverlay(true);
           setReconnecting(false);
-          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-          if (!advanced) setPlaybackError(true);
         }
-      }, 10000);
+      }, 30000);
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
 
@@ -660,10 +661,10 @@ export default function LiveFeedEmbed({
       setMuted(true);
       playbackTimeout = setTimeout(() => {
         if (!playbackStarted) {
-          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-          if (!advanced) setPlaybackError(true);
+          // Show overlay, don't auto-advance (Safari may block autoplay)
+          setShowPlayOverlay(true);
         }
-      }, 10000);
+      }, 30000);
       video.play().catch(() => {
         setShowPlayOverlay(true);
       });
@@ -674,17 +675,11 @@ export default function LiveFeedEmbed({
       setMuted(true);
       playbackTimeout = setTimeout(() => {
         if (!playbackStarted) {
-          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-          if (!advanced) {
-            setShowPlayOverlay(true);
-          }
-        }
-      }, 10000);
-      video.play().catch(() => {
-        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-        if (!advanced) {
           setShowPlayOverlay(true);
         }
+      }, 30000);
+      video.play().catch(() => {
+        setShowPlayOverlay(true);
       });
     }
 
@@ -984,23 +979,10 @@ export default function LiveFeedEmbed({
       if (hasHlsFallback) {
         // Hide the YouTube iframe to reveal the HLS video underneath.
         setYtIframeHidden(true);
-      } else {
-        // YouTube-only channel with no HLS fallback — auto-advance to
-        // the next channel that has an HLS stream_url.
-        const next = channels.find(
-          (c) =>
-            c.nanoid !== activeChannel?.nanoid &&
-            c.stream_urls &&
-            c.stream_urls.length > 0 &&
-            !c.stream_urls[0].includes("youtube.com") &&
-            !c.stream_urls[0].includes("youtube-nocookie.com") &&
-            !c.stream_urls[0].includes("youtu.be") &&
-            !c.isGeoBlocked,
-        );
-        if (next) {
-          setActiveChannel(next);
-        }
       }
+      // For YouTube-only channels (no HLS fallback), do NOT auto-advance.
+      // The YouTube iframe may be loading slowly or blocked by the browser's
+      // autoplay policy. The user can click the iframe to start playback.
     }, 6000);
 
     return () => clearTimeout(timer);
