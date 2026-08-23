@@ -291,12 +291,26 @@ export default function LiveFeedEmbed({
             (ch.stream_urls && ch.stream_urls.length > 0) ||
             (ch.youtube_urls && ch.youtube_urls.length > 0),
         );
-        // Sort: YouTube-embed channels first (most reliable playback),
-        // then non-geo-blocked, then alphabetical.
+        // Sort: non-geo-blocked HLS channels first (now reliable via CORS proxy),
+        // then YouTube-embed channels, then geo-blocked, then alphabetical.
         playable.sort((a, b) => {
-          const aYT = a.youtube_urls && a.youtube_urls.length > 0 ? 1 : 0;
-          const bYT = b.youtube_urls && b.youtube_urls.length > 0 ? 1 : 0;
-          if (aYT !== bYT) return bYT - aYT; // YouTube first
+          const aHls =
+            a.stream_urls &&
+            a.stream_urls.length > 0 &&
+            !a.stream_urls[0].includes("youtube.com") &&
+            !a.stream_urls[0].includes("youtube-nocookie.com") &&
+            !a.stream_urls[0].includes("youtu.be")
+              ? 1
+              : 0;
+          const bHls =
+            b.stream_urls &&
+            b.stream_urls.length > 0 &&
+            !b.stream_urls[0].includes("youtube.com") &&
+            !b.stream_urls[0].includes("youtube-nocookie.com") &&
+            !b.stream_urls[0].includes("youtu.be")
+              ? 1
+              : 0;
+          if (aHls !== bHls) return bHls - aHls; // HLS first (plays via proxy)
           if (a.isGeoBlocked !== b.isGeoBlocked)
             return a.isGeoBlocked ? 1 : -1;
           return a.name.localeCompare(b.name);
@@ -304,9 +318,18 @@ export default function LiveFeedEmbed({
         setChannels(playable);
         // Reset the auto-advance guard for the fresh channel list
         autoAdvanceTriedRef.current = new Set();
-        // Auto-select: prefer non-geo-blocked YouTube channels (most reliable),
-        // then any non-geo-blocked HLS channel, then the first channel.
+        // Auto-select: prefer non-geo-blocked HLS channels (now reliable via
+        // the CORS proxy), then YouTube channels, then any non-geo-blocked.
         const firstPlayable =
+          playable.find(
+            (c) =>
+              !c.isGeoBlocked &&
+              c.stream_urls &&
+              c.stream_urls.length > 0 &&
+              !c.stream_urls[0].includes("youtube.com") &&
+              !c.stream_urls[0].includes("youtube-nocookie.com") &&
+              !c.stream_urls[0].includes("youtu.be"),
+          ) ||
           playable.find(
             (c) =>
               !c.isGeoBlocked &&
@@ -345,6 +368,15 @@ export default function LiveFeedEmbed({
         channels.find(
           (c) =>
             !c.isGeoBlocked &&
+            c.stream_urls &&
+            c.stream_urls.length > 0 &&
+            !c.stream_urls[0].includes("youtube.com") &&
+            !c.stream_urls[0].includes("youtube-nocookie.com") &&
+            !c.stream_urls[0].includes("youtu.be"),
+        ) ||
+        channels.find(
+          (c) =>
+            !c.isGeoBlocked &&
             c.youtube_urls &&
             c.youtube_urls.length > 0,
         ) ||
@@ -364,20 +396,26 @@ export default function LiveFeedEmbed({
     (excludeNanoid: string): boolean => {
       autoAdvanceTriedRef.current.add(excludeNanoid);
       // Find the next playable channel we haven't tried yet.
-      // Prefer YouTube-embed channels (most reliable), then HLS streams.
+      // Prefer HLS channels (now reliable via CORS proxy), then YouTube.
+      const isHlsUrl = (c: LiveChannel) =>
+        c.stream_urls &&
+        c.stream_urls.length > 0 &&
+        !c.stream_urls[0].includes("youtube.com") &&
+        !c.stream_urls[0].includes("youtube-nocookie.com") &&
+        !c.stream_urls[0].includes("youtu.be");
       const candidates = channels.filter(
         (c) =>
           c.nanoid !== excludeNanoid &&
           !autoAdvanceTriedRef.current.has(c.nanoid) &&
           !c.isGeoBlocked &&
-          ((c.youtube_urls && c.youtube_urls.length > 0) ||
-            (c.stream_urls && c.stream_urls.length > 0)),
+          ((c.stream_urls && c.stream_urls.length > 0) ||
+            (c.youtube_urls && c.youtube_urls.length > 0)),
       );
-      // Sort: YouTube first, then alphabetical
+      // Sort: HLS first (plays via proxy), then YouTube, then alphabetical
       candidates.sort((a, b) => {
-        const aYT = a.youtube_urls && a.youtube_urls.length > 0 ? 1 : 0;
-        const bYT = b.youtube_urls && b.youtube_urls.length > 0 ? 1 : 0;
-        if (aYT !== bYT) return bYT - aYT;
+        const aHls = isHlsUrl(a) ? 1 : 0;
+        const bHls = isHlsUrl(b) ? 1 : 0;
+        if (aHls !== bHls) return bHls - aHls;
         return a.name.localeCompare(b.name);
       });
       if (candidates.length > 0) {
@@ -472,6 +510,17 @@ export default function LiveFeedEmbed({
       setShowPlayOverlay(false);
     };
     video.addEventListener("playing", onPlaying);
+        // Route HLS streams through the server-side proxy to bypass CORS.
+    // Most upstream HLS CDNs do NOT send Access-Control-Allow-Origin, so
+    // hls.js cannot fetch them cross-origin from the browser. The proxy
+    // fetches server-side, rewrites playlist URLs, and returns with CORS.
+    const isSameOrigin =
+      typeof window !== "undefined" &&
+      (window.location.hostname.includes("vercel.app") ||
+        window.location.hostname === "localhost");
+    const proxyBase = isSameOrigin ? "" : "https://fuel-app-mobile.vercel.app";
+    const proxiedStreamUrl = `${proxyBase}/api/hls-proxy?url=${encodeURIComponent(streamUrl)}`;
+
     let playbackTimeout: ReturnType<typeof setTimeout> | undefined;
 
     // HLS playback — accept any URL (not just .m3u8) since some HLS
@@ -487,7 +536,7 @@ export default function LiveFeedEmbed({
         fragLoadingTimeOut: 30000,
       });
       hlsRef.current = hls;
-      hls.loadSource(streamUrl);
+      hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
       // Start the playback safety timeout now that hls is defined.
@@ -545,8 +594,8 @@ export default function LiveFeedEmbed({
         if (!advanced) setPlaybackError(true);
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native HLS (Safari)
-      video.src = streamUrl;
+      // Native HLS (Safari) — also route through the CORS proxy
+      video.src = proxiedStreamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
@@ -559,8 +608,8 @@ export default function LiveFeedEmbed({
         setShowPlayOverlay(true);
       });
     } else {
-      // Non-HLS stream URL — try direct video
-      video.src = streamUrl;
+      // Non-HLS stream URL — try direct video (also proxied for CORS)
+      video.src = proxiedStreamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
@@ -699,7 +748,14 @@ export default function LiveFeedEmbed({
       u.includes("youtube.com") ||
       u.includes("youtube-nocookie.com") ||
       u.includes("youtu.be");
-    // Check youtube_urls array
+    // If the channel has non-YouTube HLS streams, use HLS (via the CORS proxy)
+    // instead of the YouTube iframe — HLS is more reliable (no autoplay
+    // restrictions, no geo-blocking, plays in all browsers via hls.js).
+    const hasHlsStream =
+      activeChannel.stream_urls &&
+      activeChannel.stream_urls.some((u) => !isYouTubeUrl(u));
+    if (hasHlsStream) return null;
+    // Check youtube_urls array (YouTube-only channels)
     if (activeChannel.youtube_urls && activeChannel.youtube_urls.length > 0) {
       const url = activeChannel.youtube_urls[0];
       const match = url.match(YT_RE);
@@ -707,7 +763,7 @@ export default function LiveFeedEmbed({
       // If it's just an ID
       if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
     }
-    // Check stream_urls for YouTube URLs
+    // Check stream_urls for YouTube URLs (YouTube-only channels)
     if (activeChannel.stream_urls) {
       for (const url of activeChannel.stream_urls) {
         if (isYouTubeUrl(url)) {
