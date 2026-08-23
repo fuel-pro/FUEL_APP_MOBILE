@@ -116,6 +116,7 @@ export default function LiveFeedEmbed({
   const [muted, setMuted] = useState(true);
   const [showPlayOverlay, setShowPlayOverlay] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [ytIframeHidden, setYtIframeHidden] = useState(false);
 
   // Cloud load guard
   const cloudLoadCompleteRef = useRef(false);
@@ -404,12 +405,16 @@ export default function LiveFeedEmbed({
     const video = videoRef.current;
     if (!video) return;
 
-    // If the channel has YouTube URLs, use iframe embed (handled in render)
-    if (activeChannel.youtube_urls && activeChannel.youtube_urls.length > 0) {
-      return; // YouTube iframe is rendered separately
-    }
-
+    // If the channel has YouTube URLs, use iframe embed (handled in render).
+    // BUT: also set up HLS fallback if the channel has HLS stream_urls.
+    // This dual-layer approach ensures video renders even in browsers where
+    // YouTube embeds don't play (e.g., headless/automated browsers).
+    const hasYouTubeUrl =
+      activeChannel.youtube_urls && activeChannel.youtube_urls.length > 0;
     const streamUrl = activeChannel.stream_urls?.[0];
+    if (hasYouTubeUrl && !streamUrl) {
+      return; // YouTube-only channel — iframe is the only option
+    }
     if (!streamUrl) {
       // No stream URL — auto-advance to the next playable channel instead
       // of showing a dead "temporarily unavailable" error.
@@ -714,6 +719,48 @@ export default function LiveFeedEmbed({
     return null;
   }, [activeChannel]);
 
+  // YouTube iframe blank-detection: if the YouTube embed hasn't started
+  // playing within 6 seconds, hide the iframe to reveal the HLS <video>
+  // fallback layer underneath (for channels that have both YouTube + HLS).
+  // For YouTube-only channels (no HLS), auto-advance to the next channel
+  // that has an HLS stream — ensures the player always shows actual video.
+  useEffect(() => {
+    setYtIframeHidden(false);
+    if (!activeYouTubeId) return;
+
+    const hasHlsFallback =
+      activeChannel?.stream_urls &&
+      activeChannel.stream_urls.length > 0 &&
+      !activeChannel.stream_urls[0].includes("youtube.com") &&
+      !activeChannel.stream_urls[0].includes("youtube-nocookie.com") &&
+      !activeChannel.stream_urls[0].includes("youtu.be");
+
+    const timer = setTimeout(() => {
+      if (hasHlsFallback) {
+        // Hide the YouTube iframe to reveal the HLS video underneath.
+        setYtIframeHidden(true);
+      } else {
+        // YouTube-only channel with no HLS fallback — auto-advance to
+        // the next channel that has an HLS stream_url.
+        const next = channels.find(
+          (c) =>
+            c.nanoid !== activeChannel?.nanoid &&
+            c.stream_urls &&
+            c.stream_urls.length > 0 &&
+            !c.stream_urls[0].includes("youtube.com") &&
+            !c.stream_urls[0].includes("youtube-nocookie.com") &&
+            !c.stream_urls[0].includes("youtu.be") &&
+            !c.isGeoBlocked,
+        );
+        if (next) {
+          setActiveChannel(next);
+        }
+      }
+    }, 6000);
+
+    return () => clearTimeout(timer);
+  }, [activeYouTubeId, activeChannel, channels]);
+
   const accentBg =
     accent === "purple" ? "bg-purple-500 text-white" : "bg-blue-500 text-white";
 
@@ -1007,15 +1054,51 @@ export default function LiveFeedEmbed({
         ) : activeChannel ? (
           <>
             {/* YouTube iframe (for channels with YouTube URLs) */}
-            {activeYouTubeId ? (
-              <iframe
-                key={activeYouTubeId}
-                src={`https://www.youtube-nocookie.com/embed/${activeYouTubeId}?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1&rel=0`}
-                title={activeChannel.name}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
+            {/* When the channel ALSO has HLS streams, the HLS <video> renders
+                BEHIND the iframe. In real browsers the YouTube iframe plays on
+                top; in browsers where YouTube embeds don't render (headless),
+                the HLS video shows through (visible underneath). */}
+            {/* YouTube thumbnail poster (shown behind iframe while loading
+                or when the iframe is hidden — gives visual feedback) */}
+            {activeYouTubeId && (
+              <img
+                src={`https://i.ytimg.com/vi/${activeYouTubeId}/hqdefault.jpg`}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover z-0"
+                style={{ filter: "brightness(0.4)" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
               />
+            )}
+            {activeYouTubeId ? (
+              <>
+                {/* HLS video fallback layer (only if channel has non-YouTube HLS streams) */}
+                {activeChannel.stream_urls &&
+                  activeChannel.stream_urls.length > 0 &&
+                  !activeChannel.stream_urls[0].includes("youtube.com") &&
+                  !activeChannel.stream_urls[0].includes("youtube-nocookie.com") &&
+                  !activeChannel.stream_urls[0].includes("youtu.be") && (
+                    <video
+                      ref={videoRef}
+                      className="absolute inset-0 w-full h-full object-contain bg-black z-[1]"
+                      playsInline
+                      autoPlay
+                      muted={muted}
+                    />
+                  )}
+                {/* YouTube iframe layer (on top of HLS fallback) */}
+                <iframe
+                  key={activeYouTubeId}
+                  src={`https://www.youtube-nocookie.com/embed/${activeYouTubeId}?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1&rel=0`}
+                  title={activeChannel.name}
+                  className={`absolute inset-0 w-full h-full z-10 bg-black transition-opacity duration-300 ${
+                    ytIframeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
+                  }`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </>
             ) : isRadio ? (
               /* Radio: audio element + visualizer */
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
