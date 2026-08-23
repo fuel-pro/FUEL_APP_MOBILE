@@ -6760,3 +6760,17 @@ area shows content (not blank).
 - team-manager-access-codes-merge (1 commit, 124 behind): already on main. NOT merged.
 - wire-components-cross-relate (2 commits, 344 behind): already on main. NOT merged.
 - All other unmerged branches are old divergent snapshots (200+ commits behind).
+
+## Session 2026-08-22 — Cloudflare Pages Functions for Live TV (DEPLOYED LIVE, commit 6a9a817)
+
+**Problem**: The HLS CORS proxy was a Vercel serverless function. Cloudflare Pages does NOT serve Vercel /api/* routes. So Live TV only worked on Vercel (quota-blocked), NOT on Cloudflare.
+
+**Fix**: Created Cloudflare Pages Functions (functions/api/hls-proxy.ts + functions/api/live-channels.ts). Frontend uses RELATIVE paths so same code works on both.
+
+### Verification (LIVE on fuel-app-mobile.pages.dev)
+- curl /api/hls-proxy returns {"error":"Missing url parameter"}
+- curl /api/live-channels returns JSON with 1440 US TV channels
+- Browser: News tab > Live TV loads 1440 channels, video player renders content
+
+### Deploy state
+- GitHub main: 6a9a817 (pushed). Cloudflare LIVE. Vercel BLOCKED by quota (resets ~2026-08-24). Supabase: no schema changes.
