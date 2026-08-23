@@ -6713,85 +6713,50 @@ All fix/feature branches already merged to main. No lost work.
 
 News tab Live TV sub-tab preview video now renders actual live stream content. Dual-layer: YouTube iframe (top) + HLS video (underneath). YouTube-only channels show thumbnail poster + auto-advance to HLS channel after 6s. HLS-only channels use hls.js video. Verified live on Cloudflare ea312353 + Vercel production (aliased fuel-app-mobile.vercel.app). No Supabase changes.
 
-## Session 2026-08-23 — Access Another Station restructure (DEPLOYED LIVE, commit 28ebe5d)
 
-Complete scrap & restructure of the "Access Another Station" feature
-(invite-based station sharing on the `station_members` DB table).
+## Session 2026-08-22 — HLS CORS proxy for Live TV (DEPLOYED LIVE, commit dfe043c)
 
-### station-share-service.ts (rewritten, backward compatible)
-Rich typed `StationMember` (expiry, tab grants, delegation flags,
-last_accessed_at, notes, provenance). New/enhanced functions:
-- `inviteMember`: optional expiry(days), maxUses, tabGrants, permissions,
-  delegation flags, inviter provenance. Original 4-arg signature still works.
-- `bulkInvite`: invite multiple emails at once with per-email results.
-- `updateMemberRole`: change role/tabGrants/readOnly/notes after acceptance.
-- `rejectInvite` (member) + `declineInvite` (owner pre-acceptance).
-- `leaveStation`: dedicated member self-leave (migration 023 policy).
-- `transferOwnership`: owner hands station to a member + demoted to manager.
-- `toggleFavorite`/`getFavorites`: cloud-backed favorites (app_kv, cross-device).
-- `recordStationActivity`/`getStationActivity`: cloud activity log (app_kv).
-- `getPendingInvites`: pending invites with station name joined.
-- `getSharedStationDetail`: rich single-station membership view.
-- `getInvitationStats`: quick counts for owner dashboard.
-- `subscribeToMembers` + `subscribeToMyMemberships`: real-time updates.
-- sync-first currentUserId (no auth.getUser() round-trip).
+**Root cause**: "it is loading but no actual visuals" on the Live TV sub-tab.
+Upstream HLS streams (.m3u8 + .ts segments) do NOT send
+Access-Control-Allow-Origin headers, so hls.js cannot fetch them
+cross-origin from the browser — manifest/segment fetches fail silently
+with CORS errors and no video renders.
 
-### StationManager.tsx AccessSharedStationModal (scrapped + rebuilt)
-- 4 tabs: Network / Invites / Activity / Help.
-- Network: search + role filter + favorites filter, favorite toggle per
-  station, last-accessed display, detail drawer (activity + tab grants +
-  notes + leave).
-- Invites: pending invites with Accept + Reject, plus Join-by-link entry.
-- Activity: live cross-device activity feed per selected shared station.
-- Help: role explainer + security guidance.
-- StationDetailDrawer slide-over: membership details + recent activity.
-- Real-time subscription to user memberships (instant invite refresh).
-- `handleAccessSharedStation` records an access activity entry on switch.
-- `loadSharedAndPending` uses getPendingInvites + populates lastAccessedAt.
+**Fix**: /api/hls-proxy serverless function (Vercel-only; Cloudflare Pages
+has no /api/* serverless). Fetches HLS content server-side, rewrites ALL
+playlist + segment URLs to route back through the proxy, adds permissive
+CORS headers. The proxy handles master playlists, media playlists, segments
+(.ts/.m4s), relative/absolute/protocol-relative URL rewriting, and OPTIONS
+preflight.
 
-### Migration 025_station_members_access_notes.sql
-Adds `last_accessed_at` + `notes` columns to `station_members` (nullable,
-covered by existing RLS policies). Safe to re-run. NOT yet applied to live
-DB (Supabase PAT scope insufficient from sandbox; app degrades gracefully
-without it). Apply via Supabase Dashboard SQL Editor when DB access is available.
+LiveFeedEmbed.tsx constructs the proxied URL:
+/api/hls-proxy?url=<encodeURIComponent(streamUrl)> (same-origin on Vercel,
+or https://fuel-app-mobile.vercel.app/api/hls-proxy?url=... on Cloudflare).
+hls.js then loads the manifest + segments through the proxy with zero CORS.
 
-### Deploy state 2026-08-23 (commit 28ebe5d)
-- GitHub main: 28ebe5d (pushed, rebased on dfe043c, synced with origin/main).
-- Cloudflare Pages: LIVE (preview https://404ad2d3.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev). New index chunk
-  index-DrUJ-Qqe.js verified with markers: Access Another Station,
-  getStationActivity, leaveStation, subscribeToMyMemberships, toggleFavorite.
-- Vercel production: BLOCKED by api-deployments-free-per-day (100/100
-  exhausted). GitHub integration (prodBranch=main) auto-deploys 28ebe5d
-  when quota resets (~24h).
-- Supabase: migration 025 committed but NOT yet applied (PAT scope
-  insufficient; apply via Dashboard SQL Editor — safe/re-runnable).
-- tsc 0 errors, vitest 19/19 pass, eslint 0 errors, build 107 precache.
+**Dead route cleanup**: deleted api/cron-monthly-sync.ts (old duplicate of
+api/cron/monthly-fuel-sync.ts which is the active route per vercel.json).
 
-### Live verification (2026-08-23, Cloudflare preview 404ad2d3)
-Logged in as founder QA (founder.qa.fuelpro@gmail.com, US station, USD):
-- Station Manager -> "Access Another Station" opens the restructured modal
-  with all 4 tabs (Network / Invites / Activity / Help).
-- Network: search bar + All Roles dropdown + Favorites button + empty state.
-- Invites: Join-by-link input + Accept button.
-- Activity: station selector (empty since no shared stations).
-- Help: role explainer rows.
-- Shared With Me sub-tab: renders empty state correctly.
-- POS: 10L Super Petrol @ $1.10/L = $11.00 cash sale completed
-  (INV20260823000001WMOM, country-aware US receipt, 0% VAT, US locale).
-- Broader site fully functional — no regressions from the restructure.
+**Verified end-to-end**: manifest/playlist/segment proxy all return HTTP 200
+with correct content-type. Cloudflare deploy cc2e9b7c has hls-proxy in
+News-DR4hLR_X.js. Browser: Live TV tab loads, 40+ channels render, player
+area shows content (not blank).
 
-### Lost commit audit (2026-08-23)
-No lost station-sharing work found. founder-username-login (7 commits,
-diverges from c1e907a) + identifying-security-vulnerabilities-8d289
-(3 commits, routes through non-existent /api/r2/* endpoints) remain
-documented as awaiting user authorization. All other unmerged branches
-are old divergent snapshots whose work is already on main.
+**Deploy state 2026-08-22**:
+- GitHub main: dfe043c (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview cc2e9b7c + main alias).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/day).
+  GitHub integration auto-deploys dfe043c when quota resets. Cloudflare
+  routes /api/hls-proxy calls to the existing Vercel deployment.
+- Supabase: no schema changes.
+- tsc 0 errors, build success.
 
-### Notes
-- The Supabase REST hostname does NOT resolve from this sandbox (HTTP 000,
-  DNS unreachable). API-level invite-accept tests can't run from here;
-  the browser-based live test on Cloudflare is authoritative.
-- The full invite->accept->Network flow requires a second Supabase user
-  account to accept an invite (or DB access). The service functions are
-  typechecked + unit-tested; the UI renders all states correctly.
+### Lost commit audit (2026-08-22)
+- qwen-code-6a328546 (2 commits, 84 behind): AI-generated divergent snapshot
+  that DELETES api/hls-proxy.ts. NOT merged (would regress the fix).
+- founder-username-login (7 commits, 344 behind): needs manual rebase. NOT auto-merged.
+- identifying-security-vulnerabilities-8d289 (3 commits, 106 behind): security hardening
+  requiring /api/r2/* + /api/cache/* endpoints. NOT auto-merged.
+- team-manager-access-codes-merge (1 commit, 124 behind): already on main. NOT merged.
+- wire-components-cross-relate (2 commits, 344 behind): already on main. NOT merged.
+- All other unmerged branches are old divergent snapshots (200+ commits behind).

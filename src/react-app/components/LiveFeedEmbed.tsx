@@ -510,16 +510,14 @@ export default function LiveFeedEmbed({
       setShowPlayOverlay(false);
     };
     video.addEventListener("playing", onPlaying);
-        // Route HLS streams through the server-side proxy to bypass CORS.
+    // Route HLS streams through the server-side proxy to bypass CORS.
     // Most upstream HLS CDNs do NOT send Access-Control-Allow-Origin, so
     // hls.js cannot fetch them cross-origin from the browser. The proxy
     // fetches server-side, rewrites playlist URLs, and returns with CORS.
-    const isSameOrigin =
-      typeof window !== "undefined" &&
-      (window.location.hostname.includes("vercel.app") ||
-        window.location.hostname === "localhost");
-    const proxyBase = isSameOrigin ? "" : "https://fuel-app-mobile.vercel.app";
-    const proxiedStreamUrl = `${proxyBase}/api/hls-proxy?url=${encodeURIComponent(streamUrl)}`;
+    // Both Vercel (api/hls-proxy.ts) and Cloudflare Pages
+    // (functions/api/hls-proxy.ts) serve the proxy at /api/hls-proxy, so
+    // a relative path works same-origin on both platforms.
+    const proxiedStreamUrl = `/api/hls-proxy?url=${encodeURIComponent(streamUrl)}`;
 
     let playbackTimeout: ReturnType<typeof setTimeout> | undefined;
 

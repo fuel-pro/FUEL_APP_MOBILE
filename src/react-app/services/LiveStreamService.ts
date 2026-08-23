@@ -1162,14 +1162,10 @@ export async function fetchLiveChannels(
   }
   try {
     // Use the server-side proxy (handles CORS + gzip decompression).
-    // On Vercel the /api/* route is same-origin. On Cloudflare Pages (SPA
-    // only, no serverless fns), the proxy is on the Vercel production host.
-    const isSameOrigin =
-      typeof window !== "undefined" &&
-      (window.location.hostname.includes("vercel.app") ||
-        window.location.hostname === "localhost");
-    const proxyBase = isSameOrigin ? "" : "https://fuel-app-mobile.vercel.app";
-    const proxyUrl = `${proxyBase}/api/live-channels?mode=${mode}&type=${type}&id=${normalizedId}`;
+    // Both Vercel (api/live-channels.ts) and Cloudflare Pages
+    // (functions/api/live-channels.ts) serve the proxy at /api/live-channels,
+    // so a relative path works same-origin on both platforms.
+    const proxyUrl = `/api/live-channels?mode=${mode}&type=${type}&id=${normalizedId}`;
 
     const res = await fetch(proxyUrl);
     if (!res.ok) return [];
