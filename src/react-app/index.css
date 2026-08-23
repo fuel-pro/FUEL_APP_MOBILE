@@ -2113,3 +2113,46 @@ html[data-color-theme] .fp-btn-primary:hover {
     animation: none !important;
   }
 }
+
+/* ===========================================================================
+   VLC-STYLE PLAYER CONTROLS — slider thumb styling for the seek bar + volume
+   slider in the VLC-inspired control bar (VLCStyleControls.tsx).
+   The native input range thumbs are styled to match VLC orange accent.
+   =========================================================================== */
+.vlc-seek-bar::-webkit-slider-thumb,
+.vlc-vol-bar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff8800;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s;
+}
+.vlc-seek-bar::-webkit-slider-thumb:hover,
+.vlc-vol-bar::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+.vlc-seek-bar::-moz-range-thumb,
+.vlc-vol-bar::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff8800;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+.vlc-seek-bar::-moz-range-track,
+.vlc-vol-bar::-moz-range-track {
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vlc-seek-bar::-webkit-slider-thumb,
+  .vlc-vol-bar::-webkit-slider-thumb {
+    transition: none;
+  }
+}

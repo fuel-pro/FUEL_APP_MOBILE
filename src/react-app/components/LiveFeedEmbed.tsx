@@ -26,6 +26,8 @@ import {
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
+import { VLCStyleControls } from "@/react-app/components/VLCStyleControls";
+import { useVLCKeyboardShortcuts } from "@/react-app/hooks/useVLCKeyboardShortcuts";
 import {
   Tv,
   Radio,
@@ -181,12 +183,16 @@ export default function LiveFeedEmbed({
   const [showPlayOverlay, setShowPlayOverlay] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [ytIframeHidden, setYtIframeHidden] = useState(false);
+  // VLC-style controls: loop toggle
+  const [loop, setLoop] = useState(false);
 
   // Cloud load guard
   const cloudLoadCompleteRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  // Player container ref (for VLC keyboard shortcuts + fullscreen target)
+  const playerContainerRef = useRef<HTMLDivElement>(null);
   // Track recovery attempts so we don't loop forever on a dead stream
   const hlsRecoveryRef = useRef(0);
   // Auto-advance guard: prevents infinite skip loops when every channel fails
@@ -812,6 +818,35 @@ export default function LiveFeedEmbed({
     setActiveChannel(ch);
   }, []);
 
+  // Fullscreen toggle — uses the native Fullscreen API on the player container.
+  // (Next/Prev channel + VLC keyboard shortcuts are wired AFTER
+  // filteredChannels is declared below, to avoid the TDZ error.)
+  const toggleFullscreen = useCallback(() => {
+    const el = playerContainerRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    } else {
+      el.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    }
+  }, []);
+
+  // Listen for fullscreen changes (Esc key, etc.) to keep state in sync
+  useEffect(() => {
+    const handler = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // Apply loop to the media element when it changes
+  useEffect(() => {
+    const m = (isRadio ? audioRef.current : videoRef.current) as
+      HTMLVideoElement | HTMLAudioElement | null;
+    if (m) m.loop = loop;
+  }, [loop, isRadio, activeChannel]);
+
   // ANALYTICS — record a channel play whenever the active channel changes
   // (covers both manual selection via selectChannel AND auto-advance).
   // Fire-and-forget; failures are swallowed inside trackChannelPlay so
@@ -1030,6 +1065,48 @@ export default function LiveFeedEmbed({
         ch.country.toLowerCase().includes(q),
     );
   }, [channels, searchQuery]);
+
+  // Next / Previous channel (for VLC keyboard shortcuts N / P + control bar).
+  // Declared AFTER filteredChannels to avoid the TDZ (temporal dead zone)
+  // ReferenceError that occurs when a const is referenced before init.
+  const goToNextChannel = useCallback(() => {
+    if (filteredChannels.length === 0) return;
+    if (!activeChannel) {
+      selectChannel(filteredChannels[0]);
+      return;
+    }
+    const idx = filteredChannels.findIndex(
+      (c) => c.nanoid === activeChannel.nanoid,
+    );
+    const nextIdx = (idx + 1) % filteredChannels.length;
+    selectChannel(filteredChannels[nextIdx]);
+  }, [filteredChannels, activeChannel, selectChannel]);
+
+  const goToPrevChannel = useCallback(() => {
+    if (filteredChannels.length === 0) return;
+    if (!activeChannel) {
+      selectChannel(filteredChannels[filteredChannels.length - 1]);
+      return;
+    }
+    const idx = filteredChannels.findIndex(
+      (c) => c.nanoid === activeChannel.nanoid,
+    );
+    const prevIdx =
+      (idx - 1 + filteredChannels.length) % filteredChannels.length;
+    selectChannel(filteredChannels[prevIdx]);
+  }, [filteredChannels, activeChannel, selectChannel]);
+
+  // VLC keyboard shortcuts — the full VLC hotkey set (Space, F, M, arrows, etc.)
+  useVLCKeyboardShortcuts({
+    mediaRef: isRadio ? audioRef : videoRef,
+    containerRef: playerContainerRef,
+    isFullscreen,
+    onToggleFullscreen: toggleFullscreen,
+    onNext: goToNextChannel,
+    onPrev: goToPrevChannel,
+    loop,
+    onToggleLoop: () => setLoop((v) => !v),
+  });
 
   const visibleChannels = filteredChannels.slice(0, visibleCount);
 
@@ -1650,6 +1727,7 @@ export default function LiveFeedEmbed({
 
       {/* PLAYER — native FuelPro player (NO iframe to upstream website) */}
       <div
+        ref={playerContainerRef}
         className="relative w-full bg-black"
         style={{
           height:
@@ -1779,21 +1857,25 @@ export default function LiveFeedEmbed({
                 </p>
               </div>
             ) : (
-              /* TV: video element with HLS.js */
+              /* TV: video element with HLS.js (VLC-style custom controls) */
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"
                 playsInline
                 autoPlay
                 muted={muted}
-                controls
                 onClick={() => {
-                  // If paused (autoplay blocked), clicking the video starts it.
-                  if (videoRef.current && videoRef.current.paused) {
-                    videoRef.current.muted = false;
+                  // VLC-style: click toggles play/pause (if playing) or
+                  // starts playback (if paused due to autoplay block).
+                  const v = videoRef.current;
+                  if (!v) return;
+                  if (v.paused) {
+                    v.muted = false;
                     setMuted(false);
                     setShowPlayOverlay(false);
-                    videoRef.current.play().catch(() => {});
+                    v.play().catch(() => {});
+                  } else {
+                    v.pause();
                   }
                 }}
                 onError={() => {
@@ -1806,6 +1888,29 @@ export default function LiveFeedEmbed({
                     if (!advanced) setPlaybackError(true);
                   }
                 }}
+              />
+            )}
+
+            {/* VLC-STYLE CONTROL BAR — replaces native browser controls with
+                a VLC-inspired overlay (seek, volume, speed, loop, fullscreen,
+                Open-in-VLC). Auto-hides after 3s like desktop VLC. Only for
+                TV + radio (not YouTube iframe, which has its own controls). */}
+            {activeChannel && !activeYouTubeId && !playbackError && (
+              <VLCStyleControls
+                mediaRef={isRadio ? audioRef : videoRef}
+                containerRef={playerContainerRef}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                loop={loop}
+                onToggleLoop={() => setLoop((v) => !v)}
+                onNext={goToNextChannel}
+                onPrev={goToPrevChannel}
+                streamUrl={
+                  activeChannel.stream_urls?.[0] ||
+                  activeChannel.youtube_urls?.[0]
+                }
+                channelName={activeChannel.name}
+                isLive={true}
               />
             )}
 
