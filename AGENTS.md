@@ -7980,3 +7980,63 @@ visual hierarchy.
   GitHub integration auto-deploys when quota resets ~24h).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, prettier clean, build success.
+
+
+## Session 2026-08-23 — UI reblend: calm financial-grade dark mode (commit 3b37a17)
+
+User report: "perfectly reblend the ui visuals, currently it is disorganized."
+Applied the reference design package (fuelpro-royal-dark-fix.zip, 8 rule
+files + dashboard.html). Root cause of disorganization: 6 competing multi-
+color gradient KPI cards (ocean-rose/cyber-bloom/neon-pulse/mint-eclipse/
+sunrise-sorbet/aurora-dust) + inconsistent fuel-type colors (green/amber/
+rose/indigo) + indigo/blue page-head accents — the color-as-decoration
+anti-pattern. Fix: Gold = brand + ONE primary action; color = status, never
+decoration.
+
+### tailwind.config.js — named token palette (rule 2b)
+Added bg.main/card/raised/input/hover (3 elevation steps), gold.DEFAULT/
+hover/dim/border, stat.primary/secondary/tertiary, status.positive/warning/
+negative/info + *-dim, edge.light/lighter, fontFamily.mono (JetBrains Mono),
+borderRadius.sm/md/lg. So bg-gold/text-status-warning/bg-bg-input work as
+utility classes (no more raw amber-500 doing triple duty).
+
+### index.css — universal dark surface + component layer (html.dark, all themes)
+CSS vars default to reference values. Reusable calm components:
+- .fp-kpi/.fp-kpi-top/.fp-kpi-icon(gold|positive|warning|info)/.fp-kpi-value
+  (white, JetBrains Mono)/.fp-kpi-label/.fp-kpi-foot/.fp-kpi-badge(positive|
+  warning) — dark surface, white value, small colored icon chip + trend badge.
+- .fp-btn-gold (ONE primary CTA) / .fp-btn-secondary (neutral outline).
+- .fp-status-pill(positive|warning|negative) — single reusable component.
+- .fp-price-card/.fp-price-label/.fp-price-value(white mono)/.fp-price-unit/
+  .fp-price-swatch — calm price cards.
+
+### Dashboard.tsx — rewrote the disorganized surfaces
+- KPI row: replaced 6 GradientMetricCard+HaloCard with 4 calm fp-kpi cards
+  (Revenue=gold icon, Net Profit=positive/warning, Fuel Sold=info, Balance
+  Due=warning/positive). Values white, only icon chips + trend badges carry
+  color.
+- Price cards: replaced HaloCard+competing text-green/amber/rose/indigo with
+  fp-price-card (white mono value, tiny colored swatch for fuel identity).
+- Page head: Print Summary -> fp-btn-secondary (neutral); clock -> bg-bg-card
+  + text-gold icon (was indigo/blue).
+
+### Dead component cleanup
+Deleted GradientMetricCard.tsx + HaloCard.tsx (only used in Dashboard, now
+unused) + DarkCard.tsx + Navbar.tsx (dead from a prior session, never wired).
+
+### Verification (live, 2026-08-23, Cloudflare preview 35d20cce + main alias)
+- Built CSS (index-Cm_LJtPX.css, 272KB) contains all fp-* classes.
+- Dashboard JS (Dashboard-DRqPPRXi.js, 229KB) contains all fp-kpi/fp-price
+  markers + ZERO references to old gradient cards.
+- Browser content confirms the calm structure renders: KPI row Total Revenue
+  32381 / profit Net Profit 32381 / Fuel Sold 55 L / Balance Due 0; price
+  cards Super Petrol 1.10 per litre / Diesel 3.85 per litre; page head Print
+  Summary + Sun Aug 23 2026 01:22:29 PM.
+
+### Deploy state 2026-08-23 (commit 3b37a17)
+- GitHub main: 3b37a17 (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview 35d20cce + main alias).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success (105 precache).
