@@ -7203,3 +7203,39 @@ All features tested end-to-end as founder QA (US station, USD). Access sub-tab r
 
 ### Lost commit audit (2026-08-23)
 No lost work found. All unmerged branches are old divergent snapshots (200+ behind) or single-commit fixes already superseded. founder-username-login (7 commits) + identifying-security-vulnerabilities-8d289 (3 commits) documented as awaiting user authorization (NOT auto-merged).
+
+
+## Session 2026-08-23 (cont.) — Station Member login on main AuthLogin page (DEPLOYED LIVE, commit 62b0a0c)
+
+**Requirement**: Members invited via access code should be able to log in with their station-assigned username + password DIRECTLY from the main login page — NOT by navigating to a separate #/station-access URL and entering ownerId+stationId UUIDs they don't know.
+
+### What was built
+
+1. "Station" login mode on AuthLogin.tsx (main login page): new 4th tab (Email | Username | Station, green-themed). Members search for their station by name or code (debounced 400ms), select from dropdown, enter username + password. On success redirects to /station-access read-only dashboard. Graceful degradation: if lookup_station RPC unavailable (migration 026 not applied), search returns [] and manual ownerId+stationId fallback appears (amber box).
+
+2. Migration 026 (supabase/migrations/026_station_lookup_rpc.sql, NOT yet applied to live DB — user must apply via Supabase Dashboard SQL Editor): lookup_station(p_query text) SECURITY DEFINER RPC, anon-callable, returns stationId/ownerId/stationName/code (NO PII), ranked by exact-code > exact-name > partial ILIKE, limit 10.
+
+3. station-access-code-service.ts: +lookupStation() + StationLookupResult type. Calls lookup_station RPC; on PGRST202 returns [] gracefully.
+
+4. StationAccess.tsx (#/station-access page): replaced manual UUID inputs with the SAME station search UI. Manual fallback retained. Both login entry points now consistent.
+
+5. StationManager.tsx Access sub-tab: + "Preview" button (Eye icon) per access code card. Opens Station Access viewer in new tab with owner+station IDs pre-filled.
+
+### Live verification (2026-08-23, Cloudflare 08c90e58 + main alias)
+- Login page shows 4 tabs: Email | Username | Station (green).
+- Clicked Station -> form renders: Find Your Station search + username + password + Access Station button.
+- Typed "Founder Admin" -> search ran -> migration 026 NOT applied -> returned [] -> manual entry fallback appeared (amber box). GRACEFUL DEGRADATION CONFIRMED.
+- Markers in live index-BTACYvei.js: "Access Station" (2), "Find Your Station" (1), "lookup_station" (1).
+
+### Deploy state 2026-08-23 (commit 62b0a0c)
+- GitHub main: 62b0a0c (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview 08c90e58 + main alias).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100; GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: migration 026 committed but NOT yet applied (apply via Dashboard SQL Editor). No other schema changes.
+- tsc 0 errors, build 107 precache, prettier pass.
+
+### Lost commit audit (2026-08-23, after Station Member login)
+Re-audited all 43 unmerged remote branches. No lost work found:
+- founder-username-login (7 commits): founder_credentials + loginFounder username + SecuritySection ALREADY on main (migration 018 + founder-console-enhancement). Old divergent base, conflicts — NOT auto-merged.
+- identifying-security-vulnerabilities-8d289 (3 commits): removes VITE_R2_SECRET_ACCESS_KEY + VITE_UPSTASH_REDIS_REST_TOKEN from cloudStorage.ts, routes through /api/r2/* + /api/cache/* endpoints that DON'T exist on main. Proper fix requires creating serverless endpoints first. Env vars currently NOT set (no active leak). NOT auto-merged (future security batch).
+- All other 41 branches: old divergent snapshots (200+ behind) whose work is already on main. No lost work needs merging.
