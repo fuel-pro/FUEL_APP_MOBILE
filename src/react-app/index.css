@@ -504,6 +504,96 @@ html.dark .via-indigo-500 {
   --tw-gradient-via: transparent var(--tw-gradient-via-position);
 }
 
+/* ── Sky / cyan / teal / light-blue (remaining blue-family) ─────────────
+   sky-400 (#38bdf8) + cyan-400 (#22d3ee) render as vivid blue/cyan in
+   dark mode. Map them to the same calm palette. */
+html.dark .text-sky-300,
+html.dark .text-sky-400,
+html.dark .text-sky-500,
+html.dark .text-sky-600,
+html.dark .text-sky-700,
+html.dark .text-cyan-300,
+html.dark .text-cyan-400,
+html.dark .text-cyan-500,
+html.dark .text-cyan-600,
+html.dark .text-light-blue-400,
+html.dark .text-light-blue-500,
+html.dark .text-light-blue-600 {
+  color: #e7ebf1 !important;
+}
+html.dark .bg-sky-500,
+html.dark .bg-sky-600,
+html.dark .bg-sky-700,
+html.dark .bg-cyan-500,
+html.dark .bg-cyan-600,
+html.dark .bg-cyan-700,
+html.dark .bg-light-blue-500,
+html.dark .bg-light-blue-600 {
+  background-color: var(--accent-gold) !important;
+  color: #0a0e17 !important;
+}
+html.dark .bg-sky-800,
+html.dark .bg-sky-900,
+html.dark .bg-cyan-800,
+html.dark .bg-cyan-900 {
+  background-color: var(--bg-hover) !important;
+}
+html.dark .bg-sky-50,
+html.dark .bg-sky-100,
+html.dark .bg-cyan-50,
+html.dark .bg-cyan-100 {
+  background-color: var(--status-info-dim) !important;
+}
+html.dark .bg-sky-500\/5,
+html.dark .bg-sky-500\/10,
+html.dark .bg-sky-500\/20,
+html.dark .bg-sky-500\/30,
+html.dark .bg-cyan-500\/5,
+html.dark .bg-cyan-500\/10,
+html.dark .bg-cyan-500\/20,
+html.dark .bg-cyan-500\/30 {
+  background-color: rgba(197, 160, 89, 0.1) !important;
+}
+html.dark .border-sky-300,
+html.dark .border-sky-400,
+html.dark .border-sky-500,
+html.dark .border-cyan-300,
+html.dark .border-cyan-400,
+html.dark .border-cyan-500 {
+  border-color: var(--border-light) !important;
+}
+html.dark .hover\:bg-sky-500:hover,
+html.dark .hover\:bg-sky-600:hover,
+html.dark .hover\:bg-cyan-500:hover,
+html.dark .hover\:bg-cyan-600:hover {
+  background-color: var(--accent-gold-hover) !important;
+  color: #0a0e17 !important;
+}
+html.dark .hover\:text-sky-300:hover,
+html.dark .hover\:text-sky-400:hover,
+html.dark .hover\:text-sky-500:hover,
+html.dark .hover\:text-cyan-300:hover,
+html.dark .hover\:text-cyan-400:hover {
+  color: var(--accent-gold) !important;
+}
+html.dark .from-sky-400,
+html.dark .from-sky-500,
+html.dark .from-sky-600,
+html.dark .from-cyan-400,
+html.dark .from-cyan-500,
+html.dark .from-cyan-600 {
+  --tw-gradient-from: var(--accent-gold) var(--tw-gradient-from-position);
+  --tw-gradient-to: transparent var(--tw-gradient-to-position);
+}
+html.dark .to-sky-400,
+html.dark .to-sky-500,
+html.dark .to-sky-600,
+html.dark .to-cyan-400,
+html.dark .to-cyan-500,
+html.dark .to-cyan-600 {
+  --tw-gradient-to: var(--accent-gold) var(--tw-gradient-to-position);
+}
+
 /* ── Unified dark surface + component layer (reblend) ───────────────────
    Enforces the reference design rules site-wide in dark mode so the UI
    feels cohesive instead of disorganized:

@@ -74,13 +74,15 @@ export default function LocationSelector({
     return (
       <button
         onClick={() => setShowSelector(true)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs transition-colors border border-blue-500/30"
+        className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-colors border border-amber-500/30"
       >
         <Globe size={14} />
         <span>
           {stationCountry.flag} {stationCountry.name}
         </span>
-        <span className="text-blue-400/60">{stationCountry.currency.code}</span>
+        <span className="text-amber-400/70">
+          {stationCountry.currency.code}
+        </span>
       </button>
     );
   }
@@ -114,7 +116,7 @@ export default function LocationSelector({
             <div className="sticky top-0 bg-slate-800 border-b border-white/10 p-5 z-10">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Globe size={20} className="text-blue-400" />
+                  <Globe size={20} className="text-amber-400" />
                   Select Station Location
                 </h3>
                 <button
@@ -136,13 +138,13 @@ export default function LocationSelector({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search country, currency, or region..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                 </div>
                 <button
                   onClick={handleAutoDetect}
                   disabled={detecting}
-                  className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap"
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 text-sm rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap"
                 >
                   <Navigation
                     size={14}
@@ -176,7 +178,7 @@ export default function LocationSelector({
                     onClick={() => handleSelect(country.id)}
                     className={`w-full text-left rounded-xl p-4 transition-all border ${
                       isSelected
-                        ? "bg-blue-500/20 border-blue-500/40"
+                        ? "bg-amber-500/20 border-amber-500/40"
                         : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
                     }`}
                   >
@@ -190,7 +192,7 @@ export default function LocationSelector({
                             {country.name}
                           </p>
                           {isSelected && (
-                            <Check size={14} className="text-blue-400" />
+                            <Check size={14} className="text-amber-400" />
                           )}
                           <span className="text-xs text-gray-400 bg-white/10 px-2 py-0.5 rounded">
                             {country.region}
@@ -207,7 +209,7 @@ export default function LocationSelector({
                             {country.revenueAuthority.vatRate}%
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-gray-300">
-                            <CreditCard size={12} className="text-blue-400" />
+                            <CreditCard size={12} className="text-amber-400" />
                             {country.mobileMoney.length} Mobile Money
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-gray-300">
@@ -239,7 +241,7 @@ export default function LocationSelector({
                               {country.communication.countryCode}
                             </div>
                             <div className="flex items-center gap-1.5 text-gray-400">
-                              <Clock size={12} className="text-cyan-400" />
+                              <Clock size={12} className="text-amber-400" />
                               {country.timezone
                                 .split("/")[1]
                                 ?.replace(/_/g, " ") || country.timezone}

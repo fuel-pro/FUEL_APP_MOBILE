@@ -242,7 +242,7 @@ export default function Header({
                         }}
                         className={`w-full flex h-10 items-center gap-2.5 px-3 text-left hover:bg-gray-50 dark:bg-white/5 transition-colors duration-150 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                       >
-                        <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
+                        <div className="w-6 h-6 bg-gradient-to-br from-amber-500 to-amber-700 rounded-md flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
                           {s.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-xs text-gray-200 truncate">
@@ -270,7 +270,7 @@ export default function Header({
                           onShowStations();
                           setShowStationMenu(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:bg-white/5 text-blue-300 text-xs"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:bg-white/5 text-amber-300 text-xs"
                       >
                         <Settings size={12} /> Manage Stations
                       </button>
@@ -545,7 +545,7 @@ export default function Header({
                           }}
                           className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50 dark:bg-white/5 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                         >
-                          <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center text-[9px] font-bold text-gray-900 dark:text-white">
+                          <div className="w-5 h-5 bg-amber-500 rounded flex items-center justify-center text-[9px] font-bold text-gray-900 dark:text-white">
                             {s.name.charAt(0)}
                           </div>
                           {s.name}
@@ -666,7 +666,7 @@ export default function Header({
                   }}
                   className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
                 >
-                  <Layers size={16} className="text-blue-400" />
+                  <Layers size={16} className="text-amber-400" />
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
                     Stations
                   </span>
