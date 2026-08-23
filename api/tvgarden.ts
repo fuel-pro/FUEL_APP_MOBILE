@@ -1,36 +1,31 @@
 /**
- * Live Channels API (Vercel serverless)
+ * tvgarden Catalog API (Vercel serverless)
  *
- * Reverse-engineered proxy for the tvgarden.world live-channel JSON API.
- * The shared library `api/_lib/tvgarden.ts` captures the full
- * reverse-engineered contract (endpoint shape, double compression, the
- * 218-country + 27-TV-category + 22-radio-category catalog).
+ * Returns the full reverse-engineered catalog of available countries (218)
+ * + TV categories (27) + radio categories (22) from the tvgarden.world
+ * source. Lets the frontend dynamically build filter dropdowns without
+ * hardcoding the lists.
  *
- * Why a server-side proxy: the upstream API does NOT send CORS headers, so
- * browser-side fetches from fuel-app-mobile.pages.dev /
- * fuel-app-mobile.vercel.app are blocked. This function fetches server-side
- * (no CORS restriction), decodes the gzip(brotli) double-compression, filters
- * out dead streams, and returns JSON with permissive CORS headers.
+ * GET /api/tvgarden
+ *   -> { countries: [{code,name}], tvCategories: [{id,label}],
+ *        radioCategories: [{id,label}], sourceCount: {...} }
  *
- * The client NEVER sees the upstream hostname — all requests go through
- * /api/live-channels, so there is zero upstream attribution in the UI.
- *
- * GET /api/live-channels?mode=tv|radio&type=countries|categories&id=us|news
- *
- * Returns: { channels: TvgChannel[], count: number }
+ * GET /api/tvgarden?mode=tv&type=countries&id=us
+ *   -> alias for /api/live-channels (same channel fetch, same response shape)
+ *      so the frontend can use a single endpoint for both catalog + channels.
  */
 import type { IncomingMessage, ServerResponse } from "http";
 import {
   decodeTvgardenBody,
   filterPlayable,
   isValidTvgRequest,
+  tvgardenCatalog,
   tvgardenUrl,
   type TvgChannel,
   type TvgMode,
   type TvgType,
 } from "./_lib/tvgarden.js";
 
-/** Minimal Vercel-compatible request/response wrappers (no @vercel/node dep). */
 interface ApiResponse extends ServerResponse {
   status(code: number): ApiResponse;
   json(body: unknown): void;
@@ -56,7 +51,6 @@ function parseQuery(req: IncomingMessage): Record<string, string | string[]> {
   return Object.fromEntries(new URLSearchParams(fullUrl.slice(searchIdx + 1)));
 }
 
-// In-memory cache (per serverless instance, 5-min TTL)
 const cache = new Map<string, { data: TvgChannel[]; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 
@@ -67,7 +61,6 @@ export default async function handler(
   const r = wrapRes(res);
   const query = parseQuery(req);
 
-  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -78,12 +71,17 @@ export default async function handler(
     return;
   }
 
-  const mode = (query.mode as string) || "tv";
-  const type = (query.type as string) || "countries";
-  const id = ((query.id as string) || "us").toLowerCase();
+  const mode = (query.mode as string) || "";
+  const type = (query.type as string) || "";
+  const id = ((query.id as string) || "").toLowerCase();
 
-  // Validate against the reverse-engineered catalog (reject unknown
-  // country/category ids early — saves a round-trip to the upstream).
+  // No mode/type/id -> return the catalog index
+  if (!mode && !type && !id) {
+    r.status(200).json(tvgardenCatalog());
+    return;
+  }
+
+  // mode/type/id present -> fetch channels (alias for /api/live-channels)
   if (!isValidTvgRequest(mode, type, id)) {
     r.status(400).json({
       error: "Invalid mode/type/id",
@@ -101,27 +99,19 @@ export default async function handler(
   }
 
   try {
-    // Let fetch() auto-decompress the outer brotli layer (via content-encoding).
-    // The response body is then the inner gzip(json) bytes; decodeTvgardenBody
-    // gunzips that. Accept-Encoding omitted on purpose so fetch uses its
-    // default (auto-decompress content-encoding).
     const upstreamRes = await fetch(
       tvgardenUrl(mode as TvgMode, type as TvgType, id),
     );
-
     if (!upstreamRes.ok) {
       r.status(200).json({ channels: [], count: 0 });
       return;
     }
-
     const channels = await decodeTvgardenBody(await upstreamRes.arrayBuffer());
     const playable = filterPlayable(channels);
-
     cache.set(cacheKey, { data: playable, ts: Date.now() });
-
     r.status(200).json({ channels: playable, count: playable.length });
   } catch (err) {
-    console.error("[live-channels] fetch error:", err);
+    console.error("[tvgarden] fetch error:", err);
     r.status(200).json({ channels: [], count: 0 });
   }
 }
