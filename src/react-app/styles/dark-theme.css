@@ -1316,3 +1316,223 @@ html.dark .via-indigo-950 {
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM ENHANCEMENT LAYER — elevate the feel across the entire site
+   ═══════════════════════════════════════════════════════════════════════════
+   A cohesive set of refinements that apply everywhere:
+   - Refined typography (tighter headings, tabular numbers, letter-spacing)
+   - Layered surface depth (soft shadows + 1px top light edge + subtle gradient)
+   - Frosted-glass chrome (header, tab nav, bottom nav) with backdrop blur
+   - Elevated inputs/buttons (focus glow, refined borders, press feedback)
+   - Smooth motion on all interactive elements (premium cubic-bezier)
+   - Styled selection + focus-visible rings (accessibility + polish)
+   - Shimmer skeleton utility + scrollbar hover glow
+   Typography + selection + focus-visible apply in BOTH modes; surface/glass/
+   motion refinements are scoped under html.dark (light mode keeps its look).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Premium tokens (both modes) ────────────────────────────────────────── */
+:root {
+  --fp-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --fp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --fp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --fp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --fp-shadow-lg:
+    0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
+  --fp-ring: 0 0 0 3px rgba(3, 91, 254, 0.18);
+}
+
+/* ── Typography refinement (both modes) ─────────────────────────────────── */
+body {
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.02em;
+  font-feature-settings: "ss01", "cv01";
+}
+/* Tabular numbers for financial / data alignment (both modes) */
+table,
+.fp-tabular,
+input[type="number"],
+input[type="tel"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+/* Small uppercase labels — premium tracking */
+.fp-eyebrow,
+.text-\[10px\],
+.text-\[11px\] {
+  letter-spacing: 0.06em;
+}
+
+/* ── Selection + focus-visible (both modes) ─────────────────────────────── */
+::selection {
+  background: rgba(3, 91, 254, 0.22);
+  color: inherit;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--fp-ring);
+  border-radius: inherit;
+}
+
+/* ── Shimmer skeleton utility ───────────────────────────────────────────── */
+.fp-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.fp-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: fp-shimmer 1.6s var(--fp-ease) infinite;
+}
+@keyframes fp-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Premium scrollbar hover glow (both modes) ──────────────────────────── */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dt-accent-blue, #035bfe);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK-MODE surface + chrome refinements
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Layered surface depth for cards/panels ─────────────────────────────── */
+html.dark .card,
+html.dark .fp-halo-card,
+html.dark [class*="bg-white"]:not(input):not(select):not(textarea) {
+  box-shadow:
+    0 0 0 1px var(--dt-border-subtle),
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+/* Subtle top-edge light + faint gradient sheen on hoverable cards */
+html.dark .card:hover,
+html.dark .fp-halo-card:hover,
+html.dark .group:hover > .card {
+  box-shadow:
+    0 0 0 1px var(--dt-border-active),
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(3, 91, 254, 0.06);
+}
+
+/* ── Frosted-glass chrome: header, tab nav, bottom nav ──────────────────── */
+html.dark header[class*="bg-gradient"],
+html.dark header[class*="from-slate"],
+html.dark .fp-tab-nav,
+html.dark nav[class*="fixed"][class*="bottom"],
+html.dark nav[class*="fixed bottom"] {
+  background-color: rgba(10, 10, 10, 0.72) !important;
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+/* Header inner dividers — subtler */
+html.dark header [class*="bg-white\/10"],
+html.dark header [class*="bg-gray-100"] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Elevated inputs (focus glow + refined inset) ───────────────────────── */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark select,
+html.dark textarea {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3) inset,
+    0 1px 0 rgba(255, 255, 255, 0.03);
+  transition:
+    border-color 0.18s var(--fp-ease),
+    box-shadow 0.18s var(--fp-ease),
+    background-color 0.18s var(--fp-ease);
+}
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: var(--dt-accent-blue) !important;
+  box-shadow:
+    0 0 0 3px rgba(3, 91, 254, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.3) inset !important;
+}
+
+/* ── Button press feedback + smooth motion ──────────────────────────────── */
+html.dark button,
+html.dark a[class*="cursor-pointer"],
+html.dark [role="button"] {
+  transition:
+    transform 0.16s var(--fp-ease-out),
+    background-color 0.16s var(--fp-ease),
+    color 0.16s var(--fp-ease),
+    border-color 0.16s var(--fp-ease),
+    box-shadow 0.16s var(--fp-ease);
+}
+html.dark button:active,
+html.dark [role="button"]:active,
+html.dark a[class*="cursor-pointer"]:active {
+  transform: translateY(1px) scale(0.985);
+}
+/* Primary/accent buttons get a soft glow on hover */
+html.dark button[class*="bg-blue-500"]:hover,
+html.dark button[class*="bg-indigo-"]:hover,
+html.dark button[class*="bg-amber-500"]:hover,
+html.dark button[class*="bg-emerald-500"]:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(3, 91, 254, 0.25);
+}
+
+/* ── Tab nav active indicator glow ──────────────────────────────────────── */
+html.dark .fp-tab-nav .border-blue-500 {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+/* ── Links / interactive rows hover lift ────────────────────────────────── */
+html.dark tr,
+html.dark [class*="hover:bg-gray-50"],
+html.dark [class*="hover:bg-gray-100"],
+html.dark [class*="hover:bg-white\/5"] {
+  transition: background-color 0.15s var(--fp-ease);
+}
+
+/* ── Backdrop overlay (modals) — richer blur ────────────────────────────── */
+html.dark [class*="bg-black\/60"],
+html.dark [class*="bg-black\/50"],
+html.dark .fixed.inset-0[class*="z-5"] {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dark *,
+  html.dark *::before,
+  html.dark *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .fp-shimmer::after {
+    animation: none !important;
+  }
+}
