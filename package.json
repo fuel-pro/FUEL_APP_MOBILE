@@ -110,10 +110,11 @@
     "wrangler": "^4.120.1"
   },
   "scripts": {
-    "build": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
+    "clean:cache": "rimraf node_modules/.vite dist",
+    "build": "node scripts/stamp-version.mjs && npm run clean:cache && vite build && node scripts/postbuild-version.mjs",
     "build:api": "echo 'API runs as Vercel serverless functions from /api — no separate API build needed'",
-    "build:vercel": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
-    "build:static": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
+    "build:vercel": "node scripts/stamp-version.mjs && npm run clean:cache && vite build && node scripts/postbuild-version.mjs",
+    "build:static": "node scripts/stamp-version.mjs && npm run clean:cache && vite build && node scripts/postbuild-version.mjs",
     "dev": "vite",
     "start": "vite preview",
     "check": "tsc -b",
