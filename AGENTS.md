@@ -7739,12 +7739,71 @@ existing architecture without breaking light mode or the live Header.
 ### Integration
 
 - `src/react-app/main.tsx`: `import "@/react-app/styles/dark-theme.css";`
-  added AFTER `index.css` so the `#0a0a0a` surfaces override the old
-  `#111827` dark block (CSS source order + equal specificity -> later wins).
-- No Supabase schema changes (frontend-only).
-- Light mode is completely untouched — all surface rules are scoped under
-  `html.dark`; the `:root` tokens are declared but only consumed in dark
-  mode (plus the global scrollbar, which is mode-neutral).
+
+## Session 2026-08-24 — Framer Dark theme selectable + DarkCard/DarkNavbar components (DEPLOYED LIVE, commit 181b9f0)
+
+Completed the Framer dark aesthetic integration. The base `dark-theme.css`
+token layer + sleek scrollbar was already present/imported (prior session).
+This session added the missing pieces:
+
+- **`src/react-app/components/ui/DarkCard.tsx`** (NEW): reusable dark-mode
+  card with hover elevation, subtle #222 borders, inner gradient glow,
+  blue #035bfe accent on hover, badge/priceTag meta bar, footer accent
+  indicator. Uses the dark-theme.css tokens.
+- **`src/react-app/components/ui/DarkNavbar.tsx`** (NEW): floating
+  glassmorphism nav header (backdrop-blur, #0a0a0a/80, subtle border).
+  Reusable presentational component (NOT a replacement for the functional
+  app Header — use for marketing/landing/sub-views). Props for brand,
+  links, sign-in/primary actions, right slot.
+- **`src/react-app/context/ThemeContext.tsx`**: added `"framer"` to the
+  `ColorTheme` union + `COLOR_THEMES` registry ("Framer Dark", primary
+  `#035bfe`, tint `#0a0a0a`). Selectable via the existing Header Theme
+  picker (station-owner control — "maximum control over all settings").
+- **`src/react-app/index.css`**: added the full
+  `html[data-color-theme="framer"]` + `html.dark[data-color-theme="framer"]`
+  CSS block (ultra-dark `#0a0a0a` body, `#121212` cards, `#161616` inputs,
+  subtle `#222`/`#333` borders, blue `#035bfe` accents on tabs/nav/focus/
+  buttons/links, blue glow on card hover, distinct text tiers
+  `#ffffff`/`#a1a1aa`/`#71717a`, blue HaloCard accent bar). Scoped under
+  `html.dark[data-color-theme="framer"]` so light mode + the existing
+  royal/pastel themes are untouched.
+
+### Verified LIVE (2026-08-24, Cloudflare preview 1a298e61 + main alias)
+- Logged in as founder QA → Header "Theme" picker dropdown shows 8 palettes
+  including "Framer Dark" (last in the list).
+- Selected "Framer Dark" → theme applied site-wide (Dashboard accent
+  colors changed to blue `#035bfe`).
+- Cloud sync confirmed: `fuelpro_color_theme` = `"framer"` +
+  `fuelpro_cloud_app_color_theme__<uid>` = `"framer"` (cross-device).
+- Built CSS (`index-BVzJCzll.css`) has 37 `framer` occurrences (full
+  theme block). Built index chunk has `Framer Dark`, `framer`, `035bfe`.
+- Reset to Royal Professional (default) to leave QA account clean.
+
+### Deploy state 2026-08-24 (commit 181b9f0)
+- GitHub main: `181b9f0` (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://1a298e61.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by `api-deployments-free-per-day`
+  (100/100; GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only; uses existing `app_kv`
+  table + scoped `app_color_theme__<ownerId>` row, RLS by owner_id).
+- `npx tsc --noEmit` (0 errors), `npm run build` (108 precache, success),
+  prettier all pass.
+
+### Design decision notes
+- The user's File 3 (Navbar.tsx) was a Framer-template MARKETING navbar
+  ("All-Access Pass", "Sign In", "Templates/Backgrounds/Mockups/Fonts").
+  That would BREAK the functional app Header (Edit Info, Theme, Tabs,
+  Logo, QR, Tutorial, Search, Admin, Logout). Created `DarkNavbar.tsx`
+  as a reusable presentational component with sensible props instead —
+  available for marketing/landing/sub-views, NOT forced over the
+  functional Header.
+- The Framer aesthetic is a SELECTABLE theme (not forced over the royal
+  gold brand identity). Station owners can pick it via the Theme picker
+  for "maximum control over all settings" as requested. The base
+  `dark-theme.css` tokens (`#0a0a0a` surfaces, sleek scrollbar) apply
+  to ALL dark mode as a refinement layer; the `framer` color theme
+  adds the pure blue `#035bfe` accent treatment on top.
 
 ### Key fixes (per the spec's "Key Fix Breakdown")
 
@@ -7752,18 +7811,6 @@ existing architecture without breaking light mode or the live Header.
    `#0a0a0a`/`#121212`/`#181818` for depth without harsh cutoff.
 2. **Subtle borders**: low-contrast `#222`->`#333` instead of white lines.
 3. **Typography contrast**: three text tiers (`#ffffff`/`#a1a1aa`/`#71717a`).
-
-### Deploy state 2026-08-23
-
-- GitHub main: commit pending (awaiting user authorization to commit/push).
-- Cloudflare/Vercel: NOT yet deployed (awaiting commit + deploy).
-- Supabase: no schema changes (frontend-only).
-- `node_modules` not installed in this sandbox, so `tsc`/build could not be
-  run locally; files verified via balanced-brace check + manual review.
-  The new TSX files are simple (pure presentational components with no
-  external imports beyond `react`) and the CSS is plain CSS imported via
-  the standard `@/` alias, so they integrate cleanly with the existing
-  Vite + Tailwind pipeline.
 
 
 ## Session 2026-08-23 — Max owner control + pre-fill all data in Settings (commit pending)
