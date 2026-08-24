@@ -8301,3 +8301,30 @@ Documents.tsx legacy .card.user border-left #3b82f6 -> #c5a059.
 - NOTE: users on the main alias with a cached service worker may need a
   hard reload (Ctrl+Shift+R) to see the new CSS; the preview URL has no
   SW and always serves the latest.
+
+## Session 2026-08-24 — Header dark + light mode adaptivity (DEPLOYED LIVE, commit caf8a2f)
+
+**Requirement**: "FIX THE HEADER, IT IS NOT FULLY OPTIMIZED FOR DARK MODE AND LIGHT MODE."
+
+**Root cause**: The Header (`src/react-app/components/Header.tsx`) was hardcoded dark — it rendered a dark navy bar in BOTH themes. The root `<header>` used `bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900` (no `dark:` prefix) so it was dark slate in light mode too, and text was `text-gray-900 dark:text-white` (dark text on dark bar = invisible in light mode). The mobile menu was `bg-slate-800/95` (always dark). Many buttons/icons used `text-gray-300` with NO light-mode pair (pale gray on light bg = low contrast). Edit-info inputs used `border-white/20` (invisible border in light). A leftover `focus:ring-indigo-500/50` blue ring remained.
+
+**Fixes (all now adapt via `dark:` pairs)**:
+1. Header root → `bg-white dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 ... text-gray-900 dark:text-white shadow-sm dark:shadow-lg` (white in light, dark slate gradient in dark).
+2. Mobile menu → `bg-white dark:bg-slate-800/95 ... text-gray-900 dark:text-white`.
+3. Desktop action buttons (Edit Info/Theme/Tabs/Logo/QR/Tutorial) → `bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300` (was `bg-gray-50 ... text-gray-300`).
+4. Status chips + Add Station → `bg-gray-100 dark:bg-white/5` + `text-gray-700 dark:text-gray-300`.
+5. Standalone icons (Edit3/LayoutDashboard/Image/QrCode/Moon/Loader2) → `text-gray-600 dark:text-gray-300` (was `text-gray-300`).
+6. Station name span → `text-gray-800 dark:text-gray-200` (was `text-gray-200`).
+7. Hamburger + theme-toggle buttons → light hover pair + `text-gray-700 dark:text-gray-200`.
+8. Edit-info inputs → `border-gray-200 dark:border-white/20` (was `border-white/20`) + `placeholder-gray-400 dark:placeholder-gray-500`.
+9. Mobile user name + action grid buttons → light bg pairs.
+10. Leftover indigo focus ring → `focus:ring-amber-500/50`.
+
+**Verification (live, Cloudflare preview 35fb5dde — no SW cache)**: pixel-measured header band (y 50–180):
+- Dark mode: header bg `rgb(15,23,42)` slate-900 ✓, blue 0.20%, button bg `rgb(21,25,37)` dark surface ✓.
+- Light mode: header bg `rgb(255,255,255)` pure white ✓, blue 0.29%, button bg `rgb(249,250,251)` bg-gray-100 ✓.
+- No hardcoded dark surfaces remain (from-slate-900/via-indigo-950/bg-slate-800/95 now only inside `dark:` prefixes). No unpaired `text-gray-300` remains.
+
+**Deploy state 2026-08-24 (commit caf8a2f)**: GitHub main pushed (synced with origin/main). Cloudflare Pages LIVE (preview https://35fb5dde.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev; both serve CSS chunk `index-DnMSuaLx.css` with the `dark:bg-gradient-to-r` header rule). Vercel BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets ~24h). Supabase: no schema changes. `npx tsc --noEmit` 0 errors, prettier clean, build success.
+
+**SW note**: main alias uses the network-first SW (CACHE_VERSION `20260824T090028169Z`) which fetches fresh index.html on every navigation; hard reload (Ctrl+Shift+R) forces the new CSS immediately. The preview URL has no SW cache.
