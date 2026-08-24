@@ -179,7 +179,7 @@ export default function Header({
   };
 
   return (
-    <header className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-lg relative z-40">
+    <header className="bg-white dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 border-b border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-sm dark:shadow-lg relative z-40">
       {/* Desktop Header */}
       <div className="container mx-auto px-2 sm:px-4 py-1.5 sm:py-2 lg:py-3">
         <div className="flex items-center justify-between gap-3">
@@ -217,7 +217,7 @@ export default function Header({
                   onClick={() => setShowStationMenu(!showStationMenu)}
                   aria-haspopup="listbox"
                   aria-expanded={showStationMenu}
-                  className="flex h-10 items-center gap-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  className="flex h-10 items-center gap-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 >
                   <Layers size={12} />
                   <span className="max-w-20 truncate">
@@ -245,7 +245,7 @@ export default function Header({
                         <div className="w-6 h-6 bg-gradient-to-br from-amber-500 to-amber-700 rounded-md flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
                           {s.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-xs text-gray-200 truncate">
+                        <span className="text-xs text-gray-800 dark:text-gray-200 truncate">
                           {s.name}
                         </span>
                         {currentStation?.id === s.id && (
@@ -282,7 +282,7 @@ export default function Header({
               onShowStations && (
                 <button
                   onClick={onShowStations}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 rounded-lg text-xs transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-xs transition-colors"
                 >
                   <Plus size={11} /> Add Station
                 </button>
@@ -292,18 +292,18 @@ export default function Header({
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-1.5">
-            <span className="px-2 py-1 bg-gray-50 dark:bg-white/5 rounded-md text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+            <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded-md text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
               <div className="w-1.5 h-1.5 bg-green-400 rounded-full" /> Local
             </span>
             {user && (
-              <span className="px-2 py-1 bg-gray-50 dark:bg-white/5 rounded-md text-[10px] text-gray-300 flex items-center gap-1">
+              <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded-md text-[10px] text-gray-700 dark:text-gray-300 flex items-center gap-1">
                 <User size={10} className="text-amber-400" />
                 <span className="hidden xl:inline">{user.name}</span>
               </span>
             )}
             <button
               onClick={() => setShowEditInfo(!showEditInfo)}
-              className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
             >
               <Edit3 size={12} />
               <span className="hidden lg:inline">Edit Info</span>
@@ -312,7 +312,7 @@ export default function Header({
             <div className="relative">
               <button
                 onClick={() => setShowColorThemes((v) => !v)}
-                className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
                 title={`Theme: ${colorThemeMeta.name}`}
                 aria-label="Change color theme"
                 aria-expanded={showColorThemes}
@@ -378,12 +378,12 @@ export default function Header({
             </div>
             <button
               onClick={() => setShowTabConfig(true)}
-              className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
             >
               <LayoutDashboard size={12} />
               <span className="hidden lg:inline">Tabs</span>
             </button>
-            <label className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
+            <label className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
               {logoUploading ? (
                 <Loader2 size={12} className="animate-spin" />
               ) : (
@@ -402,7 +402,7 @@ export default function Header({
             </label>
             <button
               onClick={() => setShowQRCode(true)}
-              className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
             >
               <QrCode size={12} />
               <span className="hidden lg:inline">QR</span>
@@ -410,7 +410,7 @@ export default function Header({
             <button
               onClick={() => tutorial.startTutorial("basic")}
               title="Replay the onboarding tutorial"
-              className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
             >
               <HelpCircle size={12} />
               <span className="hidden lg:inline">Tutorial</span>
@@ -482,13 +482,13 @@ export default function Header({
             </button>
             <button
               onClick={handleToggleTheme}
-              className="p-2 hover:bg-gray-100 dark:bg-white/10 rounded-lg transition-colors"
+              className="p-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors text-gray-700 dark:text-gray-200"
               title={`Theme: ${resolvedTheme}`}
             >
               {resolvedTheme === "dark" ? (
                 <Sun size={15} className="text-amber-400" />
               ) : (
-                <Moon size={15} className="text-gray-300" />
+                <Moon size={15} className="text-gray-600 dark:text-gray-300" />
               )}
             </button>
             <button
@@ -509,7 +509,7 @@ export default function Header({
           >
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="p-2.5 bg-gray-100 dark:bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+              className="p-2.5 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-xl transition-colors text-gray-700 dark:text-gray-200"
             >
               {showMobileMenu ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -519,7 +519,7 @@ export default function Header({
 
       {/* Mobile Menu Dropdown */}
       {showMobileMenu && (
-        <div className="md:hidden bg-slate-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 shadow-2xl">
+        <div className="md:hidden bg-white dark:bg-slate-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 shadow-2xl text-gray-900 dark:text-white">
           <div className="container mx-auto px-4 py-4 space-y-3">
             {/* Location & Station */}
             <div className="flex items-center justify-between">
@@ -564,9 +564,9 @@ export default function Header({
                   setShowEditInfo(!showEditInfo);
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
               >
-                <Edit3 size={16} className="text-gray-300" />
+                <Edit3 size={16} className="text-gray-600 dark:text-gray-300" />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   Edit Info
                 </span>
@@ -576,18 +576,27 @@ export default function Header({
                   setShowTabConfig(true);
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
               >
-                <LayoutDashboard size={16} className="text-gray-300" />
+                <LayoutDashboard
+                  size={16}
+                  className="text-gray-600 dark:text-gray-300"
+                />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   Tabs
                 </span>
               </button>
-              <label className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors cursor-pointer">
+              <label className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-pointer">
                 {logoUploading ? (
-                  <Loader2 size={16} className="text-gray-300 animate-spin" />
+                  <Loader2
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300 animate-spin"
+                  />
                 ) : (
-                  <Image size={16} className="text-gray-300" />
+                  <Image
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300"
+                  />
                 )}
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   {logoUploading ? "Uploading…" : "Logo"}
@@ -607,7 +616,7 @@ export default function Header({
                 onClick={() => {
                   setShowColorThemes((v) => !v);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
                 title={`Theme: ${colorThemeMeta.name}`}
               >
                 <Palette
@@ -623,9 +632,12 @@ export default function Header({
                   setShowQRCode(true);
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
               >
-                <QrCode size={16} className="text-gray-300" />
+                <QrCode
+                  size={16}
+                  className="text-gray-600 dark:text-gray-300"
+                />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   QR Code
                 </span>
@@ -635,7 +647,7 @@ export default function Header({
                   tutorial.startTutorial("basic");
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
               >
                 <HelpCircle size={16} className="text-amber-400" />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
@@ -647,12 +659,15 @@ export default function Header({
                   handleToggleTheme();
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
               >
                 {resolvedTheme === "dark" ? (
                   <Sun size={16} className="text-amber-400" />
                 ) : (
-                  <Moon size={16} className="text-gray-300" />
+                  <Moon
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300"
+                  />
                 )}
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   {resolvedTheme === "dark" ? "Light" : "Dark"}
@@ -664,7 +679,7 @@ export default function Header({
                     onShowStations();
                     setShowMobileMenu(false);
                   }}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
                 >
                   <Layers size={16} className="text-amber-400" />
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
@@ -742,7 +757,9 @@ export default function Header({
                   <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-xs font-bold">
                     {user.name?.charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-sm text-gray-300">{user.name}</span>
+                  <span className="text-sm text-gray-800 dark:text-gray-200">
+                    {user.name}
+                  </span>
                 </div>
               ) : null}
               <button
@@ -783,7 +800,7 @@ export default function Header({
                   value={editData.name}
                   onChange={(e) => updateEdit({ name: e.target.value })}
                   placeholder="e.g. Acme Fuel Station Ltd"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
               <div>
@@ -794,7 +811,7 @@ export default function Header({
                   value={editData.poBox}
                   onChange={(e) => updateEdit({ poBox: e.target.value })}
                   placeholder="e.g. 12345-00100"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
               <div>
@@ -805,7 +822,7 @@ export default function Header({
                   value={editData.contacts}
                   onChange={(e) => updateEdit({ contacts: e.target.value })}
                   placeholder="+1 555 000 0000"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
 
@@ -819,7 +836,7 @@ export default function Header({
                   onChange={(e) => updateEdit({ email: e.target.value })}
                   placeholder="info@company.com"
                   type="email"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
               <div>
@@ -970,7 +987,7 @@ export default function Header({
                   value={editData.vatRegNo}
                   onChange={(e) => updateEdit({ vatRegNo: e.target.value })}
                   placeholder="VAT Reg No"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
 
@@ -988,7 +1005,7 @@ export default function Header({
                       value={editData.bankName}
                       onChange={(e) => updateEdit({ bankName: e.target.value })}
                       placeholder="e.g. Equity Bank"
-                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </div>
                   <div>
@@ -1001,7 +1018,7 @@ export default function Header({
                         updateEdit({ branchName: e.target.value })
                       }
                       placeholder="e.g. Mombasa Road"
-                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </div>
                   <div>
@@ -1016,7 +1033,7 @@ export default function Header({
                         })
                       }
                       placeholder="Account holder name"
-                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </div>
                   <div>
@@ -1033,7 +1050,7 @@ export default function Header({
                       placeholder="1234567890"
                       type="text"
                       inputMode="numeric"
-                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </div>
                 </div>
