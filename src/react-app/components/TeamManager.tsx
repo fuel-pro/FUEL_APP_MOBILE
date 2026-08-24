@@ -1367,7 +1367,7 @@ export default function TeamManager() {
               <button
                 key={item.id}
                 onClick={item.action}
-                className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
               >
                 {item.done ? (
                   <CheckCircle2
@@ -1513,7 +1513,7 @@ export default function TeamManager() {
             <div className="lg:col-span-2 space-y-4">
               {/* ── Add Team Member ── */}
               {availableRoles.length > 0 && (
-                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <UserPlus
                       size={16}
@@ -1547,7 +1547,7 @@ export default function TeamManager() {
                   ) : (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
                       {/* Mode switcher */}
-                      <div className="flex gap-2 p-1 bg-white dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex gap-2 p-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                         <button
                           onClick={() => setAddMode("invite")}
                           className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-gray-900 dark:text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800"}`}
@@ -1593,7 +1593,7 @@ export default function TeamManager() {
                                 <button
                                   key={r.id}
                                   onClick={() => setInviteRole(r.id)}
-                                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
+                                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
                                 >
                                   {r.label}
                                 </button>
@@ -1613,7 +1613,7 @@ export default function TeamManager() {
                                 value={expireDays}
                                 onChange={(e) => setExpireDays(e.target.value)}
                                 placeholder="Never"
-                                className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                               />
                             </div>
                             <div>
@@ -1625,7 +1625,7 @@ export default function TeamManager() {
                                 value={maxUses}
                                 onChange={(e) => setMaxUses(e.target.value)}
                                 min="1"
-                                className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                               />
                             </div>
                           </div>
@@ -1696,7 +1696,7 @@ export default function TeamManager() {
 
               {/* ── Active Invites ── */}
               {activeInvites.length > 0 && (
-                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Link2 size={16} className="text-amber-600" />
                     <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -1719,7 +1719,7 @@ export default function TeamManager() {
                             >
                               {getRoleLabel(inv.role).label}
                             </div>
-                            <code className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                            <code className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                               {inv.id}
                             </code>
                           </div>
@@ -1739,7 +1739,7 @@ export default function TeamManager() {
                           <input
                             readOnly
                             value={getLink(inv)}
-                            className="flex-1 px-2 py-1.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
+                            className="flex-1 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
                           />
                           <button
                             onClick={() => handleCopyLink(inv)}
@@ -1796,7 +1796,7 @@ export default function TeamManager() {
               )}
 
               {/* ── Shared snapshot publisher ── */}
-              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Share2 size={16} className="text-indigo-600" />
                   <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -1878,7 +1878,7 @@ export default function TeamManager() {
 
               {/* ── Feature Access Control (collapsible) ── */}
               {canManagePermissions && (
-                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <button
                     onClick={() => setShowFeatureGrant(!showFeatureGrant)}
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -2003,7 +2003,7 @@ export default function TeamManager() {
               )}
 
               {/* ── Team Members roster (with search + filter + bulk actions) ── */}
-              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <Users size={16} className="text-purple-600" />
@@ -2206,7 +2206,7 @@ export default function TeamManager() {
                     return (
                       <div
                         key={member.id}
-                        className={`bg-white dark:bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
+                        className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
                       >
                         <div
                           className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -2515,7 +2515,7 @@ export default function TeamManager() {
 
               {/* ── Invite History (used/expired) ── */}
               {(usedInvites.length > 0 || expiredInvites.length > 0) && (
-                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Clock
                       size={16}
@@ -2571,7 +2571,7 @@ export default function TeamManager() {
           </div>
 
           {/* ── Access Codes panel (full-width below the grid) ── */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-2 mb-3">
               <KeyRound size={16} className="text-blue-600" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -2600,7 +2600,7 @@ export default function TeamManager() {
             className="fixed inset-0 bg-black/40 z-40"
             onClick={() => setDrawerMemberId(null)}
           />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-gray-900 dark:text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
@@ -2634,7 +2634,7 @@ export default function TeamManager() {
 
             <div className="p-4 space-y-4">
               {/* Identity */}
-              <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-xl p-3 space-y-2">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-2">
                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                   <IdCard size={12} /> Identity
                 </h4>
@@ -2692,13 +2692,13 @@ export default function TeamManager() {
                     <Activity size={12} /> Access Activity
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
                       <p className="text-xl font-bold text-blue-600">
                         {drawerMember.accessCount ?? 0}
                       </p>
                       <p className="text-[10px] text-gray-500">Logins</p>
                     </div>
-                    <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
                       <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         {drawerMember.lastAccessedAt
                           ? new Date(
@@ -2743,7 +2743,7 @@ export default function TeamManager() {
                                 : [...drawerMember.assignedPumps, p.id];
                               assignPumps(drawerMember.id, next);
                             }}
-                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
                           >
                             {p.label}
                           </button>
@@ -2767,7 +2767,7 @@ export default function TeamManager() {
                               : [...drawerMember.assignedShifts, s];
                             assignShifts(drawerMember.id, next);
                           }}
-                          className={`text-[10px] px-2 py-1 rounded-full border transition-all ${drawerMember.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                          className={`text-[10px] px-2 py-1 rounded-full border transition-all ${drawerMember.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
                         >
                           {s}
                         </button>
@@ -2830,7 +2830,7 @@ export default function TeamManager() {
                               [drawerMember.id]: e.target.value,
                             }))
                           }
-                          className="w-20 px-2 py-2 bg-gray-50 dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-gray-900 dark:text-white"
+                          className="w-20 px-2 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-gray-900 dark:text-white"
                           placeholder="Days"
                         />
                         <button
@@ -2867,7 +2867,7 @@ export default function TeamManager() {
                 )}
                 {drawerMember.expiresAt && (
                   <div
-                    className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-white dark:bg-gray-800 text-gray-500"}`}
+                    className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-gray-800 text-gray-500"}`}
                   >
                     {new Date(drawerMember.expiresAt) < new Date()
                       ? "Expired"
@@ -3019,7 +3019,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
 
       {/* Custom role creator */}
       {canCreateRoles && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           {!showRoleCreator ? (
             <div className="space-y-3">
               {/* Quick presets */}
@@ -3075,7 +3075,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="accountant"
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -3086,7 +3086,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     value={newRoleLabel}
                     onChange={(e) => setNewRoleLabel(e.target.value)}
                     placeholder="Accountant"
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -3098,7 +3098,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     onChange={(e) =>
                       setNewRoleBase(e.target.value as BaseUserRole)
                     }
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   >
                     <option value="manager">Manager</option>
                     <option value="staff">Staff</option>
@@ -3127,7 +3127,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
 
       {/* Permission editors per role */}
       {allRoles.length === 0 && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
           No roles available for you to manage.
         </div>
       )}
@@ -3138,7 +3138,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
         return (
           <div
             key={r.id}
-            className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
           >
             <button
               onClick={() => setPermEditorRole(isOpen ? null : r.id)}
@@ -3565,7 +3565,7 @@ function AccessCodesView({
                 readOnly
                 value={accessLink}
                 onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-gray-900 dark:text-white font-mono"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-gray-900 dark:text-white font-mono"
               />
               <button
                 onClick={copyLink}
@@ -3606,7 +3606,7 @@ function AccessCodesView({
       </div>
 
       {showForm && (
-        <div className="p-4 bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
           <AccessCodeForm
             stationId={stationId}
             availableRoles={availableRoles}
@@ -3633,7 +3633,7 @@ function AccessCodesView({
           {codes.map((c) => (
             <div
               key={c.id}
-              className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+              className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
             >
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -3868,7 +3868,7 @@ function ActivityHealthView({
           {teamHealth.total > 0 && (
             <button
               onClick={exportMembersCSV}
-              className="px-4 py-2 bg-white dark:bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-2 border border-gray-200 dark:border-gray-600 transition-colors"
+              className="px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-2 border border-gray-200 dark:border-gray-600 transition-colors"
             >
               <Download size={14} /> Export Team CSV
             </button>
@@ -3898,7 +3898,7 @@ function ActivityHealthView({
             value: teamHealth.inactive,
             Icon: UserX,
             color: "text-gray-500",
-            bg: "bg-gray-50 dark:bg-white dark:bg-gray-800",
+            bg: "bg-gray-50 dark:bg-gray-800",
           },
           {
             label: "Active Invites",
@@ -3935,7 +3935,7 @@ function ActivityHealthView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Role Distribution */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Crown size={16} className="text-purple-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -3977,7 +3977,7 @@ function ActivityHealthView({
         </div>
 
         {/* Access Method Breakdown */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Users2 size={16} className="text-indigo-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -4025,7 +4025,7 @@ function ActivityHealthView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Most Active Members */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={16} className="text-green-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -4069,7 +4069,7 @@ function ActivityHealthView({
         </div>
 
         {/* Recently Joined */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Clock size={16} className="text-blue-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -4117,7 +4117,7 @@ function ActivityHealthView({
       </div>
 
       {/* Invite Activity Summary */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Activity size={16} className="text-purple-600" />
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -4167,7 +4167,7 @@ function ActivityHealthView({
 
       {/* Quick Recommendations */}
       {teamHealth.total > 0 && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Zap size={16} className="text-amber-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -4212,7 +4212,7 @@ function ActivityHealthView({
               </div>
             )}
             {teamHealth.inactive > 0 && (
-              <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg">
+              <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <UserX
                   size={14}
                   className="text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0"

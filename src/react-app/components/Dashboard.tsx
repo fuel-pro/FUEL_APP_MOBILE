@@ -1165,61 +1165,64 @@ export default function Dashboard() {
     },
   };
 
+  // Unified dark-surface quick-action tiles (reference: single accent system).
+  // Each tile uses the standard card surface; only the ICON carries a semantic
+  // color — no more competing full-bleed rainbow backgrounds.
   const quickActions = [
     {
       label: "Point of Sale",
       icon: ShoppingCart,
       tab: "pos",
-      color: "bg-blue-500 hover:bg-blue-600",
+      iconColor: "text-amber-400",
       desc: "Quick fuel sale",
     },
     {
       label: "Sales Tracking",
       icon: BarChart3,
       tab: "sales",
-      color: "bg-green-500 hover:bg-green-600",
+      iconColor: "text-emerald-400",
       desc: "Record pump readings",
     },
     {
       label: "Delivery",
       icon: Fuel,
       tab: "delivery",
-      color: "bg-amber-500 hover:bg-amber-600",
+      iconColor: "text-amber-400",
       desc: "Track deliveries",
     },
     {
       label: "Invoice",
       icon: Receipt,
       tab: "invoice",
-      color: "bg-purple-500 hover:bg-purple-600",
+      iconColor: "text-sky-400",
       desc: "Create invoice",
     },
     {
       label: "M-PESA",
       icon: CreditCard,
       tab: "mpesa",
-      color: "bg-emerald-500 hover:bg-emerald-600",
+      iconColor: "text-emerald-400",
       desc: "Analyze payments",
     },
     {
       label: "Reports",
       icon: Activity,
       tab: "reports",
-      color: "bg-rose-500 hover:bg-rose-600",
+      iconColor: "text-rose-400",
       desc: "View reports",
     },
     {
       label: "Credit",
       icon: Wallet,
       tab: "credit",
-      color: "bg-pink-500 hover:bg-pink-600",
+      iconColor: "text-amber-400",
       desc: "Customer credit & debt reminders",
     },
     {
       label: "STK Push",
       icon: Smartphone,
       tab: "livetransaction",
-      color: "bg-cyan-500 hover:bg-cyan-600",
+      iconColor: "text-emerald-400",
       desc: "Collect M-PESA payment",
       payload: { openStkPush: true } as Partial<StkPushPrefill>,
     },
@@ -1227,28 +1230,28 @@ export default function Dashboard() {
       label: "Expenses",
       icon: Receipt,
       tab: "expenses",
-      color: "bg-orange-500 hover:bg-orange-600",
+      iconColor: "text-rose-400",
       desc: "Record an expense",
     },
     {
       label: "Suppliers",
       icon: Truck,
       tab: "suppliers",
-      color: "bg-indigo-500 hover:bg-indigo-600",
+      iconColor: "text-sky-400",
       desc: "Purchases & suppliers",
     },
     {
       label: "Integration Hub",
       icon: Plug,
       tab: "integration",
-      color: "bg-teal-500 hover:bg-teal-600",
+      iconColor: "text-emerald-400",
       desc: "M-PESA / Kopo Kopo setup",
     },
     {
       label: "Payroll",
       icon: Users,
       tab: "payroll",
-      color: "bg-fuchsia-500 hover:bg-fuchsia-600",
+      iconColor: "text-amber-400",
       desc: "Employee payroll",
     },
   ];
@@ -1453,19 +1456,19 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Globe
                 size={14}
                 className={
-                  isSyncing ? "text-blue-500 animate-pulse" : "text-blue-500"
+                  isSyncing ? "text-amber-500 animate-pulse" : "text-amber-500"
                 }
               />
               Current Pump Prices
             </h3>
-            <span className="text-[9px] bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+            <span className="text-[9px] bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full font-medium">
               {effectiveFuelPrice?.priceSettingBody ||
                 stationCountryProfile.fuelRegulations.priceSettingBody}
             </span>
@@ -1474,7 +1477,7 @@ export default function Dashboard() {
           <div className="mb-2 flex items-center gap-2">
             {currentLocation?.latitude != null &&
               currentLocation?.longitude != null && (
-                <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">
                   📍 {currentLocation.latitude.toFixed(4)},{" "}
                   {currentLocation.longitude.toFixed(4)}
                 </span>
@@ -1619,9 +1622,9 @@ export default function Dashboard() {
         </div>
 
         {/* Tax Rates Summary */}
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/10 rounded-xl p-3 border border-purple-200 dark:border-purple-800 shadow-sm">
-          <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-2 flex items-center gap-2">
-            <FileText size={14} className="text-purple-500" />
+        <div className="bg-white dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+            <FileText size={14} className="text-amber-500" />
             Tax & Statutory Rates
           </h3>
           <div className="space-y-2">
@@ -1705,12 +1708,12 @@ export default function Dashboard() {
         </div>
 
         {/* Weather Widget */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <WeatherWidget />
         </div>
 
         {/* Regulatory Alerts */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <RegulatoryAlerts countryCode={stationCountry} />
         </div>
       </div>
@@ -1718,10 +1721,10 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Sales Trend */}
-        <div className="lg:col-span-2 bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
-              <BarChart3 size={18} className="text-blue-500" />
+              <BarChart3 size={18} className="text-amber-500" />
               Sales Trend (Last 7 Days)
             </h3>
             <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
@@ -1734,7 +1737,7 @@ export default function Dashboard() {
         </div>
 
         {/* Fuel Distribution */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Droplets size={18} className="text-green-500" />
             Fuel Distribution
@@ -1763,7 +1766,7 @@ export default function Dashboard() {
       {/* Second Charts Row + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Expense Breakdown */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Activity size={18} className="text-rose-500" />
             Expense Breakdown
@@ -1774,9 +1777,9 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="lg:col-span-2 bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-            <ShoppingCart size={18} className="text-blue-500" />
+            <ShoppingCart size={18} className="text-amber-500" />
             Quick Actions
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1784,11 +1787,18 @@ export default function Dashboard() {
               <button
                 key={action.label}
                 onClick={() => launchAction(action)}
-                className={`${action.color} text-gray-900 dark:text-white rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm`}
+                className="fp-quick-action group"
               >
-                <action.icon size={24} className="mb-2 opacity-90" />
-                <p className="font-semibold text-sm">{action.label}</p>
-                <p className="text-xs opacity-75 mt-0.5">{action.desc}</p>
+                <action.icon
+                  size={22}
+                  className={`${action.iconColor} mb-2 transition-transform group-hover:scale-110`}
+                />
+                <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                  {action.label}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {action.desc}
+                </p>
               </button>
             ))}
           </div>
@@ -1797,9 +1807,9 @@ export default function Dashboard() {
 
       {/* Tank Levels — dynamic per fuel type (was hardcoded to only
           Super Petrol Tank + Diesel Tank). */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-          <Fuel size={18} className="text-blue-500" />
+          <Fuel size={18} className="text-amber-500" />
           Tank Levels
         </h3>
         <div
@@ -1852,7 +1862,7 @@ export default function Dashboard() {
       </div>
 
       {/* Active Pumps Summary */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Activity size={18} className="text-purple-500" />
           Pump Status

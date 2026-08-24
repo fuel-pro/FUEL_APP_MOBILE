@@ -2202,7 +2202,7 @@ export default function IntegrationHub() {
       </div>
 
       {/* Country Selector — Searchable dropdown for all 250+ Countries */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
             Select Country
@@ -2288,25 +2288,25 @@ export default function IntegrationHub() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             {connectors.length}
           </p>
           <p className="text-[10px] text-gray-500">Connectors</p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {connectedCount}
           </p>
           <p className="text-[10px] text-gray-500">Connected</p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {webhooks.length}
           </p>
           <p className="text-[10px] text-gray-500">Webhooks</p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {apiKeys.length}
           </p>
@@ -2342,7 +2342,7 @@ export default function IntegrationHub() {
       {activeTab === "connectors" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-1 bg-gray-100 dark:bg-white dark:bg-gray-800 rounded-lg p-1">
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               {categories.map((cat) => (
                 <button
                   key={cat}
@@ -2356,13 +2356,13 @@ export default function IntegrationHub() {
             <div className="flex gap-2 ml-auto">
               <button
                 onClick={() => exportData("csv")}
-                className="px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
+                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
               >
                 <Download size={14} /> CSV
               </button>
               <button
                 onClick={() => exportData("json")}
-                className="px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
+                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
               >
                 <Download size={14} /> JSON
               </button>
@@ -2395,7 +2395,7 @@ export default function IntegrationHub() {
               return (
                 <div
                   key={conn.id}
-                  className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                   <div
                     className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -2516,7 +2516,7 @@ export default function IntegrationHub() {
                                         [key]: e.target.value,
                                       }))
                                     }
-                                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                   />
                                   {(key.toLowerCase().includes("password") ||
                                     key.toLowerCase().includes("secret") ||
@@ -2653,7 +2653,7 @@ export default function IntegrationHub() {
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
                     >
                       <div>
                         <p className="text-xs font-medium text-gray-900 dark:text-gray-900 dark:text-white">
@@ -2720,7 +2720,7 @@ export default function IntegrationHub() {
             {webhooks.map((wh) => (
               <div
                 key={wh.id}
-                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -2808,7 +2808,7 @@ export default function IntegrationHub() {
               {countryConfig.scopes.map((s) => (
                 <span
                   key={s}
-                  className="text-[10px] px-2 py-0.5 bg-white dark:bg-white dark:bg-gray-800 rounded-full border border-purple-200 text-purple-600"
+                  className="text-[10px] px-2 py-0.5 bg-white dark:bg-gray-800 rounded-full border border-purple-200 text-purple-600"
                 >
                   {s}
                 </span>
@@ -2832,7 +2832,7 @@ export default function IntegrationHub() {
             {apiKeys.map((k) => (
               <div
                 key={k.id}
-                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -2898,7 +2898,7 @@ export default function IntegrationHub() {
               ].map((ep) => (
                 <div
                   key={ep}
-                  className="flex items-center gap-2 p-2 bg-white dark:bg-white dark:bg-gray-800 rounded"
+                  className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded"
                 >
                   <span
                     className={`font-bold ${ep.startsWith("GET") ? "text-green-600" : ep.startsWith("POST") ? "text-blue-600" : "text-purple-600"}`}
@@ -3010,7 +3010,7 @@ function AddWebhookForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="e.g. Invoice Sync"
         />
       </div>
@@ -3021,7 +3021,7 @@ function AddWebhookForm({
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="https://your-system.com/webhook"
         />
       </div>
@@ -3033,7 +3033,7 @@ function AddWebhookForm({
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="HMAC signature validation"
         />
       </div>
@@ -3050,7 +3050,7 @@ function AddWebhookForm({
                   p.includes(e) ? p.filter((x) => x !== e) : [...p, e],
                 )
               }
-              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedEvents.includes(e) ? "bg-indigo-600 text-gray-900 dark:text-white border-indigo-600" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedEvents.includes(e) ? "bg-indigo-600 text-gray-900 dark:text-white border-indigo-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
             >
               {e}
             </button>
@@ -3124,7 +3124,7 @@ function AddApiKeyForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="e.g. POS System Integration"
         />
       </div>
@@ -3141,7 +3141,7 @@ function AddApiKeyForm({
                   p.includes(s) ? p.filter((x) => x !== s) : [...p, s],
                 )
               }
-              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedScopes.includes(s) ? "bg-purple-600 text-gray-900 dark:text-white border-purple-600" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedScopes.includes(s) ? "bg-purple-600 text-gray-900 dark:text-white border-purple-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
             >
               {s}
             </button>

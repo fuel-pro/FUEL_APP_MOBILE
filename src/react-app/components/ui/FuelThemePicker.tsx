@@ -35,7 +35,7 @@ export default function FuelThemePicker() {
   };
 
   return (
-    <div className="w-full bg-white dark:bg-white dark:bg-gray-900/60 p-5 rounded-3xl border border-gray-200 dark:border-white/10 font-sans space-y-4">
+    <div className="w-full bg-white dark:bg-gray-900/60 p-5 rounded-3xl border border-gray-200 dark:border-white/10 font-sans space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

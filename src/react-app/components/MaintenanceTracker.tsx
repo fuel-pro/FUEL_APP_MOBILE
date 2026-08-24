@@ -526,7 +526,7 @@ export default function MaintenanceTracker() {
       )}
 
       {Object.keys(costByType).length > 0 && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
             Spend by Equipment Type
           </h4>
@@ -617,13 +617,13 @@ export default function MaintenanceTracker() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search equipment or technician..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Status</option>
           <option value="scheduled">Scheduled</option>
@@ -634,7 +634,7 @@ export default function MaintenanceTracker() {
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Priority</option>
           <option value="critical">Critical</option>
@@ -661,7 +661,7 @@ export default function MaintenanceTracker() {
           return (
             <div
               key={record.id}
-              className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
             >
               <div className="p-4">
                 <div className="flex items-start justify-between">
@@ -843,7 +843,7 @@ export default function MaintenanceTracker() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">

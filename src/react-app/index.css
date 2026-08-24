@@ -821,6 +821,71 @@ html.dark .fp-price-card .fp-price-swatch {
   vertical-align: middle;
 }
 
+/* ── Unified quick-action tile (replaces rainbow grid) ──────────────────
+   Standard card surface + subtle border; only the icon carries a semantic
+   color. Hover lifts the border to the accent. Works in light + dark. */
+.fp-quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius-md, 9px);
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+  cursor: pointer;
+}
+.fp-quick-action:hover {
+  border-color: #c5a059;
+  transform: translateY(-1px);
+}
+.fp-quick-action:active {
+  transform: translateY(0);
+}
+html.dark .fp-quick-action {
+  background: var(--bg-card, #111625);
+  border: 1px solid var(--border-light, #1f2635);
+}
+html.dark .fp-quick-action:hover {
+  background: var(--bg-card-raised, #141a2b);
+  border-color: var(--accent-gold, #c5a059);
+}
+
+/* ── Dark surface normalizer (UI FULL.txt reference rules) ──────────────
+   Enforce cohesive card surfaces site-wide in dark mode so no stark-white
+   panels or competing gradient banners leak through. Scoped to html.dark
+   so light mode is untouched. Catches the common card-container pattern
+   (rounded-xl + border + shadow-sm) that components use. */
+html.dark .bg-white.rounded-xl.border,
+html.dark .bg-white.rounded-xl.border-gray-200,
+html.dark .bg-white.rounded-xl.shadow-sm {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-light) !important;
+  color: var(--text-primary, #f9fafb);
+}
+/* KPI / metric values always white in dark mode (reference rule 5) */
+html.dark .fp-kpi-value,
+html.dark .text-2xl.font-bold,
+html.dark .text-3xl.font-bold,
+html.dark .text-4xl.font-bold {
+  color: #ffffff !important;
+}
+/* Headings inherit the primary text color in dark mode */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4 {
+  color: #f9fafb;
+}
+/* Chart canvas containers: ensure transparent bg so the card shows through */
+html.dark canvas {
+  background-color: transparent !important;
+}
+
 /* Utility classes */
 .container {
   max-width: 100%;

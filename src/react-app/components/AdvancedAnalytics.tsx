@@ -640,7 +640,7 @@ export default function AdvancedAnalytics() {
           {/* Empty State — new stations with no sales see a helpful CTA instead of
           a confusing zero-filled dashboard. */}
           {dataSource === "none" && !error && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
                 <BarChart3
                   size={32}
@@ -700,21 +700,21 @@ export default function AdvancedAnalytics() {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Total Revenue</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 {currencySymbol}
                 {formatNumber(totals.totalRevenue, 0)}
               </p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Avg Daily Sales</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {currencySymbol}
                 {formatNumber(totals.avgDaily, 0)}
               </p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">7-Day Growth</p>
               <p
                 className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
@@ -727,7 +727,7 @@ export default function AdvancedAnalytics() {
                 {Math.abs(growthData.growth7d).toFixed(1)}%
               </p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Transactions</p>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {formatNumber(totals.totalTransactions)}
@@ -736,7 +736,7 @@ export default function AdvancedAnalytics() {
           </div>
 
           {/* Sales Trend Chart */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
             <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-4">
               Daily Revenue Trend ({currencySymbol})
             </h3>
@@ -834,7 +834,7 @@ export default function AdvancedAnalytics() {
 
           {/* Payment Method Breakdown */}
           {Object.keys(paymentBreakdown).length > 0 && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <CreditCard size={16} className="text-indigo-500" /> Payment
                 Method Breakdown
@@ -897,7 +897,7 @@ export default function AdvancedAnalytics() {
 
           {/* Insights */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <Activity size={16} className="text-green-500" /> Key Insights
               </h3>
@@ -927,7 +927,7 @@ export default function AdvancedAnalytics() {
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <PieChart size={16} className="text-purple-500" /> Period Growth
               </h3>
@@ -980,7 +980,7 @@ export default function AdvancedAnalytics() {
 
           {/* Tank Levels */}
           {inventoryLevels.length > 0 && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Activity size={16} className="text-cyan-500" /> Current Tank
                 Levels

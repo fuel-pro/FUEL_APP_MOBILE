@@ -1598,7 +1598,7 @@ export default function ReportsCenter() {
                     ([desc, amount]: [string, any]) => (
                       <div
                         key={desc}
-                        className="flex justify-between items-center p-2 bg-white dark:bg-white dark:bg-gray-800 rounded"
+                        className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded"
                       >
                         <span className="text-sm">{desc}</span>
                         <span className="font-medium">
@@ -1666,7 +1666,7 @@ export default function ReportsCenter() {
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                 <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Revenue
                 </h6>
@@ -1675,7 +1675,7 @@ export default function ReportsCenter() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                 <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Expenses
                 </h6>
@@ -1684,7 +1684,7 @@ export default function ReportsCenter() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
                 <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Profit Margin
                 </h6>
@@ -1776,7 +1776,7 @@ export default function ReportsCenter() {
         {/* Detailed Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Revenue Breakdown */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <TrendingUp size={20} className="text-green-600" />
               Revenue Breakdown
@@ -1812,7 +1812,7 @@ export default function ReportsCenter() {
           </div>
 
           {/* Cost Breakdown */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <TrendingDown size={20} className="text-red-600" />
               Cost Breakdown
@@ -1841,7 +1841,7 @@ export default function ReportsCenter() {
         </div>
 
         {/* Operational Metrics */}
-        <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 p-6 rounded-lg">
+        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
           <h5 className="text-lg font-semibold mb-4">Operational Metrics</h5>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
@@ -1936,7 +1936,7 @@ export default function ReportsCenter() {
         {/* VAT Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Output VAT */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-700">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2 text-blue-700 dark:text-blue-300">
               <Receipt size={20} />
               OUTPUT VAT (Sales)
@@ -1967,7 +1967,7 @@ export default function ReportsCenter() {
           </div>
 
           {/* Input VAT */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-orange-200 dark:border-orange-700">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-orange-200 dark:border-orange-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2 text-orange-700 dark:text-orange-300">
               <Receipt size={20} />
               INPUT VAT (Purchases)
@@ -2095,7 +2095,7 @@ export default function ReportsCenter() {
           dailyData.map((day, index) => (
             <div
               key={index}
-              className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
             >
               {/* Day Header */}
               <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 flex items-center justify-between">
@@ -2327,7 +2327,7 @@ export default function ReportsCenter() {
         </div>
 
         {/* VAT Summary */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
           <h5 className="text-lg font-semibold mb-4">
             VAT Computation Summary
           </h5>
@@ -2356,7 +2356,7 @@ export default function ReportsCenter() {
         </div>
 
         {/* Profitability */}
-        <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 p-6 rounded-lg">
+        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
           <h5 className="text-lg font-semibold mb-4">Profitability Analysis</h5>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>

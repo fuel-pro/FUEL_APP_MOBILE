@@ -209,19 +209,19 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Events</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {stats.total}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Today</p>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {stats.today}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">This Week</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {stats.thisWeek}
@@ -257,13 +257,13 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
             placeholder="Search audit log..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
           />
         </div>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
+          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
           aria-label="Filter by category"
         >
           <option value="all">All Categories</option>
@@ -321,7 +321,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10">

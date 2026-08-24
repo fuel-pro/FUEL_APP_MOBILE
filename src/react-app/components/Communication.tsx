@@ -811,7 +811,7 @@ export default function Communication() {
         {filteredContacts.map((contact) => (
           <div
             key={contact.id}
-            className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+            className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">
@@ -953,7 +953,7 @@ export default function Communication() {
           return (
             <div
               key={message.id}
-              className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
+              className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
@@ -1042,7 +1042,7 @@ export default function Communication() {
         {templates.map((template) => (
           <div
             key={template.id}
-            className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
           >
             <div className="flex justify-between items-start mb-2">
               <div>
@@ -1156,7 +1156,7 @@ export default function Communication() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
           <p className="text-[10px] text-gray-500">Total Contacts</p>
           <p className="text-lg font-bold text-gray-900 dark:text-white">
             {contacts.length}
@@ -1191,7 +1191,7 @@ export default function Communication() {
       {/* Contact Modal */}
       {showContactModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">
               {selectedContact ? "Edit Contact" : "Add New Contact"}
             </h3>
@@ -1302,7 +1302,7 @@ export default function Communication() {
       {/* Message Modal */}
       {showMessageModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Send Message</h3>
 
             <div className="space-y-4">
@@ -1391,7 +1391,7 @@ export default function Communication() {
       {/* Template Modal */}
       {showTemplateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Create Message Template</h3>
 
             <div className="space-y-4">
@@ -1604,7 +1604,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* Default Sender Info */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <h4 className="font-semibold dark:text-gray-900 dark:text-white mb-3">
           Default Sender Info
         </h4>
@@ -1643,7 +1643,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* SMS Gateway */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Phone size={16} /> SMS Gateway
@@ -1697,7 +1697,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* Email */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Mail size={16} /> Email
@@ -1769,7 +1769,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* WhatsApp Business */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <MessageSquare size={16} /> WhatsApp Business

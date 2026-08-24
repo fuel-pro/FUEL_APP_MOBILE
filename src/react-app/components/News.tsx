@@ -652,7 +652,7 @@ export default function News() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search news by title, summary, source, or category..."
-              className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -748,7 +748,7 @@ export default function News() {
       {activeSubTab === "articles" && (
         <>
           {/* Social Media News Sources */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <Globe size={18} className="text-blue-600" />
               Social Media Fuel News
@@ -806,7 +806,7 @@ export default function News() {
                 return (
                   <div
                     key={item.id}
-                    className={`group bg-white dark:bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
+                    className={`group bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
                       isRead
                         ? "border-gray-200 dark:border-gray-700 opacity-70"
                         : isPriority
@@ -928,7 +928,7 @@ export default function News() {
           onClick={() => setSelectedItem(null)}
         >
           <div
-            className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 max-h-[80vh] overflow-auto">

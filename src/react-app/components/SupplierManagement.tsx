@@ -554,7 +554,7 @@ export default function SupplierManagement() {
           {/* Supplier Summary Stats */}
           {suppliers.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] text-gray-500">Total Suppliers</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white">
                   {suppliers.length}
@@ -598,13 +598,13 @@ export default function SupplierManagement() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search suppliers..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -641,7 +641,7 @@ export default function SupplierManagement() {
             {filteredSuppliers.map((supplier) => (
               <div
                 key={supplier.id}
-                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
               >
                 <div className="p-4">
                   <div className="flex items-start justify-between">
@@ -836,7 +836,7 @@ export default function SupplierManagement() {
             </button>
           </div>
 
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -952,7 +952,7 @@ export default function SupplierManagement() {
       {/* Supplier Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
@@ -1137,7 +1137,7 @@ export default function SupplierManagement() {
       {/* Order Form Modal */}
       {showOrderForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">

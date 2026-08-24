@@ -2106,7 +2106,7 @@ export default function PayrollSystem() {
           <div className="relative inline-block">
             <button
               onClick={() => setShowExportOptions(!showExportOptions)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 text-xs md:text-sm font-medium rounded-xl transition-all active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 text-xs md:text-sm font-medium rounded-xl transition-all active:scale-[0.98]"
             >
               <Download size={14} />
               <span className="hidden sm:inline">Export</span>
@@ -2125,7 +2125,7 @@ export default function PayrollSystem() {
               </svg>
             </button>
             {showExportOptions && (
-              <div className="absolute right-0 top-full mt-2 w-48 md:w-56 bg-white dark:bg-white dark:bg-gray-800 rounded-xl shadow-2xl shadow-black/20 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden origin-top-right animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-48 md:w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl shadow-black/20 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden origin-top-right animate-in fade-in slide-in-from-top-1 duration-150">
                 <button
                   onClick={exportToExcel}
                   className="w-full text-left px-2 md:px-4 py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 md:gap-3 first:rounded-t-lg text-xs md:text-base"
@@ -2207,7 +2207,7 @@ export default function PayrollSystem() {
 
       {/* Table */}
       <div className="overflow-x-auto max-h-[50vh] md:max-h-[60vh] overflow-y-auto">
-        <table className="w-full border-collapse bg-white dark:bg-white dark:bg-gray-800 rounded-lg shadow text-xs md:text-base">
+        <table className="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg shadow text-xs md:text-base">
           <thead>
             <tr className="bg-blue-900 text-gray-900 dark:text-white">
               <th className="p-1 md:p-3 text-left text-xs md:text-base">No.</th>
@@ -2929,7 +2929,7 @@ export default function PayrollSystem() {
         {filteredEmployees.map((employee) => (
           <div
             key={employee.id}
-            className="bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm"
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm"
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
@@ -3088,7 +3088,7 @@ export default function PayrollSystem() {
       {/* Employee Modal */}
       {showEmployeeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">
                 {editingEmployee ? "Edit Employee" : "Add Employee"}
@@ -3381,7 +3381,7 @@ export default function PayrollSystem() {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">Confirm Deletion</h3>
             <p className="mb-6">
               Are you sure you want to delete this employee? This action cannot
@@ -3414,7 +3414,7 @@ export default function PayrollSystem() {
       {/* SHA Modal */}
       {showShaModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">
               Edit SHA for All Employees
             </h3>
@@ -3460,7 +3460,7 @@ export default function PayrollSystem() {
       {/* NSSF Modal */}
       {showNssfModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">
               Edit NSSF for All Employees
             </h3>
@@ -3500,7 +3500,7 @@ export default function PayrollSystem() {
       {/* Column Name Modal */}
       {showColumnModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">Edit Column Name</h3>
             <div className="form-group">
               <label>Column Name</label>

@@ -233,7 +233,7 @@ export default function OnboardingTutorial(_: Props) {
   if (!started) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200 dark:border-gray-700">
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-gray-900 dark:text-white relative">
             <button
               onClick={close}
@@ -379,9 +379,9 @@ export default function OnboardingTutorial(_: Props) {
 
       {/* Step card */}
       <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center p-3 md:p-6 pointer-events-none">
-        <div className="pointer-events-auto bg-white dark:bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="pointer-events-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200 dark:border-gray-700">
           {/* Progress bar */}
-          <div className="h-1.5 bg-gray-100 dark:bg-white dark:bg-gray-800">
+          <div className="h-1.5 bg-gray-100 dark:bg-gray-800">
             <div
               className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-300"
               style={{ width: `${progress}%` }}

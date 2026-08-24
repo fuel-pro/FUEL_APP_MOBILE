@@ -473,13 +473,13 @@ export default function CreditManagement() {
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Credit Accounts</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 {accounts.length}
               </p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Total Limit</p>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {currencySymbol}
@@ -513,7 +513,7 @@ export default function CreditManagement() {
                 placeholder="Search credit accounts..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
               />
             </div>
             <button
@@ -525,7 +525,7 @@ export default function CreditManagement() {
           </div>
 
           {showAdd && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
               <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3">
                 New Credit Account
               </h3>
@@ -636,7 +636,7 @@ export default function CreditManagement() {
               return (
                 <div
                   key={acc.id}
-                  className={`bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm ${isOver || isDue ? "border-red-200 dark:border-red-800" : "border-gray-200 dark:border-gray-700"}`}
+                  className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm ${isOver || isDue ? "border-red-200 dark:border-red-800" : "border-gray-200 dark:border-gray-700"}`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -919,7 +919,7 @@ export default function CreditManagement() {
       {/* Delete confirmation modal */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="text-red-500" size={20} />
               <h3 className="text-lg font-semibold dark:text-gray-900 dark:text-white">

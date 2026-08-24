@@ -174,7 +174,7 @@ export default function Compliance() {
       </div>
 
       {/* Country Selector */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="w-full max-w-md">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
             Select Country
@@ -241,7 +241,7 @@ export default function Compliance() {
           return (
             <div
               key={section.id}
-              className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
             >
               <button
                 onClick={() =>
@@ -706,7 +706,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
           {config.bankSupport.map((b) => (
             <span
               key={b.code}
-              className="text-[10px] px-2 py-1 bg-white dark:bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+              className="text-[10px] px-2 py-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
             >
               {b.name}{" "}
               {b.supportsApi && <span className="text-green-500">API</span>}

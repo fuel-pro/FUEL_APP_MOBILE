@@ -527,25 +527,25 @@ export default function CustomerLoyalty() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Members</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {customers.length}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Points Issued</p>
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
             {formatNumber(totalPoints)}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Avg. Spend</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {currencySymbol} {formatNumber(avgSpend)}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Avg. Visits</p>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {customers.length > 0
@@ -571,13 +571,13 @@ export default function CustomerLoyalty() {
           placeholder="Search by name, phone, or vehicle..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
+          className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
         />
       </div>
 
       {/* Add Customer Modal */}
       {showAdd && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
             New Customer
           </h3>
@@ -821,7 +821,7 @@ export default function CustomerLoyalty() {
             </div>
           </div>
           {showRewards && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
                 Available Rewards
               </h3>
@@ -867,7 +867,7 @@ export default function CustomerLoyalty() {
       )}
 
       {/* Customers Table */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
@@ -1028,7 +1028,7 @@ export default function CustomerLoyalty() {
       {/* Edit Customer Modal */}
       {editingCustomer && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                 Edit Customer
@@ -1052,7 +1052,7 @@ export default function CustomerLoyalty() {
       {/* Delete Confirmation Modal */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-2">
               Delete Customer?
             </h3>

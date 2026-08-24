@@ -1041,7 +1041,7 @@ export default function MPESAAnalyzer() {
             className={`flex-1 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
               inputMethod === id
                 ? "bg-green-600 text-gray-900 dark:text-white shadow-lg"
-                : "bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50"
+                : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50"
             }`}
           >
             <Icon size={16} className="mx-auto mb-1" />
@@ -1065,7 +1065,7 @@ export default function MPESAAnalyzer() {
             className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
               processingMode === mode
                 ? "bg-indigo-600 text-gray-900 dark:text-white"
-                : "bg-gray-100 dark:bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 dark:text-gray-400"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-500 dark:text-gray-400"
             }`}
           >
             <Icon size={12} className="inline mr-1" />
@@ -1076,7 +1076,7 @@ export default function MPESAAnalyzer() {
 
       {/* ===== PDF UPLOAD INPUT ===== */}
       {inputMethod === "pdf" && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
           <input
             ref={fileInputRef}
             type="file"
@@ -1159,7 +1159,7 @@ export default function MPESAAnalyzer() {
 
       {/* ===== MANUAL TEXT PASTE INPUT ===== */}
       {inputMethod === "paste" && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-green-300 dark:border-green-700 p-6 space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-green-300 dark:border-green-700 p-6 space-y-4">
           <div className="flex items-start gap-3">
             <ClipboardPaste
               size={24}
@@ -1214,7 +1214,7 @@ export default function MPESAAnalyzer() {
 
       {/* ===== AI ONLY INPUT ===== */}
       {inputMethod === "ai" && (
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-purple-300 dark:border-purple-700 p-6 space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-purple-300 dark:border-purple-700 p-6 space-y-4">
           <div className="flex items-start gap-3">
             <Sparkles
               size={24}
@@ -1393,7 +1393,7 @@ export default function MPESAAnalyzer() {
       {showExcluded &&
         stats &&
         stats.cleanRevenue.excludedRecords.length > 0 && (
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-800 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-red-50 dark:bg-red-900/30">
@@ -1439,25 +1439,25 @@ export default function MPESAAnalyzer() {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">
               {stats.totalInflows.toLocaleString()}
             </p>
             <p className="text-[10px] text-gray-500">Total Inflows</p>
           </div>
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {currencySymbol} {formatNumber(stats.totalAmount, 0)}
             </p>
             <p className="text-[10px] text-gray-500">Total Received</p>
           </div>
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
               {stats.uniqueCustomers}
             </p>
             <p className="text-[10px] text-gray-500">Unique Customers</p>
           </div>
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
               {currencySymbol} {formatNumber(stats.averagePayment, 0)}
             </p>
@@ -1530,14 +1530,14 @@ export default function MPESAAnalyzer() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
                 {currencySymbol}{" "}
                 {formatNumber(stats.balanceAnalysis.recordedNet, 0)}
               </p>
               <p className="text-[9px] text-gray-500">Recorded Net (Paid In)</p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                 {currencySymbol}{" "}
                 {formatNumber(stats.balanceAnalysis.trueInflow, 0)}
@@ -1547,7 +1547,7 @@ export default function MPESAAnalyzer() {
               </p>
             </div>
             <div
-              className={`bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 border text-center ${
+              className={`bg-white dark:bg-gray-800 rounded-lg p-3 border text-center ${
                 stats.balanceAnalysis.hasUnrecorded
                   ? "border-amber-300 dark:border-amber-700"
                   : "border-gray-200 dark:border-gray-700"
@@ -1561,7 +1561,7 @@ export default function MPESAAnalyzer() {
               </p>
               <p className="text-[9px] text-gray-500">Unrecorded Inflow</p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
                 {Number.isFinite(stats.balanceAnalysis.discrepancy)
                   ? `${stats.balanceAnalysis.discrepancy.toFixed(1)}%`
@@ -1633,7 +1633,7 @@ export default function MPESAAnalyzer() {
                       setReceiptFilter(e.target.value.toUpperCase())
                     }
                     placeholder="UED9N3YOMC"
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono dark:text-gray-900 dark:text-white uppercase"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono dark:text-gray-900 dark:text-white uppercase"
                   />
                 </div>
                 <div>
@@ -1644,7 +1644,7 @@ export default function MPESAAnalyzer() {
                     type="datetime-local"
                     value={timeRangeStart}
                     onChange={(e) => setTimeRangeStart(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -1655,7 +1655,7 @@ export default function MPESAAnalyzer() {
                     type="datetime-local"
                     value={timeRangeEnd}
                     onChange={(e) => setTimeRangeEnd(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-gray-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -1715,7 +1715,7 @@ export default function MPESAAnalyzer() {
                 </button>
               </div>
               {rangeFilterTotal !== null && (
-                <div className="p-3 bg-white dark:bg-white dark:bg-gray-800 rounded-lg border border-indigo-200">
+                <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-indigo-200">
                   <p className="text-xs text-gray-500">Filtered Result:</p>
                   <p className="text-xl font-bold text-indigo-700 dark:text-indigo-400">
                     {currencySymbol} {formatNumber(rangeFilterTotal, 2)}
@@ -1753,7 +1753,7 @@ export default function MPESAAnalyzer() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search details, receipt, amount…"
-                className="px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white w-48"
+                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white w-48"
               />
               <button
                 onClick={exportCSV}
@@ -1773,7 +1773,7 @@ export default function MPESAAnalyzer() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10">

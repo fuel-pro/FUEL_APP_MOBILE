@@ -677,25 +677,25 @@ export default function FuelTypesManager() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                 {(fuelTypes || []).length}
               </p>
               <p className="text-[10px] text-gray-500">Fuel Types</p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {(fuelTypes || []).filter((f) => f.active).length}
               </p>
               <p className="text-[10px] text-gray-500">Active</p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {(fuelTypes || []).reduce((s, f) => s + (f.pumpCount || 0), 0)}
               </p>
               <p className="text-[10px] text-gray-500">Total Pumps</p>
             </div>
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {marginPercent(
                   fuelTypes.find((f) => f.id === "pms")?.price || 0,
@@ -732,7 +732,7 @@ export default function FuelTypesManager() {
 
           {/* Add Custom Form */}
           {showAddForm && (
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
                 <Settings size={18} className="text-amber-500" /> Add New Fuel
                 Type
@@ -889,7 +889,7 @@ export default function FuelTypesManager() {
                   return (
                     <div
                       key={preset.id}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
                     >
                       <div className="flex items-center gap-2">
                         <Fuel size={14} className="text-blue-500" />
@@ -930,7 +930,7 @@ export default function FuelTypesManager() {
               return (
                 <div
                   key={ft.id}
-                  className={`bg-white dark:bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
+                  className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
                 >
                   <div
                     className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -1155,7 +1155,7 @@ export default function FuelTypesManager() {
                                               e.target.value,
                                             );
                                           }}
-                                          className="flex-1 px-2 py-1 text-xs bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md dark:text-gray-900 dark:text-white"
+                                          className="flex-1 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md dark:text-gray-900 dark:text-white"
                                         />
                                         <span className="text-[9px] text-gray-500 dark:text-gray-400 font-mono">
                                           ID: {pump.id}

@@ -938,7 +938,7 @@ export default function SalesTracking() {
                     </button>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-amber-400 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-all"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-amber-400 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-all"
                     >
                       <Upload size={18} />
                       Choose File
@@ -1137,7 +1137,7 @@ export default function SalesTracking() {
                       {editableResult.pumps.map((pump, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg text-sm"
+                          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm"
                         >
                           <input
                             type="text"
@@ -1193,7 +1193,7 @@ export default function SalesTracking() {
                         {editableResult.expenses.map((expense, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg text-sm"
+                            className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm"
                           >
                             <input
                               type="text"
@@ -1239,7 +1239,7 @@ export default function SalesTracking() {
                   </button>
                   <button
                     onClick={resetScan}
-                    className="px-4 py-2.5 bg-gray-100 dark:bg-white dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-colors"
+                    className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-colors"
                   >
                     Cancel
                   </button>

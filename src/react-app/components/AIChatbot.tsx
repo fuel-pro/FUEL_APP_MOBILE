@@ -777,7 +777,7 @@ export default function AIChatbot() {
 
   return (
     <div
-      className={`fixed bottom-20 md:bottom-6 right-2 md:right-6 bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-600 z-50 transition-all duration-300 ${
+      className={`fixed bottom-20 md:bottom-6 right-2 md:right-6 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-600 z-50 transition-all duration-300 ${
         isMinimized
           ? "w-80 h-16"
           : "w-[calc(100vw-16px)] md:w-[420px] h-[70vh] md:h-[650px] max-h-[650px]"

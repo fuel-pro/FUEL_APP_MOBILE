@@ -491,7 +491,7 @@ export default function ExpenseTracker() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingDown size={14} className="text-red-500" />
             <span className="text-xs text-gray-500">Total Expenses</span>
@@ -500,7 +500,7 @@ export default function ExpenseTracker() {
             {currencySymbol} {(totalExpenses || 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle2 size={14} className="text-emerald-500" />
             <span className="text-xs text-gray-500">Approved</span>
@@ -509,7 +509,7 @@ export default function ExpenseTracker() {
             {currencySymbol} {(approvedTotal || 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle size={14} className="text-amber-500" />
             <span className="text-xs text-gray-500">Pending</span>
@@ -567,13 +567,13 @@ export default function ExpenseTracker() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search expenses..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Categories</option>
               {EXPENSE_CATEGORIES.map((c) => (
@@ -585,7 +585,7 @@ export default function ExpenseTracker() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -628,7 +628,7 @@ export default function ExpenseTracker() {
           </div>
 
           {/* Table */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -750,7 +750,7 @@ export default function ExpenseTracker() {
         /* Analytics View */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Monthly Budget Setter */}
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-500" /> Monthly
               Budget
@@ -786,7 +786,7 @@ export default function ExpenseTracker() {
               </p>
             )}
           </div>
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <PieChart size={14} className="text-amber-500" /> By Category
             </h3>
@@ -822,7 +822,7 @@ export default function ExpenseTracker() {
               )}
             </div>
           </div>
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-500" /> Summary
             </h3>
@@ -901,7 +901,7 @@ export default function ExpenseTracker() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">

@@ -630,7 +630,7 @@ export default function DataManager() {
     <div className="min-h-screen bg-gray-50 dark:bg-white dark:bg-gray-900 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
@@ -700,7 +700,7 @@ export default function DataManager() {
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Data Summary */}
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
               <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Data Summary
               </h2>
@@ -797,7 +797,7 @@ export default function DataManager() {
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
               <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Quick Actions
               </h2>
@@ -896,7 +896,7 @@ export default function DataManager() {
         {activeTab === "recovery" && <DataRecovery />}
 
         {activeTab === "backup" && (
-          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
             <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
               Backup Management
             </h2>
@@ -1003,7 +1003,7 @@ export default function DataManager() {
             {/* New Firebase Cloud Sync Panel */}
             <CloudSyncPanel />
 
-            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
               <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Local Cloud Sync
               </h2>

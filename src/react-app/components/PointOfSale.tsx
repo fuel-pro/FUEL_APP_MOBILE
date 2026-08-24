@@ -1291,7 +1291,7 @@ export default function PointOfSale() {
                     {cart.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg"
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                       >
                         <div className="flex-1">
                           <p className="font-medium">{item.name}</p>
@@ -1401,7 +1401,7 @@ export default function PointOfSale() {
 
                 {/* Loyalty Scanner Modal */}
                 {showLoyaltyScanner && (
-                  <div className="mb-3 p-3 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg">
+                  <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <p className="text-xs text-gray-500 mb-2">
                       Enter phone number or card number
                     </p>
@@ -1628,7 +1628,7 @@ export default function PointOfSale() {
                       .map((txn) => (
                         <div
                           key={txn.id}
-                          className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                           onClick={() => {
                             setCurrentTransaction(txn);
                             setShowReceipt(true);
@@ -1657,7 +1657,7 @@ export default function PointOfSale() {
           {/* Tax/KRA Settings Modal */}
           {showSettings && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
                   <h3 className="font-semibold">
                     {kenyaStation
@@ -1863,7 +1863,7 @@ export default function PointOfSale() {
           {/* Receipt Modal - KRA Compliant */}
           {showReceipt && currentTransaction && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
                   <h3 className="font-semibold">Tax Invoice / Receipt</h3>
                   <div className="flex gap-2">
