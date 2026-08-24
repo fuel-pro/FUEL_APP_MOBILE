@@ -10,9 +10,16 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 type Theme = "light" | "dark" | "system";
 
-/** The 6 soft pastel color themes from design spec (99.txt). */
+/** The color themes from design spec (99.txt) + the Framer dark aesthetic. */
 export type ColorTheme =
-  "royal" | "eucalyptus" | "mauve" | "ocean" | "peach" | "periwinkle" | "mint";
+  | "royal"
+  | "eucalyptus"
+  | "mauve"
+  | "ocean"
+  | "peach"
+  | "periwinkle"
+  | "mint"
+  | "framer";
 
 export interface ColorThemeMeta {
   id: ColorTheme;
@@ -63,6 +70,12 @@ export const COLOR_THEMES: ColorThemeMeta[] = [
     name: "Mint Lagoon",
     primaryHex: "#6DD5C4",
     tintHex: "#DFF6F0",
+  },
+  {
+    id: "framer",
+    name: "Framer Dark",
+    primaryHex: "#035bfe",
+    tintHex: "#0a0a0a",
   },
 ];
 

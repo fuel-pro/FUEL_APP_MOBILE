@@ -2940,6 +2940,123 @@ html[data-color-theme="mint"] {
 }
 
 /* ============================================================
+   FRAMER DARK THEME (dark-theme.css spec)
+   The sleek Framer-inspired aesthetic: ultra-dark #0a0a0a surfaces,
+   subtle low-contrast borders, blue #035bfe glowing accents, and
+   distinct text-opacity tiers. Selectable via the Theme picker as
+   "Framer Dark". Best experienced in dark mode.
+   ============================================================ */
+html[data-color-theme="framer"] {
+  --fp-accent: #035bfe;
+  --fp-accent-tint: #0a0a0a;
+  --fp-accent-rgb: 3, 91, 254;
+  --fp-accent-gradient: linear-gradient(135deg, #0a0a0a 0%, #035bfe 100%);
+}
+html.dark[data-color-theme="framer"] body {
+  background-color: #0a0a0a;
+  color: #ffffff;
+}
+html.dark[data-color-theme="framer"] body::before {
+  background: radial-gradient(
+    circle at center,
+    rgba(3, 91, 254, 0.06) 0%,
+    rgba(3, 91, 254, 0.02) 50%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+html.dark[data-color-theme="framer"] .card,
+html.dark[data-color-theme="framer"] .fp-halo-card,
+html.dark[data-color-theme="framer"]
+  [class*="bg-white"]:not(input):not(select):not(textarea) {
+  background-color: #121212 !important;
+  border-color: #222222 !important;
+  box-shadow:
+    0 0 0 1px #222222,
+    0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 4px 6px rgba(0, 0, 0, 0.3);
+}
+html.dark[data-color-theme="framer"] .card:hover,
+html.dark[data-color-theme="framer"] .fp-halo-card:hover {
+  border-color: #333333 !important;
+  background-color: #161616 !important;
+  box-shadow:
+    0 0 0 1px #333333,
+    0 1px 0 0 rgba(3, 91, 254, 0.08) inset,
+    0 8px 18px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(3, 91, 254, 0.1);
+}
+html.dark[data-color-theme="framer"]
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark[data-color-theme="framer"] select,
+html.dark[data-color-theme="framer"] textarea {
+  background-color: #161616 !important;
+  border-color: #222222 !important;
+  color: #ffffff !important;
+}
+html.dark[data-color-theme="framer"] input:focus,
+html.dark[data-color-theme="framer"] select:focus,
+html.dark[data-color-theme="framer"] textarea:focus {
+  border-color: #035bfe !important;
+  box-shadow:
+    0 0 0 3px rgba(3, 91, 254, 0.22),
+    0 1px 2px rgba(0, 0, 0, 0.3) inset !important;
+}
+html.dark[data-color-theme="framer"] input::placeholder,
+html.dark[data-color-theme="framer"] textarea::placeholder {
+  color: #71717a !important;
+}
+html.dark[data-color-theme="framer"] .fp-tab-nav .text-blue-400,
+html.dark[data-color-theme="framer"] .fp-tab-nav .text-blue-500,
+html.dark[data-color-theme="framer"] .fp-tab-nav .text-amber-400,
+html.dark[data-color-theme="framer"] .fp-tab-nav .text-amber-500 {
+  color: #035bfe !important;
+}
+html.dark[data-color-theme="framer"] .fp-tab-nav .border-blue-500,
+html.dark[data-color-theme="framer"] .fp-tab-nav .border-amber-500 {
+  border-color: #035bfe !important;
+}
+html.dark[data-color-theme="framer"] .fp-tab-nav .bg-blue-500,
+html.dark[data-color-theme="framer"] .fp-tab-nav .bg-amber-500 {
+  background-color: rgba(3, 91, 254, 0.12) !important;
+}
+html.dark[data-color-theme="framer"] nav .text-blue-400,
+html.dark[data-color-theme="framer"] nav .text-blue-500,
+html.dark[data-color-theme="framer"] nav .text-amber-400,
+html.dark[data-color-theme="framer"] nav .text-amber-500 {
+  color: #035bfe !important;
+}
+html.dark[data-color-theme="framer"] nav .bg-blue-100,
+html.dark[data-color-theme="framer"] nav .bg-blue-900\/40,
+html.dark[data-color-theme="framer"] nav .bg-amber-100,
+html.dark[data-color-theme="framer"] nav .bg-amber-900\/40 {
+  background-color: rgba(3, 91, 254, 0.12) !important;
+}
+html.dark[data-color-theme="framer"] .fp-btn-primary {
+  background-color: #035bfe !important;
+  color: #ffffff !important;
+  border: 1px solid #035bfe !important;
+}
+html.dark[data-color-theme="framer"] .fp-btn-primary:hover {
+  background-color: #2b73fe !important;
+  border-color: #2b73fe !important;
+  box-shadow: 0 8px 20px rgba(3, 91, 254, 0.3);
+}
+html.dark[data-color-theme="framer"] a {
+  color: #2b73fe;
+}
+html.dark[data-color-theme="framer"] a:hover {
+  color: #035bfe;
+}
+html.dark[data-color-theme="framer"] .fp-halo-card.accent-theme::before {
+  background: linear-gradient(
+    90deg,
+    #035bfe 0%,
+    rgba(3, 91, 254, 0.35) 100%
+  ) !important;
+}
+
+/* ============================================================
    VISIBLE THEME EFFECTS (design spec 99.txt)
    The accent variables above only drove a subtle hover glow.
    These rules make the active color theme visibly affect the most
