@@ -8474,3 +8474,14 @@ Single accent system preserved: gold (#c5a059) remains the ONE primary accent (c
 - `npx tsc --noEmit` 0 errors, prettier clean, `npm run build` 107 precache success (clean Vite cache).
 
 **SW note**: main alias uses the network-first SW (CACHE_VERSION `20260824T142513492Z`); hard reload (Ctrl+Shift+R) forces the new CSS immediately. Preview URL has no SW cache.
+
+## Session 2026-08-24 — Lost-commit audit (post UI-FULL fix)
+
+Audited all 68 remote branches for unmerged commits not on main (c56abf0):
+- fix/station-persistence-and-currency (6 commits, 511 behind): currency.ts detection + StationContext UUID-preservation. VERIFIED ALREADY ON MAIN in MORE complete form (main has readStationsJson user-scoped, normalizeCurrencyCode, getCountryFromLocation, companyData fallback, + identical cloudIds UUID-preservation block StationContext L1044-1052). Superseded.
+- qwen-code-6a328546 (2 commits, 146 behind): EnhancedPOS/EnhancedAnalyticsDashboard/EnhancedInventory/performance.ts/SyncService.ts. VERIFIED ALL ALREADY ON MAIN + wired into PointOfSale/AdvancedAnalytics/InventoryManagement. Only missing features/index.ts (dead barrel, removed). Superseded.
+- founder-username-login (7 commits, 406 behind): founder_credentials table (migration 018), loginFounder username resolution (founder-auth.ts L58 ilike), SecuritySection credential manager. VERIFIED ALL ON MAIN. Superseded.
+- identifying-security-vulnerabilities-8d289 (3 commits, 168 behind): removes exposed VITE_R2_SECRET_ACCESS_KEY + VITE_UPSTASH_REDIS_REST_TOKEN from cloudStorage.ts, routes through /api/r2/* + /api/cache/* endpoints that DONT exist on main. NOT auto-merged (requires creating serverless endpoints first). Env vars NOT set (no active leak). Documented.
+- 5 branches with 0 ahead: fully contained in main.
+- All other branches (200+ behind): old divergent snapshots, work already on main.
+Conclusion: NO new lost work needs merging.
