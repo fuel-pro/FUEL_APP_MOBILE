@@ -8328,3 +8328,42 @@ Documents.tsx legacy .card.user border-left #3b82f6 -> #c5a059.
 **Deploy state 2026-08-24 (commit caf8a2f)**: GitHub main pushed (synced with origin/main). Cloudflare Pages LIVE (preview https://35fb5dde.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev; both serve CSS chunk `index-DnMSuaLx.css` with the `dark:bg-gradient-to-r` header rule). Vercel BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets ~24h). Supabase: no schema changes. `npx tsc --noEmit` 0 errors, prettier clean, build success.
 
 **SW note**: main alias uses the network-first SW (CACHE_VERSION `20260824T090028169Z`) which fetches fresh index.html on every navigation; hard reload (Ctrl+Shift+R) forces the new CSS immediately. The preview URL has no SW cache.
+
+## Session 2026-08-24 — Cohesive dark-mode surface system (UI FULL.txt spec, DEPLOYED LIVE, commit 4b9c4cc)
+
+**Requirement**: /workspace/UI FULL.txt — fix the cluttered interface caused by uncontrolled chromatic noise (rainbow action grid, stark white panels, purple/pink/blue gradient banners, multi-color accents). Enforce a strict design-system token architecture: 3 elevation surfaces, single accent, color = status only.
+
+**Root causes fixed**:
+1. **Stark-white panels in dark mode (27 files)**: the broken pattern `bg-white dark:bg-white dark:bg-gray-800` — the redundant `dark:bg-white` won the CSS cascade (equal specificity, but Tailwind generates `bg-white` after `bg-gray-800`), so panels stayed stark white in dark mode. Blinding contrast spikes against the dark header.
+2. **Rainbow quick-action grid**: 12 tiles each used a full-bleed saturated background (bg-blue/green/purple/emerald/rose/pink/cyan/orange/indigo/teal/fuchsia-500) — competing backgrounds created chromatic noise.
+3. **Gradient banner cards**: Current Pump Prices used `from-blue-50 to-indigo-50 / dark:from-blue-900/20`; Tax & Statutory Rates used `from-purple-50 to-pink-50` — decorative color, not functional.
+4. **Blue section-header icons**: Quick Actions / Tank Levels / Charts headers used `text-blue-500` icons (blue as decoration).
+
+**Fixes** (commit 4b9c4cc):
+1. Removed the redundant `dark:bg-white` across all 27 files → `bg-white dark:bg-gray-800` (dark mode now correctly shows the gray-800 card surface).
+2. Dashboard quick-action grid: replaced 12 full-bleed rainbow tiles with a unified `.fp-quick-action` tile (standard card surface + subtle border; hover lifts border to the gold accent). Only the ICON carries a semantic color (amber/emerald/sky/rose) — no more competing backgrounds.
+3. Dashboard price card: blue gradient banner → neutral `bg-white dark:bg-gray-800/50` card; blue Globe icon + blue badge → amber/neutral.
+4. Dashboard tax card: purple/pink gradient banner → neutral card; purple FileText icon → amber.
+5. Dashboard section headers: blue icons (BarChart3/ShoppingCart/Fuel) → amber.
+6. New CSS surface-normalizer block (index.css, `html.dark` scoped):
+   - `.fp-quick-action` unified tile (light + dark variants).
+   - Catches stray `.bg-white.rounded-xl.border` card containers → maps to `var(--bg-card)` so no stark-white panels leak in dark mode.
+   - KPI/metric values (`.text-2xl/3xl/4xl.font-bold`, `.fp-kpi-value`) forced white in dark mode (reference rule 5).
+   - `h1`–`h4` inherit `#f9fafb` in dark mode.
+   - `canvas` bg transparent so chart cards show through.
+Single accent system preserved: gold (#c5a059) remains the ONE primary accent (consistent with the deployed color-theme picker); color = status only, never decoration.
+
+**Verification (live, Cloudflare preview 6846286c — no SW cache)**: logged in as founder QA (US station, USD). Pixel-measured the full dark-mode Dashboard:
+- Rainbow (saturated) pixels: **1.66%** (was the dominant visual before — now only the small semantic icons + status pills carry color, per spec).
+- Stark-white panel pixels: **0.23%** (effectively eliminated — was the blinding contrast issue).
+- Quick-action tile bg: uniform `rgb(17,22,37)` dark card surface across ALL 12 tiles (was 12 different saturated colors).
+- Quick-action tile click → navigates to Point of Sale tab correctly (no regression).
+
+**Deploy state 2026-08-24 (commit 4b9c4cc)**:
+- GitHub main: 4b9c4cc (pushed, synced with origin/main; 28 files changed, 329 ins / 254 del).
+- Cloudflare Pages: LIVE (preview https://6846286c.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev).
+- Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- `npx tsc --noEmit` 0 errors, prettier clean, `npm run build` 107 precache success (clean Vite cache).
+
+**SW note**: main alias uses the network-first SW (CACHE_VERSION `20260824T142513492Z`); hard reload (Ctrl+Shift+R) forces the new CSS immediately. Preview URL has no SW cache.
