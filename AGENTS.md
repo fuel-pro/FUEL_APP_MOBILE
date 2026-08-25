@@ -1,5 +1,87 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
 
+## Session 2026-08-25 — News tab: station preview + Live Channels/Live TV merge (DEPLOYED LIVE)
+
+**Task**: add a per-station preview (from tvgarden.world) to Live Channels/Live
+TV/Live Radio, and merge the redundant Live Channels + Live TV sub-tabs.
+
+### What ships (commits 14b8608 + c84a533 + 3fead1c, on main)
+
+- **News.tsx now has 3 sub-tabs**: News Articles / Live TV / Live Radio (the
+  "Live Channels" sub-tab was removed; Live TV absorbed its multi-category
+  config, so video categories Live TV|News|Movies|Sports|Entertainment|Music
+  TV|Kids|Documentaries|Education|Religious|Business|Radio live in ONE place).
+- **Station preview (LiveFeedEmbed.tsx `StationPreview` component)**: a "Preview
+  a station" dropdown (with "Search stations…" filter) lists only PLAYABLE
+  stations (YouTube-first sort). Selecting one overlays a native player on top
+  of the tvgarden browse iframe: YouTube → `youtube-nocookie.com/embed` iframe;
+  HLS (.m3u8) → hls.js on `<video>` (direct URL first, /api/hls-proxy CORS
+  fallback); radio direct stream (.mp3, etc.) → `<audio controls>`. Header
+  shows station name + country badge + kind badge (YouTube/HLS/Radio/Direct) +
+  green "PREVIEW" badge + a "Browse" (back) button; footer shows the previewing
+  station + "Live sync ✓". Down-dip detection: HLS hls.js ERROR_RECOVERY (2
+  attempts, manifest/level/frag timeouts 15s/15s/30s) then auto-advance to next
+  playable channel only on actual fatal errors (the auto-advance-on-timeout
+  anti-pattern from the old player was NOT carried over). Curated-known-good
+  channels (CURATED_GOOD_CHANNELS) are prepended so auto-advance always lands
+  on a working stream.
+- **The tvgarden browse iframe remains** the main player (Option 1 from TV.txt
+  — verify: tvgarden.world returns HTTP 200 with NO X-Frame-Options on all
+  variants, so it is iframe-embeddable; the provider curates only live
+  streams).
+
+### Two bugs found + fixed during verification (permanent fixes, not band-aids)
+
+1. **Radio "No stations found" (commit c84a533)**: the provider API OMITS
+   `stream_urls`/`youtube_urls` keys when empty (radio channels have no
+   `youtube_urls`), so the playable filter threw TypeError on
+   `.length of undefined` → catch → `setStations([])`. Fix: normalize all three
+   arrays at fetch time (`ch.stream_urls ?? []` etc.) + null-safe length
+   checks in the filter/sort/StationPreview. Verified: 4100 US radio stations
+   now render + audio preview works.
+2. **Sub-category selection was a no-op for the station list (commit
+   3fead1c, LiveStreamService.resolveChannelFetchParams)**: the function
+   returned the country fetch FIRST (`if (country && !showAll) return
+   countries/…`), so picking e.g. Movies → Action never changed the station
+   list — the ~1,435-station country dump always won. Fix: an explicitly
+   chosen sub-category (id ≠ "all") now fetches by its upstream category
+   BEFORE the country fallback. Verified: Movies → Action → 205 movie
+   stations; category remains country-wide only for "All …" selections.
+
+### Verified live on fuel-app-mobile.pages.dev (founder QA user)
+
+- Down to 3 sub-tabs ("Live Channels" gone); articles search "crude" filters;
+  bookmark toggles Saved 0→1 (cloud key `news_bookmarks`); "Mark all read"
+  Unread 8→0 (cloud key `news_read`).
+- Live TV: picker lists 1,435 US TV stations; search "ABC 13" filters; select
+  → YouTube preview (kind badge "YouTube", header/f.footer update); Browse
+  (back) works. HLS channel "21 Jump Street" → native `<video>` + hls.js
+  attaches (kind badge "HLS").
+- Live Radio: picker lists 4,100 US radio stations (post-fix); ".977 80s" →
+  `<audio controls>` preview (kind badge "Radio").
+- Category switch: Movies → Action lists exactly 205 stations; Surprise
+  (shuffle) lands on Music TV → All Music (42 stations) with Turkish content —
+  always a real upstream category id, never a dead stream.
+- Vercel production serves the same build (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app). Cloudflare preview eb022091 (fix part 1) +
+  3b7ca477 (fix part 2). tsc 0 errors; build success (109 precache).
+
+### Lost-commit audit (this session, BEFORE/AFTER per instruction)
+
+Audited all 71 remote branches. Top-12 ahead-of-main list is the usual old
+divergent snapshots (≤309 commits ahead/500+ behind — ALL superseded,
+documented in earlier AGENTS.md audits). Confirmed the two small ones:
+- `founder-username-login` (7 commits): founder username login IS on main
+  (`founder_credentials` table + `ilike("username", …)` resolution in
+  founder-auth.ts L56-60) — branch is documentation pending user authorization,
+  no lost code.
+- `fix/station-persistence-and-currency` (6 commits): currency detection +
+  local-UUID preservation — ALREADY on main in more complete form (verified
+  earlier sessions).
+- Newest relevant: `fix/cross-device-sync-initialization-fix` (309 ahead):
+  old divergent snapshot; cloudLoadCompleteRef pattern already on main.
+No lost work needs merging.
+
 ## Project Overview
 
 React + Vite + TypeScript SPA for fuel station management. Deployed at
