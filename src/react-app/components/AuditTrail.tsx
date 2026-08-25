@@ -208,7 +208,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Events</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">

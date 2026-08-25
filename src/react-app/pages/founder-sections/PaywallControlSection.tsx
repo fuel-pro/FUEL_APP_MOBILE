@@ -687,7 +687,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
                 key={c.id}
                 className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
               >
-                <div className="grid grid-cols-4 gap-3 items-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
                   <div>
                     <label className="text-[10px] text-gray-500">Code</label>
                     <input

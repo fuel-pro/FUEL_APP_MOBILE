@@ -129,7 +129,7 @@ export default function TrialAnalyticsSection({ logAudit }: Props) {
       </div>
 
       {/* Trial Status Card */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] text-gray-500">Trial Status</span>

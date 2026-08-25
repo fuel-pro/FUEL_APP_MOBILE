@@ -168,7 +168,7 @@ export default function PerformanceSection({ logAudit }: Props) {
       </div>
 
       {/* Core Web Vitals Cards */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {targets.map((t) => (
           <div
             key={t.metric}

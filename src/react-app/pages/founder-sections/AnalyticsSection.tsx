@@ -384,7 +384,7 @@ export default function AnalyticsSection({
           <h3 className="text-sm font-medium text-white mb-4">
             Audit Events Summary (from DB)
           </h3>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               {
                 label: "Total Events",
