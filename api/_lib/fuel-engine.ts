@@ -201,7 +201,7 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
     countryCode,
     region: addr.state || addr.region,
     town: addr.town || addr.city || addr.municipality,
-    county: addr.county || addr.state_district,
+    county: addr.county || addr.state_district || addr.state,
     raw: data.display_name || `${name}, ${country}`,
   };
 }
