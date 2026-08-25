@@ -1743,13 +1743,18 @@ export function getCuratedGoodChannels(
     return [];
   }
   // For news/business/general categories, prioritize the YouTube news channels
-  // first (most reliable). For movies/entertainment, prioritize the HLS test
-  // loops. For all others, return the full set.
+  // first (most reliable). For all OTHER content categories (movies, sports,
+  // kids...), only the neutral HLS test loops are prepended — prepending news
+  // channels to the Movies category made the auto-select land on a news
+  // channel, which is wrong for the category.
   const newsish: LiveCategory[] = ["news", "business", "general"];
   if (newsish.includes(category)) {
     return CURATED_GOOD_CHANNELS.filter((c) => c.youtube_urls.length > 0);
   }
-  return CURATED_GOOD_CHANNELS;
+  if (category === "tv") {
+    return CURATED_GOOD_CHANNELS;
+  }
+  return CURATED_GOOD_CHANNELS.filter((c) => c.stream_urls.length > 0);
 }
 
 /**
@@ -1861,6 +1866,15 @@ export function resolveChannelFetchParams(
   // upstream category — otherwise sub-category selection had no effect on
   // the station list and the country list of thousands always won).
   if (subDef && subCategoryId !== "all") {
+    return [{ mode, type: "categories", id: effectiveCat }];
+  }
+
+  // Content categories (news, movies, sports, music, kids...) are GLOBAL in
+  // the upstream API — there is no country+category combined endpoint, so
+  // the category ALWAYS outranks the country filter. Without this, picking
+  // "Movies" with a country selected returned ALL of that country's
+  // channels (news, kids, shopping...) instead of movie channels.
+  if (category !== "tv" && category !== "radio") {
     return [{ mode, type: "categories", id: effectiveCat }];
   }
 
