@@ -286,8 +286,34 @@ export async function GET(request: Request): Promise<Response> {
       );
     }
 
-    // No API keys configured — return a clean signal so the client can
-    // fall back to its own location-based static pricing
+    // No API keys configured — if the coords are in Kenya, serve the
+    // embedded published EPRA reference; otherwise return a clean signal so
+    // the client falls back to its own location-based static pricing.
+    const inKenya = lat >= -5 && lat <= 6 && lng >= 33.5 && lng <= 42.5;
+    if (inKenya) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: "geolocation-fallback",
+          timestamp: new Date().toISOString(),
+          coordinates: { latitude: lat, longitude: lng },
+          stationName: "National Average (Kenya EPRA)",
+          currency: "KES",
+          currencySymbol: "KSh",
+          unit: "litre",
+          prices: { gasoline: "214.03", diesel: "217.86", premium: "N/A" },
+          kerosenePrice: 191.38,
+          source: "EPRA Published Reference (15 Aug – 14 Sep 2026)",
+        }),
+        {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Cache-Control": "s-maxage=3600, stale-while-revalidate=600",
+          },
+        },
+      );
+    }
     return new Response(
       JSON.stringify({
         success: false,
@@ -303,10 +329,20 @@ export async function GET(request: Request): Promise<Response> {
   const apiKey = process.env.OILPRICE_API_KEY;
 
   if (!apiKey) {
+    // Serve the embedded published EPRA reference (Nairobi, current cycle)
+    // instead of an error — real gazetted prices, no external key needed.
+    // Keep in sync with api/_lib/fuel-engine.ts EPRA_KE_REFERENCE.
     return new Response(
       JSON.stringify({
-        success: false,
-        error: "OILPRICE_API_KEY not configured on the server",
+        success: true,
+        mode: "kenya-epra",
+        petrolPrice: 214.03,
+        dieselPrice: 217.86,
+        keroseneprice: 191.38,
+        currency: "KES",
+        currencySymbol: "KSh",
+        source: "EPRA Published Reference (15 Aug – 14 Sep 2026)",
+        fetchedAt: new Date().toISOString(),
       }),
       { status: 200, headers: corsHeaders },
     );

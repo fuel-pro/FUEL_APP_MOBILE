@@ -330,7 +330,9 @@ const USD_EXCHANGE_RATES: Record<string, number> = {
 /** Round to a "nice" number for display (avoid absurd decimals). */
 function niceRound(value: number): number {
   if (value < 1) return Math.round(value * 100) / 100;
-  if (value < 10) return Math.round(value * 10) / 10;
+  // Per-litre fuel prices are conventionally quoted to 2 decimals; rounding
+  // to 1 decimal here silently misstates the price (1.42 -> 1.40).
+  if (value < 10) return Math.round(value * 100) / 100;
   if (value < 100) return Math.round(value);
   if (value < 10000) return Math.round(value / 5) * 5;
   return Math.round(value / 100) * 100;
