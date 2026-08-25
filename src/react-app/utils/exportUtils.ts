@@ -3,11 +3,15 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { formatNumber } from "./formatUtils";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+} from "@/react-app/lib/currency";
 import {
   getFuelLabel,
   getFuelCode,
   normalizeFuelType,
+  getBasePrice,
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -236,6 +240,14 @@ function getPriceForType(
           typeof ft?.price === "number" &&
           ft.price > 0
         ) {
+          // Kenya-stale-price guard (mirrors the UI's useStationFuelTypes):
+          // on a non-Kenya station, a stored price >= 100/L is a leftover
+          // Kenya KSh value — use the country-appropriate fallback instead.
+          const cc = getDetectedCountryCode();
+          if (cc && cc !== "KE" && ft.price >= 100) {
+            const base = getBasePrice(type, cc);
+            if (base > 0 && base < 100) return base;
+          }
           return ft.price;
         }
       }
