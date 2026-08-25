@@ -130,12 +130,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         },
       });
     } else {
-      // Segment (.ts, .aac, .mp4, .key, etc.) — pass through with CORS
+      // Segment / MP3 / icecast / other binary content — STREAM THROUGH
+      // (pass the upstream body directly without buffering, so live streams
+      // like MP3 radio begin playing immediately instead of hanging forever
+      // while awaiting arrayBuffer() on an unbounded live stream).
       const upstreamHeaders = upstreamRes.headers;
       const responseHeaders: Record<string, string> = { ...corsHeaders };
 
       if (contentType) responseHeaders["Content-Type"] = contentType;
-      responseHeaders["Cache-Control"] = "public, max-age=3600";
       responseHeaders["Accept-Ranges"] = "bytes";
 
       const len = upstreamHeaders.get("content-length");
@@ -143,8 +145,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const range = upstreamHeaders.get("content-range");
       if (range) responseHeaders["Content-Range"] = range;
 
-      const buffer = await upstreamRes.arrayBuffer();
-      return new Response(buffer, {
+      // Pass the upstream stream through (no internal buffering).
+      return new Response(upstreamRes.body, {
         status: 200,
         headers: responseHeaders,
       });

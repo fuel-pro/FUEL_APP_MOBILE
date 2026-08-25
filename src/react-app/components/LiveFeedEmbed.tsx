@@ -29,6 +29,7 @@ import {
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
+import Hls from "hls.js";
 import {
   Tv,
   Radio,
@@ -141,9 +142,13 @@ function extractYouTubeId(url: string): string | null {
   return /^[a-zA-Z0-9_-]{11}$/.test(url.trim()) ? url.trim() : null;
 }
 
-/** Build the CORS-proxy URL for an HLS resource (same-origin on both hosts). */
+/** Build the CORS-proxy URL for an HLS resource (same-origin on both hosts).
+ * Uses the ABSOLUTE origin (window.location.origin) instead of a relative
+ * path — the relative form silently stalls hls.js's manifest fetch in some
+ * contexts. */
 function hlsProxyUrl(url: string): string {
-  return `/api/hls-proxy?url=${encodeURIComponent(url)}`;
+  const origin = window.location.origin;
+  return `${origin}/api/hls-proxy?url=${encodeURIComponent(url)}`;
 }
 
 /** A selectable HLS quality level (one rendition of the master playlist). */
@@ -206,7 +211,13 @@ function ChannelPlayer({
   useEffect(() => {
     if (ytId || !streamUrl) return;
     let destroyed = false;
-    let retriedViaProxy = false;
+    // PRIMARY loader for ~HLS (~.m3u8) sources is the same-origin
+    // /api/hls-proxy (CSP-compliant + defeats CORS). Direct fallback on fatal.
+    // ICECAST/MP3 and other non-HLS streams (mostly RADIO) must bypass hsl.js —
+    // feeding a non-HLS URL into hls.js guaranteed no playback (root cause of
+    // the radio dead-stream bug).
+    const isHlsSource = /\.m3u8(\?|#|$)/i.test(streamUrl);
+    let retriedDirectly = false;
     const mediaEl: HTMLVideoElement | HTMLAudioElement | null = isAudio
       ? audioRef.current
       : videoRef.current;
@@ -216,21 +227,35 @@ function ChannelPlayer({
     setCurrentLevel(-1);
     setBuffering(true);
 
+    if (!isHlsSource) {
+      // Native direct stream — unblocks MP3/icecast radio. ALSO routes through
+      // the same-origin proxy so the strict CSP (`media-src 'self' blob:`)
+      // can allow the media element to connect (CSP still blocks arbitrary
+      // external hosts even on <audio>/<video>).
+      mediaEl.src = hlsProxyUrl(streamUrl);
+      mediaEl.play().catch(() => {
+        /* autoplay blocked */
+      });
+      setBuffering(false);
+      return;
+    }
+
     const handleFatal = (
       Hls: typeof import("hls.js").default,
       hls: import("hls.js").default,
       data: { type?: string; fatal?: boolean },
     ) => {
       if (!data.fatal) return;
-      if (!retriedViaProxy) {
-        // Retry once via the CORS proxy (streams without CORS headers)
-        retriedViaProxy = true;
+      if (!retriedDirectly) {
+        // Retry once via the direct URL (proxy may have failed for another
+        // reason e.g. upstream needs unusual headers).
+        retriedDirectly = true;
         try {
           hls.destroy();
         } catch {
           /* */
         }
-        attachHls(Hls, hlsProxyUrl(streamUrl));
+        attachHls(Hls, streamUrl);
         return;
       }
       if (!destroyed) {
@@ -243,12 +268,10 @@ function ChannelPlayer({
 
     const attachHls = (Hls: typeof import("hls.js").default, url: string) => {
       const hls = new Hls({
-        enableWorker: true,
+        // Fetch on the main thread — reliable across all contexts.
+        enableWorker: false,
         lowLatencyMode: true,
-        // Never cap the rendition to the player size — allow 1080p+ streams
-        // to play at full resolution regardless of the on-screen box.
         capLevelToPlayerSize: false,
-        // Assume a fast link so ABR ramps to the top rendition immediately.
         abrEwmaDefaultEstimate: 10_000_000,
         manifestLoadingTimeOut: 15000,
         levelLoadingTimeOut: 15000,
@@ -259,7 +282,6 @@ function ChannelPlayer({
       hls.attachMedia(mediaEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (destroyed) return;
-        // Build the quality list sorted best-first (highest resolution).
         const lv: QualityLevel[] = hls.levels
           .map((l, i) => ({
             index: i,
@@ -268,7 +290,6 @@ function ChannelPlayer({
           }))
           .sort((a, b) => b.height - a.height || b.bitrate - a.bitrate);
         setLevels(lv);
-        // Default to the HIGHEST rendition (1080p+ preference per spec).
         const best = lv[0];
         if (best) {
           hls.currentLevel = best.index;
@@ -287,24 +308,17 @@ function ChannelPlayer({
       hls.on(Hls.Events.ERROR, (_e, data) => handleFatal(Hls, hls, data));
     };
 
-    (async () => {
-      try {
-        const Hls = (await import("hls.js")).default;
-        if (destroyed) return;
-        if (Hls.isSupported()) {
-          attachHls(Hls, streamUrl);
-          return;
-        }
-      } catch {
-        /* fall through to native */
-      }
+    if (Hls.isSupported()) {
+      // Same-origin proxy FIRST (CSP-compliant), direct fallback on fatal.
+      attachHls(Hls, hlsProxyUrl(streamUrl));
+    } else {
       // Safari native HLS / non-HLS direct stream (mp3/aac/icecast etc.)
-      mediaEl.src = streamUrl;
+      mediaEl.src = hlsProxyUrl(streamUrl);
       mediaEl.play().catch(() => {
         /* autoplay blocked */
       });
       setBuffering(false);
-    })();
+    }
 
     return () => {
       destroyed = true;

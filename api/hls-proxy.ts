@@ -17,6 +17,7 @@
  * /api/hls-proxy.
  */
 import type { IncomingMessage, ServerResponse } from "http";
+import { Readable } from "node:stream";
 
 interface ApiRequest extends IncomingMessage {
   query: Record<string, string | string[]>;
@@ -166,12 +167,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       res.setHeader("Cache-Control", "public, max-age=5");
       res.end(rewritten);
     } else {
-      // It's a segment (.ts, .aac, .mp4, .key, etc.) — pass through
-      const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+      // Binary content (segment, MP3, icecast, etc.) — STREAM THROUGH without
+      // buffering. Never use arrayBuffer/Buffer.from on the body — live MP3
+      // streams are unbounded and buffering them hangs the response forever
+      // (root cause of the silent radio dead-stream). Readable.fromWeb
+      // converts the WHATWG ReadableStream (fetch body in Node 22) to a
+      // Node Readable and pipes it through.
+      const body = upstreamRes.body as ReadableStream<Uint8Array> | null;
 
       // Forward the content-type so the player knows how to decode it
       if (contentType) res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=3600");
       // Allow range requests for seeking
       const len = upstreamRes.headers.get("content-length");
       if (len) res.setHeader("Content-Length", len);
@@ -179,7 +184,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (range) res.setHeader("Content-Range", range);
       res.setHeader("Accept-Ranges", "bytes");
 
-      res.end(buffer);
+      if (!body) {
+        res.end();
+        return;
+      }
+      Readable.fromWeb(body as ReadableStream).pipe(res);
     }
   } catch (err) {
     console.error("[hls-proxy] error:", err);
