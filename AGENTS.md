@@ -9149,3 +9149,47 @@ Implementation:
 Verified live (Cloudflare preview 9d886dd0): CC button renders in the player header on HLS channels; opening it lists the preferred-language picker (English/Spanish/Mandarin/Arabic/Korean visible) + No subtitle tracks in this stream for the HLS test loop (correct, that stream has no tracks); selecting Spanish persisted live_feed_subtitle_lang = es to the cloud cache; QA language reset to English after verification.
 
 Deploy state: GitHub main 6202720 (pushed, synced); Cloudflare Pages LIVE (9d886dd0 + main alias); Vercel production LIVE (prebuilt deploy aliased fuel-app-mobile.vercel.app); Supabase: no schema changes (uses existing app_kv live_feed_subtitle_lang key). tsc 0 errors, clean build, prettier pass.
+
+
+## Session 2026-08-25 — Live TV/Radio subtitle-track fix (DEPLOYED LIVE, commit d0f0556)
+
+**User report**: "No subtitle tracks in this stream" — toggling subtitles on a
+stream with no embedded tracks was a dead end, and the preferred-language
+picker was inert on YouTube channels.
+
+### Fixes (all in LiveFeedEmbed.tsx)
+1. **Helpful empty state** (was a dead 'No subtitle tracks in this stream'):
+   now explains "This stream has no embedded subtitles. Pick a preferred
+   language below — it will auto-activate on any stream or channel that
+   carries captions (including YouTube)."
+2. **YouTube caption language actually applies**: the YouTube iframe `key`
+   now includes `subtitleLang`, so changing the preferred language reloads
+   the iframe with the new `cc_lang_pref` (cc_load_policy=1 forces captions
+   ON). Previously the iframe never reloaded, so the language change did
+   nothing.
+3. **CC toggle never dead-ends**: new `onCaptionFallback` prop — toggling a
+   preferred subtitle language on a trackless HLS stream auto-advances to a
+   channel that DOES carry captions (prefers YouTube-embed channels via
+   cc_load_policy, then any HLS channel with an embedded subtitle track).
+   The parent wires it via the new `advanceToCaptionedChannel()` helper.
+
+### Deploy state 2026-08-25
+- GitHub main: d0f0556 pushed.
+- Cloudflare Pages: LIVE (preview 2697c83d + main alias). Live News chunk
+  `News-DflnEJ6F.js` contains the fix markers ("embedded subtitles",
+  "onCaptionFallback", "cc_load_policy").
+- Vercel: BLOCKED by api-deployments-free-per-day (100/100; GitHub
+  integration auto-deploys on quota reset ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
+
+### Honest limitation (documented)
+A stream that genuinely has NO captions anywhere can't synthesize them — but
+the toggle now always finds a captioned stream (YouTube channels always can
+via cc_load_policy) instead of dead-ending, and the empty state explains the
+fallback so the user is never stuck.
