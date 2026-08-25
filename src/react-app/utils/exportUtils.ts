@@ -106,13 +106,51 @@ export async function addLogoToPDF(
  *     keys (defense-in-depth: any fuel type that has pumps/prices/tank data).
  *  4. Fallback: ["petrol", "diesel"] ONLY if nothing is configured (first run).
  */
-function deriveFuelTypes(state: any): CanonicalFuelType[] {
+/**
+ * Refresh the fuel_types_config in-memory cache from cloud before generating
+ * a document, so the export ALWAYS uses the station's current registered fuel
+ * types + prices — even on the very first export after a fresh login on a new
+ * device (where the cache may not yet be populated).
+ */
+async function loadFuelTypesForExport(): Promise<Array<{
+  name?: string;
+  price?: number;
+  active?: boolean;
+}> | null> {
+  try {
+    const data =
+      await cloudStorageService.get<
+        Array<{ name?: string; price?: number; active?: boolean }>
+      >("fuel_types_config");
+    if (Array.isArray(data) && data.length > 0) return data;
+  } catch {
+    /* non-fatal — fall back to the in-memory cache below */
+  }
+  try {
+    const cached =
+      cloudStorageService.getCached<
+        Array<{ name?: string; price?: number; active?: boolean }>
+      >("fuel_types_config");
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function deriveFuelTypes(
+  state: any,
+  cloudFuelTypes?: any[] | null,
+): CanonicalFuelType[] {
   const set = new Set<CanonicalFuelType>();
-  if (Array.isArray(state.fuelTypes)) {
-    for (const ft of state.fuelTypes) {
-      const key =
-        typeof ft === "string" ? ft : ft?.canonical || ft?.type || ft?.name;
-      if (key) set.add(key as CanonicalFuelType);
+  for (const list of [cloudFuelTypes, state.fuelTypes]) {
+    if (Array.isArray(list)) {
+      for (const ft of list) {
+        const key =
+          typeof ft === "string" ? ft : ft?.canonical || ft?.type || ft?.name;
+        const canonical = key ? normalizeFuelType(String(key)) : null;
+        if (canonical) set.add(canonical);
+      }
     }
   }
   // FIX: pull the station's registered fuel types from the fuel_types_config
@@ -174,16 +212,21 @@ function getPumpsForType(state: any, type: CanonicalFuelType): any[] {
  * Get the price for a given fuel type from state. Petrol/diesel use the legacy
  * pmsPrice/agoPrice fields; all other types use fuelPricesByType[type].
  */
-function getPriceForType(state: any, type: CanonicalFuelType): number {
+function getPriceForType(
+  state: any,
+  type: CanonicalFuelType,
+  cloudFuelTypes?: any[] | null,
+): number {
   // Prefer the station's configured fuel_types_config price (the same source
-  // FuelTypesManager edits + the UI reads). Read synchronously from the
-  // cloudStorageService in-memory cache so the export uses the CURRENT
-  // configured price, not a stale persisted pmsPrice scalar.
+  // FuelTypesManager edits + the UI reads). Use the freshly-loaded list when
+  // the caller passed one (guaranteed current), else the in-memory cache.
   try {
     const cached =
-      cloudStorageService.getCached<
-        Array<{ name?: string; price?: number; active?: boolean }>
-      >("fuel_types_config");
+      Array.isArray(cloudFuelTypes) && cloudFuelTypes.length > 0
+        ? cloudFuelTypes
+        : cloudStorageService.getCached<
+            Array<{ name?: string; price?: number; active?: boolean }>
+          >("fuel_types_config");
     if (Array.isArray(cached)) {
       for (const ft of cached) {
         if (ft?.active === false) continue;
@@ -248,9 +291,14 @@ export async function exportDeliveryPDF(state: any) {
   doc.setFontSize(16);
   doc.setTextColor("#d4af37");
   doc.setFont("helvetica", "bold");
-  doc.text(state.companyData.name || "Company Name", 105, y, {
-    align: "center",
-  });
+  doc.text(
+    state.companyData?.name || state.companyData?.companyName || "Fuel Station",
+    105,
+    y,
+    {
+      align: "center",
+    },
+  );
 
   // Reset to normal text color and size
   doc.setTextColor("#1a3a5f");
@@ -271,10 +319,11 @@ export async function exportDeliveryPDF(state: any) {
   y += 8;
 
   // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     doc.text(
       `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
       14,
@@ -335,24 +384,29 @@ export async function exportDeliveryPDF(state: any) {
   doc.save(`Delivery_Report_${state.deliveredTo || "Client"}.pdf`);
 }
 
-export function exportDeliveryExcel(state: any) {
+export async function exportDeliveryExcel(state: any) {
   const wb = XLSX.utils.book_new();
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
   const priceRows: string[] = [];
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     priceRows.push(
       `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
     );
   }
 
   const ws_data = [
-    [state.companyData.name || "Company Name"],
+    [
+      state.companyData?.name ||
+        state.companyData?.companyName ||
+        "Fuel Station",
+    ],
     ["Fuel Delivery Report"],
     [],
     [`FUEL DELIVERED TO: ${state.deliveredTo || "Client"}`],
@@ -391,19 +445,20 @@ export function exportDeliveryExcel(state: any) {
   XLSX.writeFile(wb, `Delivery_Report_${state.deliveredTo || "Client"}.xlsx`);
 }
 
-export function exportDeliveryTXT(state: any) {
+export async function exportDeliveryTXT(state: any) {
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
-  let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Delivery Report\n\n`;
+  let txt = `=== ${state.companyData?.name || state.companyData?.companyName || "Fuel Station"} ===\nFuel Delivery Report\n\n`;
   txt += `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\n`;
   txt += `TOTAL ORDER: ${state.totalOrder || "N/A"} Litres\n`;
   txt += `YEAR: ${state.deliveryYear || new Date().getFullYear()}\n`;
 
   // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     txt += `${label} Price: ${currencySymbol} ${formatNumber(price)} /L\n`;
   }
   txt += "\n";
@@ -449,9 +504,14 @@ export async function exportDebtPDF(state: any) {
   doc.setFontSize(16);
   doc.setTextColor("#d4af37");
   doc.setFont("helvetica", "bold");
-  doc.text(state.companyData.name || "Company Name", 105, y, {
-    align: "center",
-  });
+  doc.text(
+    state.companyData?.name || state.companyData?.companyName || "Fuel Station",
+    105,
+    y,
+    {
+      align: "center",
+    },
+  );
   doc.setTextColor("#1a3a5f");
 
   y += 10;
@@ -482,7 +542,7 @@ export async function exportDebtPDF(state: any) {
     `Best regards,`,
     `${data.manager}`,
     `Manager`,
-    `${state.companyData.name || "Company Name"}`,
+    `${state.companyData?.name || state.companyData?.companyName || "Fuel Station"}`,
     ``,
     `P.O. Box: ${state.companyData.poBox || "N/A"}`,
     `CONTACTS: ${state.companyData.contacts || "N/A"}`,
@@ -524,7 +584,9 @@ export function exportDebtExcel(state: any) {
     ["Best regards,"],
     [`${data.manager}`],
     ["Manager"],
-    [`${state.companyData.name || "Company Name"}`],
+    [
+      `${state.companyData?.name || state.companyData?.companyName || "Fuel Station"}`,
+    ],
     [],
     [`P.O. Box: ${state.companyData.poBox || "N/A"}`],
     [`CONTACTS: ${state.companyData.contacts || "N/A"}`],
@@ -537,7 +599,8 @@ export function exportDebtExcel(state: any) {
 
 export function exportDebtTXT(state: any) {
   const data = state.debtData;
-  const companyName = state.companyData.name || "Company Name";
+  const companyName =
+    state.companyData?.name || state.companyData?.companyName || "Fuel Station";
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const txt = `=== ${companyName} ===\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${companyName}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
@@ -559,9 +622,14 @@ export async function exportSalesPDF(state: any) {
   doc.setFontSize(16);
   doc.setTextColor("#d4af37");
   doc.setFont("helvetica", "bold");
-  doc.text(state.companyData.name || "Company Name", 105, y, {
-    align: "center",
-  });
+  doc.text(
+    state.companyData?.name || state.companyData?.companyName || "Fuel Station",
+    105,
+    y,
+    {
+      align: "center",
+    },
+  );
   doc.setTextColor("#1a3a5f");
 
   y += 10;
@@ -579,7 +647,8 @@ export async function exportSalesPDF(state: any) {
   // DYNAMIC fuel-type pump tables — iterates the station's configured fuel
   // types (Kerosene, V-Power, LPG, …) instead of the legacy hardcoded
   // Petrol (PMS) + Diesel (AGO). A station with N fuel types gets N tables.
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
   for (const ft of fuelTypes) {
     const pumps = getPumpsForType(state, ft);
     if (!pumps || pumps.length === 0) continue;
@@ -688,7 +757,7 @@ export async function exportSalesPDF(state: any) {
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
     const code = getFuelCode(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     doc.text(
       `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L`,
       20,
@@ -744,13 +813,14 @@ export async function exportSalesPDF(state: any) {
   doc.save("Fuel_Sales_Report.pdf");
 }
 
-export function exportSalesExcel(state: any) {
+export async function exportSalesExcel(state: any) {
   const wb = XLSX.utils.book_new();
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   // DYNAMIC: one sheet per configured fuel type (was hardcoded Petrol/Diesel).
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
   for (const ft of fuelTypes) {
     const pumps = getPumpsForType(state, ft);
     if (!pumps || pumps.length === 0) continue;
@@ -824,7 +894,7 @@ export function exportSalesExcel(state: any) {
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
     const code = getFuelCode(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     priceRows.push([label, code, price]);
   }
   const priceWS = XLSX.utils.aoa_to_sheet(priceRows);
@@ -856,7 +926,9 @@ export function exportSalesExcel(state: any) {
   const footerData = [
     ["Report Information"],
     [],
-    [`Company: ${state.companyData.name || "Company Name"}`],
+    [
+      `Company: ${state.companyData?.name || state.companyData?.companyName || "Fuel Station"}`,
+    ],
     [`Generated: ${new Date().toLocaleDateString()}`],
   ];
   const footerWS = XLSX.utils.aoa_to_sheet(footerData);
@@ -865,14 +937,15 @@ export function exportSalesExcel(state: any) {
   XLSX.writeFile(wb, "Fuel_Sales_Report.xlsx");
 }
 
-export function exportSalesTXT(state: any) {
+export async function exportSalesTXT(state: any) {
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
-  let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Sales Report\n\n`;
+  let txt = `=== ${state.companyData?.name || state.companyData?.companyName || "Fuel Station"} ===\nFuel Sales Report\n\n`;
   txt += `Date: ${state.salesDate}\nShift: ${state.shift}\n\n`;
 
   // DYNAMIC: tank inventory + pricing + pumps per configured fuel type.
-  const fuelTypes = deriveFuelTypes(state);
+  const cloudFuelTypes = await loadFuelTypesForExport();
+  const fuelTypes = deriveFuelTypes(state, cloudFuelTypes);
 
   txt += `Fuel Tank Inventory:\n`;
   for (const ft of fuelTypes) {
@@ -887,7 +960,7 @@ export function exportSalesTXT(state: any) {
   for (const ft of fuelTypes) {
     const label = getFuelLabel(ft);
     const code = getFuelCode(ft);
-    const price = getPriceForType(state, ft);
+    const price = getPriceForType(state, ft, cloudFuelTypes);
     txt += `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L\n`;
   }
   txt += "\n";
