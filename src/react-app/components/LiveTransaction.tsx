@@ -1140,7 +1140,7 @@ export default function LiveTransaction() {
                 <div className="font-medium text-gray-900 dark:text-white pr-16">
                   {source.source_name}
                 </div>
-                <div className="text-sm text-gray-300">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
                   {source.source_type.replace("_", " ").toUpperCase()}:{" "}
                   {source.identifier}
                 </div>
@@ -1154,7 +1154,7 @@ export default function LiveTransaction() {
                     className={`w-2 h-2 rounded-full ${source.is_active ? "bg-green-500" : "bg-gray-500"}`}
                   ></div>
                   <span
-                    className={`text-xs ${source.is_active ? "text-green-400" : "text-gray-500 dark:text-gray-400"}`}
+                    className={`text-xs ${source.is_active ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}
                   >
                     {source.is_active ? "Active" : "Inactive"}
                   </span>
