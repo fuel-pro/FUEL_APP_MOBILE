@@ -52,6 +52,8 @@ import {
   Upload,
   Info,
   Globe,
+  Package,
+  Fuel,
   Clock,
   DollarSign,
   Tag,
@@ -530,6 +532,9 @@ export default function GeneralSettings() {
       { id: "general", label: "General", icon: Settings },
       { id: "company", label: "Company Profile", icon: Building },
       { id: "tabs", label: "Tab Manager", icon: LayoutGrid },
+      { id: "modules", label: "Module Behavior", icon: Monitor },
+      { id: "api", label: "API & Backend", icon: Globe },
+      { id: "deployment", label: "Deployment", icon: Cloud },
       { id: "features", label: "Features", icon: ToggleLeft },
       { id: "appearance", label: "Appearance", icon: Palette },
       { id: "finance", label: "Tax & Finance", icon: Receipt },
@@ -665,6 +670,22 @@ export default function GeneralSettings() {
             show={show}
             isOwner={isOwner}
           />
+        )}
+        {activeSubTab === "modules" && (
+          <ModuleBehaviorTab
+            config={config}
+            update={update}
+            updatePrefs={updatePrefs}
+            prefs={prefs}
+            show={show}
+            isOwner={isOwner}
+          />
+        )}
+        {activeSubTab === "api" && (
+          <ApiBackendTab config={config} update={update} show={show} />
+        )}
+        {activeSubTab === "deployment" && (
+          <DeploymentTab config={config} show={show} />
         )}
         {activeSubTab === "features" && (
           <FeaturesTab featureFlags={featureFlags} show={show} />
@@ -3127,6 +3148,7 @@ function SystemTab({
 // ═══════════════════════════════════════════════════════════════════════════
 function SectionCard({
   title,
+
   icon: Icon,
   children,
 }: {
@@ -3143,6 +3165,723 @@ function SectionCard({
         </h4>
       </div>
       <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUB-TAB: MODULE BEHAVIOR — per-tab functional tunables (admin/owner)
+// ═══════════════════════════════════════════════════════════════════════════
+function ModuleBehaviorTab({
+  config,
+  update,
+  prefs,
+  updatePrefs,
+  show,
+  isOwner,
+}: {
+  config: GeneralSettingsConfig;
+  update: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+  ) => void;
+  prefs: UserPreferences;
+  updatePrefs: (patch: Partial<UserPreferences>) => Promise<void>;
+  show: (msg: string, type?: "success" | "error" | "info") => void;
+  isOwner: boolean;
+}) {
+  const setAuto = (key: string, value: boolean, label: string) => {
+    updatePrefs({
+      automation: { ...prefs.automation, [key]: value },
+    });
+    show(`${label}: ${value ? "enabled" : "disabled"}`, "success");
+  };
+
+  return (
+    <div className="p-5 space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Module Behavior
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Per-tab functional controls. Changes sync across all devices
+          instantly.
+        </p>
+      </div>
+
+      <SectionCard title="Point of Sale" icon={DollarSign}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.autoApplyLoyaltyDiscounts ?? false}
+            onChange={(v) =>
+              setAuto("autoApplyLoyaltyDiscounts", v, "Loyalty discounts")
+            }
+            label="Auto-Apply Loyalty Discounts"
+            description="Automatically apply loyalty points as a discount at checkout"
+          />
+          <Toggle
+            checked={prefs.automation?.autoOpenCashDrawer ?? false}
+            onChange={(v) =>
+              setAuto("autoOpenCashDrawer", v, "Cash drawer auto-open")
+            }
+            label="Auto-Open Cash Drawer"
+            description="Open the cash drawer on every cash sale (POS hardware)"
+          />
+          <Toggle
+            checked={prefs.automation?.autoPrintReceipt ?? false}
+            onChange={(v) =>
+              setAuto("autoPrintReceipt", v, "Receipt auto-print")
+            }
+            label="Auto-Print Receipt"
+            description="Print the receipt immediately after every sale completes"
+          />
+          <Toggle
+            checked={prefs.automation?.showShiftReminderOnClose ?? true}
+            onChange={(v) =>
+              setAuto("showShiftReminderOnClose", v, "Shift close reminder")
+            }
+            label="Shift Close Reminder"
+            description="Prompt the cashier to close the shift at end of day"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Sales Tracking" icon={Tag}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.autoCalculateDipDifferences ?? true}
+            onChange={(v) =>
+              setAuto(
+                "autoCalculateDipDifferences",
+                v,
+                "Dip-difference auto-calc",
+              )
+            }
+            label="Auto-Calculate Dip Differences"
+            description="Auto-compute stock variance from tank dip readings"
+          />
+          <Toggle
+            checked={prefs.automation?.autoFlagShortDeliveries ?? true}
+            onChange={(v) =>
+              setAuto("autoFlagShortDeliveries", v, "Short-delivery flags")
+            }
+            label="Auto-Flag Short Deliveries"
+            description="Flag deliveries with less quantity than invoiced"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Invoice & Billing" icon={FileText}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Invoice Prefix">
+              <input
+                className={inputClass}
+                value={config.invoicePrefix}
+                onChange={(e) => update("invoicePrefix", e.target.value)}
+                disabled={!isOwner}
+                placeholder="INV"
+              />
+            </Field>
+            <Field label="Next Invoice Number">
+              <input
+                type="number"
+                className={inputClass}
+                value={config.invoiceNextNumber}
+                onChange={(e) =>
+                  update("invoiceNextNumber", parseInt(e.target.value) || 1)
+                }
+                disabled={!isOwner}
+                min={1}
+              />
+            </Field>
+          </div>
+          <Field label="Receipt Header">
+            <input
+              className={inputClass}
+              value={config.receiptHeader}
+              onChange={(e) => update("receiptHeader", e.target.value)}
+              disabled={!isOwner}
+              placeholder="FuelPro Station"
+            />
+          </Field>
+          <Field label="Receipt Footer">
+            <input
+              className={inputClass}
+              value={config.receiptFooter}
+              onChange={(e) => update("receiptFooter", e.target.value)}
+              disabled={!isOwner}
+              placeholder="Thank you for your business!"
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="News & Live TV" icon={Monitor}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.showLiveTVTab ?? true}
+            onChange={(v) => setAuto("showLiveTVTab", v, "Live TV tab")}
+            label="Live TV Tab"
+            description="Show the Live TV sub-tab in the News section"
+          />
+          <Toggle
+            checked={prefs.automation?.showLiveRadioTab ?? true}
+            onChange={(v) => setAuto("showLiveRadioTab", v, "Live Radio tab")}
+            label="Live Radio Tab"
+            description="Show the Live Radio sub-tab in the News section"
+          />
+          <Toggle
+            checked={prefs.automation?.autoPlayLiveStreams ?? true}
+            onChange={(v) =>
+              setAuto("autoPlayLiveStreams", v, "Auto-play live streams")
+            }
+            label="Auto-Play Streams"
+            description="Automatically play the first available stream when a channel is selected"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Team Manager" icon={Shield}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.requireInviteCodeApproval ?? true}
+            onChange={(v) =>
+              setAuto("requireInviteCodeApproval", v, "Invite code approval")
+            }
+            label="Require Invite Code Approval"
+            description="Owner must approve each access-code login before the member gets in"
+          />
+          <Toggle
+            checked={prefs.automation?.autoDeactivateExpiredMembers ?? true}
+            onChange={(v) =>
+              setAuto(
+                "autoDeactivateExpiredMembers",
+                v,
+                "Auto-deactivate expired members",
+              )
+            }
+            label="Auto-Deactivate Expired Members"
+            description="Automatically disable members whose invite/access period has ended"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Stock Management" icon={Package}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.autoCreateProductOnDelivery ?? false}
+            onChange={(v) =>
+              setAuto(
+                "autoCreateProductOnDelivery",
+                v,
+                "Auto-create products on delivery",
+              )
+            }
+            label="Auto-Create Product on Delivery"
+            description="Create a stock product entry automatically when a delivery arrives"
+          />
+          <Toggle
+            checked={prefs.automation?.showNegativeStockWarning ?? true}
+            onChange={(v) =>
+              setAuto("showNegativeStockWarning", v, "Negative-stock warning")
+            }
+            label="Negative Stock Warning"
+            description="Alert when stock would go below zero after a sale"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Fuel Price Engine" icon={Fuel}>
+        <div className="space-y-4">
+          <Toggle
+            checked={prefs.automation?.autoUpdateFuelPrices ?? false}
+            onChange={(v) =>
+              setAuto("autoUpdateFuelPrices", v, "Auto-update fuel prices")
+            }
+            label="Auto-Update Fuel Prices"
+            description="Sync fuel prices from the regional price feed automatically"
+          />
+          <Toggle
+            checked={prefs.automation?.showEpraReference ?? true}
+            onChange={(v) => setAuto("showEpraReference", v, "EPRA reference")}
+            label="Show EPRA Reference"
+            description="Display the EPRA published reference price alongside yours"
+          />
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUB-TAB: API & BACKEND — endpoint config + live status + health checks
+// ═══════════════════════════════════════════════════════════════════════════
+function ApiBackendTab({
+  config,
+  update,
+  show,
+}: {
+  config: GeneralSettingsConfig;
+  update: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+  ) => void;
+  show: (msg: string, type?: "success" | "error" | "info") => void;
+}) {
+  const [endpoints, setEndpoints] = useState<
+    { name: string; url: string; status: "ok" | "error" | "checking" }[]
+  >([]);
+  const [testing, setTesting] = useState(false);
+
+  const testEndpoint = useCallback(async (url: string, name: string) => {
+    setEndpoints((s) => [
+      ...s.filter((e) => e.name !== name),
+      { name, url, status: "checking" },
+    ]);
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      setEndpoints((s) =>
+        s.map((e) =>
+          e.name === name
+            ? { ...e, status: res.ok ? ("ok" as const) : ("error" as const) }
+            : e,
+        ),
+      );
+    } catch {
+      setEndpoints((s) =>
+        s.map((e) =>
+          e.name === name ? { ...e, status: "error" as const } : e,
+        ),
+      );
+    }
+  }, []);
+
+  const testAll = useCallback(async () => {
+    setTesting(true);
+    const checks = [
+      {
+        name: "Supabase API",
+        url: "https://ojsscjwatikixlpshmub.supabase.co/rest/v1/",
+      },
+      { name: "Cloudflare Pages", url: "https://fuel-app-mobile.pages.dev/" },
+      { name: "Vercel", url: "https://fuel-app-mobile.vercel.app/" },
+      {
+        name: "Live Channels",
+        url: "https://fuel-app-mobile.pages.dev/api/live-channels?mode=tv&type=categories&id=news",
+      },
+      {
+        name: "HLS Proxy",
+        url: "https://fuel-app-mobile.pages.dev/api/hls-proxy",
+      },
+    ];
+    for (const c of checks) await testEndpoint(c.url, c.name);
+    setTesting(false);
+    show("All endpoints tested", "success");
+  }, [testEndpoint, show]);
+
+  useEffect(() => {
+    testAll();
+  }, []);
+
+  const customApiBase = useMemo(() => {
+    return window.location.origin;
+  }, []);
+
+  return (
+    <div className="p-5 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            API & Backend
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Backend endpoints, live health checks, and integration references.
+          </p>
+        </div>
+        <button
+          onClick={testAll}
+          disabled={testing}
+          className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={testing ? "animate-spin" : ""} />
+          Test All
+        </button>
+      </div>
+
+      <SectionCard title="Live Endpoint Status" icon={Activity}>
+        <div className="space-y-2">
+          {endpoints.length === 0 ? (
+            <p className="text-xs text-gray-500">Running health checks…</p>
+          ) : (
+            endpoints.map((e) => (
+              <div
+                key={e.name}
+                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {e.name}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{e.url}</p>
+                </div>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                    e.status === "ok"
+                      ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                      : e.status === "error"
+                        ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+                        : "bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300"
+                  }`}
+                >
+                  {e.status === "ok"
+                    ? "OK"
+                    : e.status === "error"
+                      ? "Error"
+                      : "Checking…"}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Current Deployment Origin" icon={Globe}>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <Globe size={16} className="text-blue-500 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {customApiBase}
+            </p>
+            <p className="text-xs text-gray-400">
+              This is the host the browser is talking to right now. All API
+              calls are relative to this origin (same-origin CORS-free).
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Integration Documentation" icon={FileText}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[
+            {
+              name: "Supabase REST API",
+              url: "https://supabase.com/docs/guides/api",
+              desc: "RESTful access to all database tables",
+            },
+            {
+              name: "Supabase Realtime",
+              url: "https://supabase.com/docs/guides/realtime",
+              desc: "Cross-device WebSocket subscriptions",
+            },
+            {
+              name: "PostgREST",
+              url: "https://postgrest.org/en/stable/",
+              desc: "Auto-generated REST API for PostgreSQL",
+            },
+            {
+              name: "hls.js",
+              url: "https://github.com/video-dev/hls.js/",
+              desc: "HLS video player for Live TV",
+            },
+            {
+              name: "Nominatim Geocoding",
+              url: "https://nominatim.org/release-docs/latest/api/Overview/",
+              desc: "Reverse geocoding for fuel price location",
+            },
+            {
+              name: "Safaricom Daraja",
+              url: "https://developer.safaricom.co.ke/APIs/",
+              desc: "M-PESA STK Push + C2B + B2C APIs",
+            },
+            {
+              name: "Kopo Kopo API",
+              url: "https://kopokopo.co.ke/developers",
+              desc: "Till number + transaction search API",
+            },
+            {
+              name: "Fuel Price Data (EPRA)",
+              url: "https://www.epra.go.ke/",
+              desc: "Kenya fuel price reference",
+            },
+            {
+              name: "Vercel Serverless Functions",
+              url: "https://vercel.com/docs/functions",
+              desc: "API endpoints & cron jobs",
+            },
+            {
+              name: "Cloudflare Pages Functions",
+              url: "https://developers.cloudflare.com/pages/platform/functions/",
+              desc: "Edge serverless for the Pages mirror",
+            },
+          ].map((d) => (
+            <a
+              key={d.name}
+              href={d.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:border-blue-300 dark:hover:border-blue-600 transition-colors group"
+            >
+              <ExternalLink
+                size={16}
+                className="text-blue-500 flex-shrink-0 mt-0.5 group-hover:text-blue-600"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                  {d.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {d.desc}
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUB-TAB: DEPLOYMENT — live deployment status + version + sync info
+// ═══════════════════════════════════════════════════════════════════════════
+function DeploymentTab({
+  config,
+  show,
+}: {
+  config: GeneralSettingsConfig;
+  show: (msg: string, type?: "success" | "error" | "info") => void;
+}) {
+  const [deployStatus, setDeployStatus] = useState<
+    {
+      name: string;
+      url: string;
+      status: "ok" | "error" | "checking";
+      time?: string;
+    }[]
+  >([
+    {
+      name: "Cloudflare Pages (Primary)",
+      url: "https://fuel-app-mobile.pages.dev/",
+      status: "checking",
+    },
+    {
+      name: "Vercel Production",
+      url: "https://fuel-app-mobile.vercel.app/",
+      status: "checking",
+    },
+    {
+      name: "Supabase Backend",
+      url: "https://ojsscjwatikixlpshmub.supabase.co/rest/v1/",
+      status: "checking",
+    },
+    {
+      name: "Supabase Storage",
+      url: "https://ojsscjwatikixlpshmub.supabase.co/storage/v1/",
+      status: "checking",
+    },
+    {
+      name: "Supabase Realtime",
+      url: "https://ojsscjwatikixlpshmub.supabase.co/realtime/v1/",
+      status: "checking",
+    },
+  ]);
+
+  const checkDeployment = useCallback(async (name: string, url: string) => {
+    setDeployStatus((s) =>
+      s.map((d) =>
+        d.name === name ? { ...d, status: "checking" as const } : d,
+      ),
+    );
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      const ok = res.ok || res.status === 401 || res.status === 403;
+      setDeployStatus((s) =>
+        s.map((d) =>
+          d.name === name
+            ? {
+                ...d,
+                status: ok ? ("ok" as const) : ("error" as const),
+                time: new Date().toLocaleTimeString(),
+              }
+            : d,
+        ),
+      );
+    } catch {
+      setDeployStatus((s) =>
+        s.map((d) =>
+          d.name === name
+            ? {
+                ...d,
+                status: "error" as const,
+                time: new Date().toLocaleTimeString(),
+              }
+            : d,
+        ),
+      );
+    }
+  }, []);
+
+  const checkAll = useCallback(async () => {
+    for (const d of deployStatus) {
+      await checkDeployment(d.name, d.url);
+    }
+    show("Deployment status refreshed", "success");
+  }, [deployStatus, checkDeployment, show]);
+
+  useEffect(() => {
+    checkAll();
+  }, []);
+
+  return (
+    <div className="p-5 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Deployment
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Live deployment status, version info, and sync configuration.
+          </p>
+        </div>
+        <button
+          onClick={checkAll}
+          className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+
+      <SectionCard title="Live Deployment Status" icon={Cloud}>
+        <div className="space-y-2">
+          {deployStatus.map((d) => (
+            <div
+              key={d.name}
+              className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {d.name}
+                </p>
+                <p className="text-xs text-gray-400 truncate">{d.url}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {d.time && (
+                  <span className="text-xs text-gray-400">{d.time}</span>
+                )}
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    d.status === "ok"
+                      ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                      : d.status === "error"
+                        ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+                        : "bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300"
+                  }`}
+                >
+                  {d.status === "ok"
+                    ? "Live"
+                    : d.status === "error"
+                      ? "Error"
+                      : "Checking…"}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Version Information" icon={Info}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              App Version
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              FuelPro v3.0 (2026)
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Build</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {new Date(config.updatedAt).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Cloud Save Debounce
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {config.lowBandwidthMode ? "2000ms (low-bandwidth)" : "500ms"}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Compression
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {config.enableCompression ? "gzip level 9 (enabled)" : "disabled"}
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Sync Configuration" icon={Zap}>
+        <div className="space-y-4">
+          <Toggle
+            checked={config.enableRealtime}
+            onChange={(v) => update("enableRealtime", v)}
+            label="Real-Time Sync"
+            description="Cross-device instant updates via Supabase Realtime (all tabs)"
+          />
+          <Toggle
+            checked={config.enableCompression}
+            onChange={(v) => update("enableCompression", v)}
+            label="Data Compression"
+            description="gzip level 9 compression for cloud storage (reduces Supabase egress/storage)"
+          />
+          <Toggle
+            checked={config.lowBandwidthMode}
+            onChange={(v) => update("lowBandwidthMode", v)}
+            label="Low-Bandwidth Mode"
+            description="Slower sync (2s debounce) + no realtime — for slow/unstable networks"
+          />
+          <Toggle
+            checked={config.autoBackup}
+            onChange={(v) => update("autoBackup", v)}
+            label="Auto-Backup"
+            description="Automatically back up all data to cloud storage"
+          />
+          <Field label="Backup Frequency">
+            <select
+              className={inputClass}
+              value={config.backupFrequency}
+              onChange={(e) =>
+                update(
+                  "backupFrequency",
+                  e.target.value as GeneralSettingsConfig["backupFrequency"],
+                )
+              }
+              disabled={!config.autoBackup}
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </Field>
+          <Field label="Data Retention (days)">
+            <input
+              type="number"
+              className={inputClass}
+              value={config.dataRetentionDays}
+              onChange={(e) =>
+                update("dataRetentionDays", parseInt(e.target.value) || 365)
+              }
+              min={30}
+              max={3650}
+            />
+          </Field>
+        </div>
+      </SectionCard>
     </div>
   );
 }
