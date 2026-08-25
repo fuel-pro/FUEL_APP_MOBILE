@@ -1619,7 +1619,7 @@ export default function LiveFeedEmbed({
           )}
         </div>
         {channelsLoading ? (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
             {Array.from({ length: 16 }).map((_, i) => (
               <div
                 key={i}
@@ -1629,7 +1629,10 @@ export default function LiveFeedEmbed({
           </div>
         ) : visibleChannels.length > 0 ? (
           <>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            {/* Channel grid adapts to the device aspect ratio:
+                phone 2-col → small phone 3-col → tablet 4-col →
+                laptop 6-col → desktop 8-col → TV/4K 10-col. */}
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
               {visibleChannels.map((ch) => (
                 <ChannelCard
                   key={ch.nanoid}

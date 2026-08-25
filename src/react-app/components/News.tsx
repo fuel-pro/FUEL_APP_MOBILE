@@ -811,7 +811,7 @@ export default function News() {
               <p className="text-gray-500">Loading news...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {searchedNews.map((item) => {
                 const Icon = CATEGORY_ICONS[item.category] || Newspaper;
                 const colorClass = CATEGORY_COLORS[item.category];
