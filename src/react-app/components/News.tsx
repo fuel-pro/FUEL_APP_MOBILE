@@ -22,7 +22,6 @@ import {
   Receipt,
   Gavel,
   Building2,
-  Monitor,
   Radio,
   Tv,
 } from "lucide-react";
@@ -276,9 +275,9 @@ export default function News() {
   const [source, setSource] = useState<"curated" | "external">("curated");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sub-tab navigation: News Articles | Live Channels | Live TV | Live Radio
+  // Sub-tab navigation: News Articles | Live TV (merged Live Channels + Live TV) | Live Radio
   const [activeSubTab, setActiveSubTab] = useState<
-    "articles" | "live-channels" | "live-tv" | "live-radio"
+    "articles" | "live-tv" | "live-radio"
   >("articles");
 
   // Live feed embed state — country filter for TV / Radio sub-tabs
@@ -586,11 +585,10 @@ export default function News() {
         </div>
       </div>
 
-      {/* Sub-tab navigation: Articles | Live Channels | Live TV | Live Radio */}
+      {/* Sub-tab navigation: Articles | Live TV (merged channels) | Live Radio */}
       <SubTabBar
         tabs={[
           { id: "articles", label: "News Articles", icon: Newspaper },
-          { id: "live-channels", label: "Live Channels", icon: Monitor },
           { id: "live-tv", label: "Live TV", icon: Tv },
           { id: "live-radio", label: "Live Radio", icon: Radio },
         ]}
@@ -605,8 +603,12 @@ export default function News() {
             <Newspaper size={16} className="text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Total Articles</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-white">{news.length}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+              Total Articles
+            </p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">
+              {news.length}
+            </p>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
@@ -614,26 +616,50 @@ export default function News() {
             <Clock size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Unread</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-white">{unreadCount}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+              Unread
+            </p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">
+              {unreadCount}
+            </p>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
           <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg">
-            <BookmarkCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <BookmarkCheck
+              size={16}
+              className="text-emerald-600 dark:text-emerald-400"
+            />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Bookmarked</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-white">{news.filter((n) => n.bookmarked).length}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+              Bookmarked
+            </p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">
+              {news.filter((n) => n.bookmarked).length}
+            </p>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${source === "external" ? "bg-green-50 dark:bg-green-900/30" : "bg-gray-100 dark:bg-gray-700"}`}>
-            <Wifi size={16} className={source === "external" ? "text-green-600 dark:text-green-400" : "text-gray-500"} />
+          <div
+            className={`p-2 rounded-lg ${source === "external" ? "bg-green-50 dark:bg-green-900/30" : "bg-gray-100 dark:bg-gray-700"}`}
+          >
+            <Wifi
+              size={16}
+              className={
+                source === "external"
+                  ? "text-green-600 dark:text-green-400"
+                  : "text-gray-500"
+              }
+            />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Source</p>
-            <p className="text-lg font-bold text-gray-800 dark:text-white">{source === "external" ? "Live" : "Curated"}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+              Source
+            </p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">
+              {source === "external" ? "Live" : "Curated"}
+            </p>
           </div>
         </div>
       </div>
@@ -701,27 +727,16 @@ export default function News() {
         </>
       )}
 
-      {/* ===================== LIVE CHANNELS SUB-TAB (multi-category grid) ===================== */}
-      {activeSubTab === "live-channels" && (
-        <div className="space-y-4">
-          {/* Multi-category live channel grid — silently integrated */}
-          <LiveFeedEmbed
-            defaultCategory="tv"
-            defaultCountry={currentCountry.id}
-            showCategorySwitcher={true}
-            accent="blue"
-          />
-        </div>
-      )}
-
-      {/* ===================== LIVE TV SUB-TAB ===================== */}
+      {/* ===================== LIVE TV SUB-TAB (merged Live Channels + Live TV) ===================== */}
       {activeSubTab === "live-tv" && (
         <div className="space-y-4">
-          {/* Live global TV channels — silently integrated (no upstream attribution) */}
+          {/* Live global TV channels — full multi-category switcher so both
+              the old "Live Channels" grid and the "Live TV" view are available
+              in ONE place. Select a station from the picker to PREVIEW it. */}
           <LiveFeedEmbed
             defaultCategory="tv"
             defaultCountry={tvCountry}
-            showCategorySwitcher={false}
+            showCategorySwitcher={true}
             showSubCategorySwitcher={true}
             family="video"
             accent="blue"
