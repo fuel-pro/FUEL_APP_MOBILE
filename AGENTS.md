@@ -9134,3 +9134,18 @@ Generated a Sales Tracking TXT after all fixes:
 Same documented state — no new lost work. founder-username-login (7 ahead)
 awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 /api/r2/* + /api/cache/* endpoints first.
+
+## Session 2026-08-25 (cont.) — Live TV subtitles/CC with multi-language auto-selection
+
+Requirement: add subtitles (different languages + auto-select depending on location; defaults: English, Spanish, French, Mandarin, Hindi, Arabic, Korean, etc.) to Live TV and Live Radio.
+
+Implementation:
+- New src/react-app/lib/subtitle-languages.ts: 15-language registry (English, Spanish, French, Mandarin, Hindi, Arabic, Korean, Portuguese, German, Italian, Japanese, Russian, Swahili, Turkish, Dutch); browser-locale detection with station-country fallback (COUNTRY_TO_LANG map; e.g. KE/US(en), ES/MX(es), CN(zh), IN(hi), SA(ar), KR(ko)); subtitle-track matcher by ISO lang code or track name.
+- ChannelPlayer (Live TV): CC button in player header with a dropdown listing the stream own subtitle tracks (read from the HLS manifest via SUBTITLE_TRACKS_UPDATED) plus a preferred-language picker (15 languages). Auto-selects the preferred language track on load (browser locale > station country > English) and enables hls.subtitleDisplay. Streams without subtitle tracks show No subtitle tracks in this stream but the language preference still persists for streams that DO carry tracks.
+- The preferred-language choice persists to cloud (live_feed_subtitle_lang, cross-device) and swaps live on streams carrying a matching track.
+- YouTube channels auto-show captions in the preferred language via cc_load_policy=1 and cc_lang_pref in the embed URL.
+- Live Radio: CC correctly not applicable (audio-only); the menu deliberately does not render there.
+
+Verified live (Cloudflare preview 9d886dd0): CC button renders in the player header on HLS channels; opening it lists the preferred-language picker (English/Spanish/Mandarin/Arabic/Korean visible) + No subtitle tracks in this stream for the HLS test loop (correct, that stream has no tracks); selecting Spanish persisted live_feed_subtitle_lang = es to the cloud cache; QA language reset to English after verification.
+
+Deploy state: GitHub main 6202720 (pushed, synced); Cloudflare Pages LIVE (9d886dd0 + main alias); Vercel production LIVE (prebuilt deploy aliased fuel-app-mobile.vercel.app); Supabase: no schema changes (uses existing app_kv live_feed_subtitle_lang key). tsc 0 errors, clean build, prettier pass.
