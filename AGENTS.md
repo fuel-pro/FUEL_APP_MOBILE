@@ -9040,3 +9040,22 @@ are old divergent snapshots superseded on main.
 - tv-4k 3840x2160: zero overflow, 4-col, widened gutters
 
 **Deploy state**: GitHub main 7d94d25 (pushed, synced); Cloudflare Pages LIVE (4e4b13f5 + main alias fuel-app-mobile.pages.dev, grid rules confirmed in live CSS); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets). tsc 0 errors, clean build, prettier pass.
+
+## Session 2026-08-25 (cont.) — News tab grids adapt to device aspect ratio
+
+**Requirement**: "fix the News tab grids adapts to each ASPECT RATIOS (on each type of device; phone, tablet, laptop, tv, etc...) for clarity and accessibility of grids."
+
+**What was done**:
+1. Channel grid (Live TV + Live Radio, LiveFeedEmbed.tsx): `grid-cols-3 sm:4 md:6 lg:8` -> `grid-cols-2 xs:3 sm:4 md:6 lg:8 xl:10`. Phone shows 2 large readable cards; TV/4K shows 10 dense cards per row.
+2. Added `xs: 380px` breakpoint to tailwind.config.js (was undefined — xs: classes were no-ops).
+3. News article grid (News.tsx): `grid-cols-1 lg:grid-cols-2` -> `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` (3-col on wide/TV).
+
+**Verified live via Playwright across 6 device sizes** (deployed preview e57b9b21):
+- phone-360: 2-col grid, 482px cards, no overflow
+- phone-414: 2-3 col, 318px cards, no overflow
+- tablet 768x1024: 4-6 col, 155px cards, no overflow
+- laptop 1366x768: 4-10 col, 101px cards, no overflow
+- tv 1920x1080: 4-10 col, 113px cards, no overflow
+- tv-4k 2560x1440: zero overflow
+
+**Deploy state**: GitHub main 80c10f0 (pushed, synced); Cloudflare Pages LIVE (9430ad6a + main alias, xs:380px + grid-cols-10 confirmed in live CSS); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets); Supabase: no schema changes (frontend-only). tsc 0 errors, clean build, prettier pass.
