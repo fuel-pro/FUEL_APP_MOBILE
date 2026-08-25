@@ -289,6 +289,12 @@
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
+              // A new build is ready. Notify the app so it can show the
+              // "New version available" banner (UpdateAvailableBanner)
+              // instead of silently waiting for the next reload.
+              try {
+                window.dispatchEvent(new CustomEvent("fuelpro-sw-update"));
+              } catch (e) {}
               newWorker.postMessage({ type: "SKIP_WAITING" });
             }
           });

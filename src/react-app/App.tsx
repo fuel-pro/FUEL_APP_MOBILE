@@ -24,6 +24,7 @@ import StationAccess from "@/react-app/pages/StationAccess";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { SkipToContent } from "@/react-app/lib/accessibility";
+import UpdateAvailableBanner from "@/react-app/components/UpdateAvailableBanner";
 import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { resolveCountryCode } from "@/react-app/lib/geo-utils";
@@ -258,6 +259,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SkipToContent />
+      <UpdateAvailableBanner />
       <div id="main-content" className="min-h-screen">
         <AuthProvider>
           <ThemeProvider>

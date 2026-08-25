@@ -7,8 +7,10 @@ import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   getFuelLabel,
   getFuelCode,
+  normalizeFuelType,
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 /**
  * Load a logo image (data URL or external URL) as a base64 data URL so it can
@@ -95,9 +97,14 @@ export async function addLogoToPDF(
  *
  * Resolution order:
  *  1. state.fuelTypes (the FuelTypesManager config array) — canonical keys.
- *  2. state.fuelPumpsByType / state.fuelPricesByType / state.fuelTankValuesByType
+ *  2. The `fuel_types_config` cloud row (read synchronously via the
+ *     cloudStorageService in-memory cache — the SAME source FuelTypesManager
+ *     edits). This is the fix for the reported mismatch: FuelContext's
+ *     `state.fuelTypes` is never populated, so relying on it alone yielded
+ *     the petrol/diesel fallback instead of the station's registered fuels.
+ *  3. state.fuelPumpsByType / state.fuelPricesByType / state.fuelTankValuesByType
  *     keys (defense-in-depth: any fuel type that has pumps/prices/tank data).
- *  3. Fallback: ["petrol", "diesel"] ONLY if nothing is configured (first run).
+ *  4. Fallback: ["petrol", "diesel"] ONLY if nothing is configured (first run).
  */
 function deriveFuelTypes(state: any): CanonicalFuelType[] {
   const set = new Set<CanonicalFuelType>();
@@ -108,6 +115,25 @@ function deriveFuelTypes(state: any): CanonicalFuelType[] {
       if (key) set.add(key as CanonicalFuelType);
     }
   }
+  // FIX: pull the station's registered fuel types from the fuel_types_config
+  // cloud row (read synchronously from the in-memory cache). FuelContext's
+  // state.fuelTypes is never populated, so without this the export derived
+  // the petrol/diesel fallback instead of the station's actual fuels.
+  try {
+    const cached =
+      cloudStorageService.getCached<
+        Array<{ name?: string; canonical?: string }>
+      >("fuel_types_config");
+    if (Array.isArray(cached)) {
+      for (const ft of cached) {
+        const key = ft?.canonical || ft?.name;
+        const canonical = key ? normalizeFuelType(key) : null;
+        if (canonical) set.add(canonical);
+      }
+    }
+  } catch {
+    /* non-fatal — fall through to the other sources */
+  }
   for (const store of [
     state.fuelPumpsByType,
     state.fuelPricesByType,
@@ -115,7 +141,8 @@ function deriveFuelTypes(state: any): CanonicalFuelType[] {
   ]) {
     if (store && typeof store === "object") {
       for (const key of Object.keys(store)) {
-        if (key) set.add(key as CanonicalFuelType);
+        const canonical = key ? normalizeFuelType(key) : null;
+        if (canonical) set.add(canonical);
       }
     }
   }
