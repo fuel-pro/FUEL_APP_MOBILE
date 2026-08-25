@@ -8806,3 +8806,74 @@ requires /api/r2/* + /api/cache/* endpoints first. No new lost work.
 **Found + fixed during the sweep**: the Settings tab crash (Monitor icon was used but not imported — the Settings tab was inaccessible before this fix).
 
 **Deploy state**: GitHub main e8a28f5+ commits; Cloudflare Pages LIVE (853b76ee + main alias); Vercel production BLOCKED by api-deployments-free-per-day (100/100; resets ~24h — GitHub integration auto-deploys when quota resets). Supabase: no schema changes (frontend-only). tsc 0 errors, prettier pass.
+
+
+## Session 2026-08-25 — Professional header restructure (+ Live Transaction light-mode polish) (DEPLOYED LIVE)
+
+**Task**: organize the header section (Add Station, Edit Info, Theme, Tabs,
+Logo, QR, Tutorial, Search, Owner, Locked, Admin, Logout) into a
+professional structure; restructure the entire website professionally.
+
+### Header restructure (commit 95478fe, LIVE)
+
+The scattered 12-button action strip is now THREE professional grouped zones
+(desktop) + labeled mobile sections:
+
+- **Zone 1 — Workspace status**: sync indicator (border-separated).
+- **Zone 2 — Global utilities**: Quick Search (⌘K), Notification Center,
+  NEW **Customize dropdown** (Settings icon + chevron) grouping:
+  - "APPEARANCE" group: Color Theme (with current theme name), Light/Dark
+    toggle, Layout & Tabs.
+  - "BRANDING & TOOLS" group: Upload Logo, Company QR Code, Replay Tutorial.
+- **Zone 3 — Account**: RoleSelector (Owner/Locked badge) + NEW **profile
+  dropdown** (avatar + name + chevron): user/email identity card,
+  Edit Company Info, Admin Console (amber + chevron link), Sign Out (red).
+- Both dropdowns: outside-click close (ref + mousedown listener), ARIA
+  `aria-haspopup="listbox"` + `aria-expanded`, chevron rotate cue,
+  escape-safe.
+- Mobile menu reorganized into labeled sections (Workspace / Customize &
+  Tools / Account) mirroring the desktop zones.
+- Color-theme picker popover re-anchored onto the Customize trigger (was
+  orphaned by the strip removal); opened from inside the Customize dropdown.
+
+### Dead components removed (0 references)
+- `AIAssistant.tsx` (Invoice implements the AI assistant inline)
+- `Paywall.tsx` (only PaywallControlSection — different component — existed)
+- `ProductsManagement.tsx` (merged into InventoryManagement in 2026-08-11)
+- `SettingsPanel.tsx` (documented dead; GeneralSettings.tsx is the live one)
+NOTE: `Documents.tsx` intentionally KEPT (documented reference component).
+
+### Live Transaction light-mode polish (commits 0bc6511 + c9eb274, LIVE)
+Payment source cards (`bg-gray-700`), time-range inputs + Clear button
+(`bg-gray-600/700`), source-type text (`text-gray-300`), and Active badge
+(`text-green-400`) had NO light-mode pair — rendered dark-on-light or
+faint. Now fully paired (`bg-gray-100 dark:bg-gray-700`,
+`bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700`,
+`text-gray-600 dark:text-gray-300`, `text-green-600 dark:text-green-400`).
+
+### Live verification (fuel-app-mobile.pages.dev, founder QA user, light mode)
+- Header: Customize dropdown renders grouped sections; Account dropdown
+  renders identity card + Edit Company Info + Admin Console + Sign Out. ✓
+- POS: quick sale 10L Super Petrol @ $1.42 = $14.20 cash
+  (INV20260825000003E404), celebration + receipt. ✓
+- Fuel Offloading: record KDA 123X / James QA Driver / 8,000L Super Petrol
+  @ $1.42 = $11,360, Synced. ✓
+- Live Transaction: card text + inputs fully readable in light mode. ✓
+
+### Deploy state 2026-08-25
+- GitHub main: 95478fe (header) → 0bc6511 + c9eb274 (LT polish) pushed.
+- Cloudflare Pages: LIVE (ae8a637e preview + main alias).
+- Vercel: header restructure LIVE (aliased; index-BpALpL7h.js verified).
+  LT polish pending `api-deployments-free-per-day` (GitHub integration
+  auto-deploys on reset ~24h).
+- Parallel session commits folded in: e8a28f5 (General Settings 3 new
+  sub-tabs), d835348 (Monitor import fix), 6a0b3c4 (docs).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, 27/27 tests pass, prettier clean, eslint 0 errors.
+
+### Lost-commit audit 2026-08-25
+Pre- and post-task audits of all unmerged branches: same documented state —
+large branches (200-309 ahead, 600+ behind) are old superseded snapshots;
+founder-username-login (7 ahead) awaits user authorization for manual
+rebase; identifying-security-vulnerabilities-8d289 needs /api/r2/* +
+/api/cache/* endpoints first. No new lost work.
