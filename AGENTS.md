@@ -8656,3 +8656,29 @@ Re-audited all 43 unmerged remote branches. State matches the 2026-08-24 audit e
 - Vercel production: LIVE (prebuilt deploy, aliased to fuel-app-mobile.vercel.app; /api/live-channels movies endpoint verified returning HLS streams).
 - Supabase: no schema changes (frontend + serverless only).
 - npx tsc --noEmit 0 errors, npm run build success (clean Vite cache), vitest 19/19 pass, eslint 0 errors, prettier clean. All client bundles verified 0 "tvgarden" references.
+
+## Session 2026-08-25 (cont.) — Live TV/Radio playback FULLY FIXED (CSP root cause)
+
+**Goal**: "Ensure the preview works and shows actual live video … each channel, stream, station accurately."
+
+**Root causes found via Playwright network/CDP probes + hls.js debug (LFE-HLS) instrumentation**:
+1. **CSP blocked blob: URLs** — `Loading media from blob:... violates CSP "default-src self"`. HLS.js MediaSource blob URL rejected by browser URL-safety check; video/audio stuck at readyState=0 forever.
+2. **CSP frame-src missing youtube-nocookie.com** — `Framing... violates frame-src` — YouTube-embed channels blocked (iframe appeared blank/error).
+3. **Radio (MP3/icecast) fed into hls.js** — radio URLs are .mp3/direct streams, not .m3u8, so hls.js never buffered.
+4. **Native MP3 src blocked by CSP `media-src self blob:`** — native <audio> direct src to streamtheworld/icecast blocked.
+5. **hls-proxy buffered non-playlist bodies** — `arrayBuffer()` on a live MP3/icecast body never completes; response hangs forever.
+
+**Fixes (all in commit 35f512f):**
+- `index.html` CSP: added `media-src self blob:` + `youtube-nocookie.com` to frame-src.
+- `LiveFeedEmbed.tsx` ChannelPlayer: only use hls.js when URL matches `.m3u8`; all other sources (MP3) go native via the same-origin proxy FIRST (CSP-compliant + CORS-proof), direct fallback on fatal. Static hls.js import + `hls.startLoad()` + `enableWorker:false` + absolute proxy URL.
+- `api/hls-proxy.ts` + `functions/api/hls-proxy.ts`: STREAM non-playlist bodies with `Readable.fromWeb()/pass-through` (no arrayBuffer — live MP3 unbounded).
+
+**Verified live (production https://fuel-app-mobile.pages.dev/)**:
+- 2 HLS TV channels (Big Buck Bunny, 24 Hour Free Movies): readyState=4, paused=false, currentTime advancing — ACTUAL VIDEO PLAYBACK.
+- 2 YouTube channels (AAC Television, ABC News Live): nocookie iframe renders.
+- 1 Radio (.977 80s: audio readyState=4 advancing, paused=false) — actual audio streams.
+- 3 dead upstream channels (AMC, AXN, 70s Cinema): correctly show the "currently unreachable" error overlay (not a bug — upstream died).
+
+**Deploy state**: GitHub main 35f512f (pushed). Cloudflare Pages LIVE (a6c32a31 + main alias). Vercel production LIVE (prebuilt deploy). Supabase migration NOT needed (frontend-only). tsc 0 errors, build success.
+
+**Lost-commit audit (post-fix)**: re-audited 8 recently-active branches — no new lost work. Remaining documented branches (founder-username-login 7 commits, identifying-security-vulnerabilities-8d289 3 commits) remain NOT auto-merged per their manual-rebase requirements.
