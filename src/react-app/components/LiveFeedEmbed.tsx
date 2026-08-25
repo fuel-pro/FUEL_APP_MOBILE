@@ -1084,15 +1084,27 @@ export default function LiveFeedEmbed({
   };
 
   // ─── FULLSCREEN ─────────────────────────────────────────────────────────
+  // Fullscreen the WHOLE Live TV/Radio panel (player + grid + filters), not
+  // just the player container — so the user can switch channels while in
+  // fullscreen. Uses the native Fullscreen API (works in browser + app).
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const toggleFullscreen = useCallback(() => {
-    const el = playerContainerRef.current;
-    if (!el) return;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
-    } else {
-      el.requestFullscreen().catch(() => {});
+      return;
     }
+    const el = rootRef.current || playerContainerRef.current;
+    if (!el) return;
+    el.requestFullscreen?.().catch(() => {
+      // Fallback for older browsers
+      const anyEl = el as unknown as Record<string, () => void>;
+      (
+        anyEl.webkitRequestFullscreen ||
+        anyEl.mozRequestFullScreen ||
+        anyEl.msRequestFullscreen
+      )?.call(el);
+    });
   }, []);
 
   useEffect(() => {
@@ -1721,7 +1733,7 @@ export default function LiveFeedEmbed({
     // staying in fullscreen. Exit via the X button (top-right) OR the browser
     // Esc key (fullscreenchange listener resets isFullscreen).
     return (
-      <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <div ref={rootRef} className="fixed inset-0 z-50 bg-black flex flex-col">
         <div className="flex items-center justify-between p-2 bg-gray-900 border-b border-gray-800">
           <div className="flex items-center gap-2 text-white min-w-0">
             <Sparkles size={14} className="text-blue-400 flex-shrink-0" />
@@ -1746,7 +1758,10 @@ export default function LiveFeedEmbed({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div
+      ref={rootRef}
+      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+    >
       {embedContent}
     </div>
   );
