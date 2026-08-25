@@ -5,7 +5,7 @@
 **Task**: add a per-station preview (from tvgarden.world) to Live Channels/Live
 TV/Live Radio, and merge the redundant Live Channels + Live TV sub-tabs.
 
-### What ships (commits 14b8608 + c84a533 + 3fead1c, on main)
+### What ships (commits 14a9ad5 + c84a533 + 3fead1c, on main)
 
 - **News.tsx now has 3 sub-tabs**: News Articles / Live TV / Live Radio (the
   "Live Channels" sub-tab was removed; Live TV absorbed its multi-category
