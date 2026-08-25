@@ -150,12 +150,12 @@ function StationPreview({
 
   const ytId = useMemo(
     () =>
-      station.youtube_urls.length > 0
+      (station.youtube_urls?.length ?? 0) > 0
         ? extractYouTubeId(station.youtube_urls[0])
         : null,
     [station],
   );
-  const streamUrl = station.stream_urls[0] || "";
+  const streamUrl = station.stream_urls?.[0] || "";
   const isHls =
     !ytId && !!streamUrl && (isAudio ? /\.m3u8(\?|$)/i.test(streamUrl) : true);
   const countryName = station.country
@@ -477,9 +477,20 @@ export default function LiveFeedEmbed({
         const seen = new Set<string>();
         const playable = results
           .flat()
+          // Normalize: the API omits array keys when empty (e.g. radio
+          // channels have no youtube_urls key) — always materialize both
+          // arrays so downstream code can never crash on missing keys.
+          .map((ch) => ({
+            ...ch,
+            stream_urls: ch.stream_urls ?? [],
+            youtube_urls: ch.youtube_urls ?? [],
+            languages: ch.languages ?? [],
+          }))
           .filter(
             (ch) =>
-              ch && (ch.stream_urls.length > 0 || ch.youtube_urls.length > 0),
+              ch &&
+              ((ch.stream_urls?.length ?? 0) > 0 ||
+                (ch.youtube_urls?.length ?? 0) > 0),
           )
           .filter((ch) => {
             if (seen.has(ch.nanoid)) return false;
@@ -487,8 +498,8 @@ export default function LiveFeedEmbed({
             return true;
           })
           .sort((a, b) => {
-            const ay = a.youtube_urls.length > 0 ? 0 : 1;
-            const by = b.youtube_urls.length > 0 ? 0 : 1;
+            const ay = (a.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
+            const by = (b.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
             if (ay !== by) return ay - by;
             return a.name.localeCompare(b.name);
           });
