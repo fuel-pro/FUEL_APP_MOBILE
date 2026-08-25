@@ -31,13 +31,12 @@ import {
   Edit3,
   Image,
   ChevronDown,
+  ChevronRight,
   Layers,
   Plus,
   X,
   Check,
   Menu,
-  Shield,
-  Globe,
   LayoutDashboard,
   Crown,
   Loader2,
@@ -73,11 +72,15 @@ export default function Header({
   const [showStationMenu, setShowStationMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showTabConfig, setShowTabConfig] = useState(false);
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editData, setEditData] = useState({ ...state.companyData });
   const [editDirty, setEditDirty] = useState(false);
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || "");
   const [logoUploading, setLogoUploading] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const customizeMenuRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close mobile menu on outside click
   useEffect(() => {
@@ -87,6 +90,18 @@ export default function Header({
         !mobileMenuRef.current.contains(e.target as Node)
       ) {
         setShowMobileMenu(false);
+      }
+      if (
+        customizeMenuRef.current &&
+        !customizeMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowCustomizeMenu(false);
+      }
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowProfileMenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -290,45 +305,92 @@ export default function Header({
             )}
           </div>
 
-          {/* Desktop Actions */}
+          {/* Desktop Actions — organized into 3 zones: Workspace · Utilities · Account */}
           <div className="hidden md:flex items-center gap-1.5">
-            <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded-md text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full" /> Local
-            </span>
-            {user && (
-              <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 rounded-md text-[10px] text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                <User size={10} className="text-amber-400" />
-                <span className="hidden xl:inline">{user.name}</span>
-              </span>
-            )}
-            <button
-              onClick={() => setShowEditInfo(!showEditInfo)}
-              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              <Edit3 size={12} />
-              <span className="hidden lg:inline">Edit Info</span>
-            </button>
-            {/* Quick color-theme picker (design spec 99.txt) */}
-            <div className="relative">
-              <button
-                onClick={() => setShowColorThemes((v) => !v)}
-                className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
-                title={`Theme: ${colorThemeMeta.name}`}
-                aria-label="Change color theme"
-                aria-expanded={showColorThemes}
-              >
-                <Palette
-                  size={12}
-                  style={{ color: colorThemeMeta.primaryHex }}
-                />
-                <span className="hidden lg:inline">Theme</span>
-              </button>
-              {showColorThemes && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowColorThemes(false)}
+            {/* ── Zone 1: Workspace status ── */}
+            <div className="flex items-center gap-1.5 pr-2 border-r border-gray-200 dark:border-white/10">
+              <SyncStatusIndicator
+                countryCode={location.currentCountry.id}
+                compact
+              />
+            </div>
+
+            {/* ── Zone 2: Global utilities (search, alerts, customize) ── */}
+            <div className="flex items-center gap-1.5">
+              <QuickSearch
+                entries={[
+                  ...(state.tabConfigurations || []).map((tab) => ({
+                    id: tab.id,
+                    label: tab.label,
+                    description: tab.description || "",
+                    category: "Navigation" as const,
+                    tabId: tab.id,
+                    keywords: `${tab.id} ${tab.label}`,
+                  })),
+                  {
+                    id: "qa-pos",
+                    label: "New Sale (POS)",
+                    description: "Quick fuel sale",
+                    category: "Quick Action" as const,
+                    tabId: "pos",
+                    keywords: "sell checkout pos cart",
+                  },
+                  {
+                    id: "qa-invoice",
+                    label: "New Invoice",
+                    description: "Create a new invoice",
+                    category: "Quick Action" as const,
+                    tabId: "invoice",
+                    keywords: "bill receipt customer",
+                  },
+                  {
+                    id: "qa-expense",
+                    label: "Record Expense",
+                    description: "Log a new expense",
+                    category: "Quick Action" as const,
+                    tabId: "expenses",
+                    keywords: "cost spend money",
+                  },
+                  {
+                    id: "qa-credit",
+                    label: "Credit Accounts",
+                    description: "Manage customer credit",
+                    category: "Quick Action" as const,
+                    tabId: "credit",
+                    keywords: "debt loan customer balance",
+                  },
+                  {
+                    id: "qa-stkpush",
+                    label: "M-PESA STK Push",
+                    description: "Collect payment via M-PESA",
+                    category: "Quick Action" as const,
+                    tabId: "livetransaction",
+                    keywords: "mpesa payment collect phone",
+                  },
+                ]}
+              />
+              <NotificationCenter />
+              {/* Customize menu — groups every appearance/layout/branding
+                  control (Theme, Tabs, Logo, QR, Tutorial, light/dark) into ONE
+                  professional dropdown instead of a scattered button strip. */}
+              <div className="relative" ref={customizeMenuRef}>
+                <button
+                  onClick={() => setShowCustomizeMenu((v) => !v)}
+                  aria-haspopup="listbox"
+                  aria-expanded={showCustomizeMenu}
+                  title="Customize & Tools"
+                  className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
+                >
+                  <Settings size={12} />
+                  <span className="hidden lg:inline">Customize</span>
+                  <ChevronDown
+                    size={10}
+                    className={`transition-transform duration-150 ${showCustomizeMenu ? "rotate-180" : ""}`}
                   />
+                </button>
+                {/* Color-theme picker popover (opened from inside the
+                    Customize dropdown, anchored to the same trigger). */}
+                {showColorThemes && (
                   <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl p-3 space-y-2">
                     <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 px-1">
                       App Color Theme
@@ -373,133 +435,179 @@ export default function Header({
                       Syncs across your devices
                     </p>
                   </div>
-                </>
-              )}
+                )}
+                {showCustomizeMenu && (
+                  <div
+                    role="listbox"
+                    className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top-right"
+                  >
+                    <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      Appearance
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowColorThemes((v) => !v);
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <Palette
+                        size={13}
+                        style={{ color: colorThemeMeta.primaryHex }}
+                      />
+                      <span>Color Theme</span>
+                      <span className="ml-auto text-[10px] text-gray-400 truncate max-w-20">
+                        {colorThemeMeta.name}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleToggleTheme();
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      {resolvedTheme === "dark" ? (
+                        <Sun size={13} className="text-amber-400" />
+                      ) : (
+                        <Moon size={13} className="text-gray-500" />
+                      )}
+                      <span>
+                        {resolvedTheme === "dark"
+                          ? "Switch to Light Mode"
+                          : "Switch to Dark Mode"}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowTabConfig(true);
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <LayoutDashboard size={13} className="text-gray-500" />
+                      <span>Layout & Tabs</span>
+                    </button>
+                    <div className="h-px bg-gray-200 dark:bg-white/10 my-1" />
+                    <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      Branding & Tools
+                    </p>
+                    <label className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer">
+                      {logoUploading ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Image size={13} className="text-gray-500" />
+                      )}
+                      <span>
+                        {logoUploading ? "Uploading logo…" : "Upload Logo"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          handleLogoChange(e);
+                          setShowCustomizeMenu(false);
+                        }}
+                        disabled={logoUploading}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      onClick={() => {
+                        setShowQRCode(true);
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <QrCode size={13} className="text-gray-500" />
+                      <span>Company QR Code</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        tutorial.startTutorial("basic");
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <HelpCircle size={13} className="text-amber-400" />
+                      <span>Replay Tutorial</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <button
-              onClick={() => setShowTabConfig(true)}
-              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              <LayoutDashboard size={12} />
-              <span className="hidden lg:inline">Tabs</span>
-            </button>
-            <label className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
-              {logoUploading ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Image size={12} />
-              )}
-              <span className="hidden lg:inline">
-                {logoUploading ? "Uploading…" : "Logo"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleLogoChange}
-                disabled={logoUploading}
-                className="hidden"
-              />
-            </label>
-            <button
-              onClick={() => setShowQRCode(true)}
-              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              <QrCode size={12} />
-              <span className="hidden lg:inline">QR</span>
-            </button>
-            <button
-              onClick={() => tutorial.startTutorial("basic")}
-              title="Replay the onboarding tutorial"
-              className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              <HelpCircle size={12} />
-              <span className="hidden lg:inline">Tutorial</span>
-            </button>
-            <QuickSearch
-              entries={[
-                ...(state.tabConfigurations || []).map((tab) => ({
-                  id: tab.id,
-                  label: tab.label,
-                  description: tab.description || "",
-                  category: "Navigation" as const,
-                  tabId: tab.id,
-                  keywords: `${tab.id} ${tab.label}`,
-                })),
-                {
-                  id: "qa-pos",
-                  label: "New Sale (POS)",
-                  description: "Quick fuel sale",
-                  category: "Quick Action" as const,
-                  tabId: "pos",
-                  keywords: "sell checkout pos cart",
-                },
-                {
-                  id: "qa-invoice",
-                  label: "New Invoice",
-                  description: "Create a new invoice",
-                  category: "Quick Action" as const,
-                  tabId: "invoice",
-                  keywords: "bill receipt customer",
-                },
-                {
-                  id: "qa-expense",
-                  label: "Record Expense",
-                  description: "Log a new expense",
-                  category: "Quick Action" as const,
-                  tabId: "expenses",
-                  keywords: "cost spend money",
-                },
-                {
-                  id: "qa-credit",
-                  label: "Credit Accounts",
-                  description: "Manage customer credit",
-                  category: "Quick Action" as const,
-                  tabId: "credit",
-                  keywords: "debt loan customer balance",
-                },
-                {
-                  id: "qa-stkpush",
-                  label: "M-PESA STK Push",
-                  description: "Collect payment via M-PESA",
-                  category: "Quick Action" as const,
-                  tabId: "livetransaction",
-                  keywords: "mpesa payment collect phone",
-                },
-              ]}
-            />
-            <SyncStatusIndicator
-              countryCode={location.currentCountry.id}
-              compact
-            />
-            <NotificationCenter />
-            <RoleSelector />
-            <button
-              onClick={() => navigate("/founder")}
-              className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-xs text-amber-400 transition-colors flex items-center gap-1.5 border border-amber-500/20"
-            >
-              <Crown size={12} />
-              <span className="hidden lg:inline">Admin</span>
-            </button>
-            <button
-              onClick={handleToggleTheme}
-              className="p-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors text-gray-700 dark:text-gray-200"
-              title={`Theme: ${resolvedTheme}`}
-            >
-              {resolvedTheme === "dark" ? (
-                <Sun size={15} className="text-amber-400" />
-              ) : (
-                <Moon size={15} className="text-gray-600 dark:text-gray-300" />
-              )}
-            </button>
-            <button
-              onClick={() => {
-                logout();
-              }}
-              className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-xs text-red-400 transition-colors flex items-center gap-1.5"
-            >
-              <LogOut size={12} />
-              <span className="hidden lg:inline">Logout</span>
-            </button>
+
+            {/* ── Zone 3: Account (role, company info, admin, sign out) ── */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200 dark:border-white/10">
+              <RoleSelector />
+              <div className="relative" ref={profileMenuRef}>
+                <button
+                  onClick={() => setShowProfileMenu((v) => !v)}
+                  aria-haspopup="listbox"
+                  aria-expanded={showProfileMenu}
+                  title="Account"
+                  className="flex items-center gap-2 pl-1 pr-2 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <div className="w-6 h-6 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
+                    {user?.name?.charAt(0).toUpperCase() || <User size={11} />}
+                  </div>
+                  <span className="hidden xl:inline text-xs font-medium text-gray-800 dark:text-gray-200 max-w-28 truncate">
+                    {user?.name || "Account"}
+                  </span>
+                  <ChevronDown
+                    size={10}
+                    className={`text-gray-500 transition-transform duration-150 ${showProfileMenu ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {showProfileMenu && (
+                  <div
+                    role="listbox"
+                    className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top-right"
+                  >
+                    <div className="px-3 py-2.5 border-b border-gray-200 dark:border-white/10">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                        {user?.name || "Signed in"}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                        {user?.email}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowEditInfo(true);
+                        setShowProfileMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <Edit3 size={13} className="text-gray-500" />
+                      <span>Edit Company Info</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate("/founder");
+                        setShowProfileMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    >
+                      <Crown size={13} />
+                      <span>Admin Console</span>
+                      <ChevronRight size={11} className="ml-auto" />
+                    </button>
+                    <div className="h-px bg-gray-200 dark:bg-white/10 my-1" />
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowProfileMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-red-500 dark:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <LogOut size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Mobile: Hamburger Menu */}
@@ -557,147 +665,167 @@ export default function Header({
               )}
             </div>
 
-            {/* Action Grid */}
-            <div className="grid grid-cols-4 gap-2">
-              <button
-                onClick={() => {
-                  setShowEditInfo(!showEditInfo);
-                  setShowMobileMenu(false);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-              >
-                <Edit3 size={16} className="text-gray-600 dark:text-gray-300" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Edit Info
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowTabConfig(true);
-                  setShowMobileMenu(false);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-              >
-                <LayoutDashboard
-                  size={16}
-                  className="text-gray-600 dark:text-gray-300"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Tabs
-                </span>
-              </button>
-              <label className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-pointer">
-                {logoUploading ? (
-                  <Loader2
-                    size={16}
-                    className="text-gray-600 dark:text-gray-300 animate-spin"
-                  />
-                ) : (
-                  <Image
-                    size={16}
-                    className="text-gray-600 dark:text-gray-300"
-                  />
+            {/* Mobile menu — grouped sections mirroring the desktop zones */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1 mb-1.5">
+                Workspace
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {onShowStations && (
+                  <button
+                    onClick={() => {
+                      onShowStations();
+                      setShowMobileMenu(false);
+                    }}
+                    className="flex items-center gap-2 p-2.5 bg-gray-100 dark:bg-white/5 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-left"
+                  >
+                    <Layers size={15} className="text-amber-400" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">
+                      Stations
+                    </span>
+                  </button>
                 )}
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {logoUploading ? "Uploading…" : "Logo"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={logoUploading}
-                  onChange={(e) => {
-                    handleLogoChange(e);
-                    setShowMobileMenu(false);
-                  }}
-                  className="hidden"
-                />
-              </label>
-              <button
-                onClick={() => {
-                  setShowColorThemes((v) => !v);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                title={`Theme: ${colorThemeMeta.name}`}
-              >
-                <Palette
-                  size={16}
-                  style={{ color: colorThemeMeta.primaryHex }}
-                />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Theme
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowQRCode(true);
-                  setShowMobileMenu(false);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-              >
-                <QrCode
-                  size={16}
-                  className="text-gray-600 dark:text-gray-300"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  QR Code
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  tutorial.startTutorial("basic");
-                  setShowMobileMenu(false);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-              >
-                <HelpCircle size={16} className="text-amber-400" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Tutorial
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  handleToggleTheme();
-                  setShowMobileMenu(false);
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-              >
-                {resolvedTheme === "dark" ? (
-                  <Sun size={16} className="text-amber-400" />
-                ) : (
-                  <Moon
-                    size={16}
-                    className="text-gray-600 dark:text-gray-300"
-                  />
-                )}
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {resolvedTheme === "dark" ? "Light" : "Dark"}
-                </span>
-              </button>
-              {onShowStations && (
                 <button
                   onClick={() => {
-                    onShowStations();
+                    setShowEditInfo(!showEditInfo);
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center gap-2 p-2.5 bg-gray-100 dark:bg-white/5 rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-left"
+                >
+                  <Edit3 size={15} className="text-gray-500" />
+                  <span className="text-xs text-gray-700 dark:text-gray-300">
+                    Company Info
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1 mb-1.5">
+                Customize & Tools
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    setShowColorThemes((v) => !v);
+                  }}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                  title={`Theme: ${colorThemeMeta.name}`}
+                >
+                  <Palette
+                    size={16}
+                    style={{ color: colorThemeMeta.primaryHex }}
+                  />
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Theme
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTabConfig(true);
                     setShowMobileMenu(false);
                   }}
                   className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
                 >
-                  <Layers size={16} className="text-amber-400" />
+                  <LayoutDashboard
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300"
+                  />
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                    Stations
+                    Tabs
                   </span>
                 </button>
-              )}
+                <label className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-pointer">
+                  {logoUploading ? (
+                    <Loader2
+                      size={16}
+                      className="text-gray-600 dark:text-gray-300 animate-spin"
+                    />
+                  ) : (
+                    <Image
+                      size={16}
+                      className="text-gray-600 dark:text-gray-300"
+                    />
+                  )}
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {logoUploading ? "Uploading…" : "Logo"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={logoUploading}
+                    onChange={(e) => {
+                      handleLogoChange(e);
+                      setShowMobileMenu(false);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    setShowQRCode(true);
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                >
+                  <QrCode
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300"
+                  />
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    QR Code
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    tutorial.startTutorial("basic");
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                >
+                  <HelpCircle size={16} className="text-amber-400" />
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Tutorial
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleToggleTheme();
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                >
+                  {resolvedTheme === "dark" ? (
+                    <Sun size={16} className="text-amber-400" />
+                  ) : (
+                    <Moon
+                      size={16}
+                      className="text-gray-600 dark:text-gray-300"
+                    />
+                  )}
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {resolvedTheme === "dark" ? "Light" : "Dark"}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1 mb-1.5">
+                Account
+              </p>
               <button
                 onClick={() => {
                   navigate("/founder");
                   setShowMobileMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors"
+                className="w-full flex items-center gap-2 p-2.5 bg-amber-500/10 rounded-lg hover:bg-amber-500/20 transition-colors text-left"
               >
-                <Crown size={16} className="text-amber-400" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Admin
+                <Crown size={15} className="text-amber-400" />
+                <span className="text-xs text-amber-500 dark:text-amber-400">
+                  Admin Console
                 </span>
+                <ChevronRight size={12} className="ml-auto text-amber-400" />
               </button>
             </div>
 
