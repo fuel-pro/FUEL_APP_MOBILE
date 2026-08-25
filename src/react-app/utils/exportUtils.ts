@@ -175,11 +175,33 @@ function getPumpsForType(state: any, type: CanonicalFuelType): any[] {
  * pmsPrice/agoPrice fields; all other types use fuelPricesByType[type].
  */
 function getPriceForType(state: any, type: CanonicalFuelType): number {
+  // Prefer the station's configured fuel_types_config price (the same source
+  // FuelTypesManager edits + the UI reads). Read synchronously from the
+  // cloudStorageService in-memory cache so the export uses the CURRENT
+  // configured price, not a stale persisted pmsPrice scalar.
+  try {
+    const cached =
+      cloudStorageService.getCached<
+        Array<{ name?: string; price?: number; active?: boolean }>
+      >("fuel_types_config");
+    if (Array.isArray(cached)) {
+      for (const ft of cached) {
+        if (ft?.active === false) continue;
+        const canonical = ft?.name ? normalizeFuelType(ft.name) : null;
+        if (
+          canonical === type &&
+          typeof ft?.price === "number" &&
+          ft.price > 0
+        ) {
+          return ft.price;
+        }
+      }
+    }
+  } catch {
+    /* non-fatal — fall through to the in-memory state */
+  }
   if (type === "petrol")
     return (
-      // Prefer the station's current LIVE price (fuelPricesByType), then the
-      // legacy scalars. This keeps the export in sync with the current on-
-      // screen price instead of a stale persisted pmsPrice.
       state.fuelPricesByType?.petrol ?? state.pmsPrice ?? state.petrolPrice ?? 0
     );
   if (type === "diesel")
