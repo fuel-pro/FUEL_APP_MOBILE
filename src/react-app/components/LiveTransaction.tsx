@@ -1118,7 +1118,7 @@ export default function LiveTransaction() {
             paymentSources.map((source) => (
               <div
                 key={source.id}
-                className="bg-gray-700 p-3 rounded border-l-4 border-green-500 relative group"
+                className="bg-gray-100 dark:bg-gray-700 p-3 rounded border-l-4 border-green-500 relative group"
               >
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -1277,7 +1277,7 @@ export default function LiveTransaction() {
               type="datetime-local"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
             />
           </div>
           <div>
@@ -1286,7 +1286,7 @@ export default function LiveTransaction() {
               type="datetime-local"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
             />
           </div>
           <button
@@ -1295,7 +1295,7 @@ export default function LiveTransaction() {
               setStartTime("");
               setEndTime("");
             }}
-            className="bg-gray-600 hover:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2"
+            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2"
           >
             <XCircle size={16} />
             Clear
@@ -1565,7 +1565,7 @@ export default function LiveTransaction() {
                       })
                     }
                     placeholder={`Enter phone number (e.g. ${getDialingCode()}712345678)`}
-                    className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                    className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -1583,7 +1583,7 @@ export default function LiveTransaction() {
                       })
                     }
                     placeholder="1000"
-                    className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                    className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -1601,7 +1601,7 @@ export default function LiveTransaction() {
                       })
                     }
                     placeholder="INV-001 or Customer Name"
-                    className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                    className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -1619,7 +1619,7 @@ export default function LiveTransaction() {
                       })
                     }
                     placeholder="Payment for fuel"
-                    className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                    className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -1666,7 +1666,7 @@ export default function LiveTransaction() {
                       });
                     }}
                     disabled={stkPushStatus.loading}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
                   >
                     Cancel
                   </button>
@@ -1694,7 +1694,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, source_type: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 >
                   <option value="mpesa_paybill">M-PESA Paybill</option>
                   <option value="mpesa_buygoods">M-PESA Buy Goods</option>
@@ -1824,7 +1824,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, identifier: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder={
                     newSource.source_type.includes("mpesa") ||
                     newSource.source_type === "kopo_kopo"
@@ -1843,7 +1843,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, source_name: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="e.g., Main Fuel Station Till"
                   required
                 />
@@ -1858,7 +1858,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, account_info: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="Optional account details"
                 />
               </div>
@@ -1882,7 +1882,7 @@ export default function LiveTransaction() {
                   resetNewSource();
                 }}
                 disabled={isLoading}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
+                className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
               >
                 Cancel
               </button>
@@ -1908,7 +1908,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, source_type: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 >
                   <option value="mpesa_paybill">M-PESA Paybill</option>
                   <option value="mpesa_buygoods">M-PESA Buy Goods</option>
@@ -1930,7 +1930,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, identifier: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 />
               </div>
               <div>
@@ -1943,7 +1943,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, source_name: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   required
                 />
               </div>
@@ -1957,7 +1957,7 @@ export default function LiveTransaction() {
                   onChange={(e) =>
                     setNewSource({ ...newSource, account_info: e.target.value })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 />
               </div>
             </div>
@@ -1981,7 +1981,7 @@ export default function LiveTransaction() {
                   resetNewSource();
                 }}
                 disabled={isLoading}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
+                className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
               >
                 Cancel
               </button>
@@ -2029,7 +2029,7 @@ export default function LiveTransaction() {
                     setSelectedSource(null);
                   }}
                   disabled={isLoading}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
                 >
                   Cancel
                 </button>
@@ -2151,7 +2151,7 @@ export default function LiveTransaction() {
                       sender_info: e.target.value,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="e.g., John Mwangi"
                 />
               </div>
@@ -2173,7 +2173,7 @@ export default function LiveTransaction() {
                       amount: parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="1000"
                 />
               </div>
@@ -2189,7 +2189,7 @@ export default function LiveTransaction() {
                       payment_method: e.target.value,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 >
                   {[
                     "M-PESA",
@@ -2217,7 +2217,7 @@ export default function LiveTransaction() {
                       source_id: e.target.value,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                 >
                   <option value="">— Direct / Unspecified —</option>
                   {paymentSources.map((s) => (
@@ -2240,7 +2240,7 @@ export default function LiveTransaction() {
                       account_reference: e.target.value,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="INV-001 or Customer Account"
                 />
               </div>
@@ -2257,7 +2257,7 @@ export default function LiveTransaction() {
                       transaction_desc: e.target.value,
                     })
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                  className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
                   placeholder="Payment for fuel"
                 />
               </div>
@@ -2288,7 +2288,7 @@ export default function LiveTransaction() {
                   });
                 }}
                 disabled={isLoading}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
+                className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-900 dark:text-white py-2 rounded"
               >
                 Cancel
               </button>
