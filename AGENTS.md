@@ -8614,3 +8614,45 @@ Audited all 68 remote branches for unmerged commits not on main (c56abf0):
 - 5 branches with 0 ahead: fully contained in main.
 - All other branches (200+ behind): old divergent snapshots, work already on main.
 Conclusion: NO new lost work needs merging.
+
+## Session 2026-08-25 — Native Live TV/Radio replicate: category fix + dead-code cleanup (DEPLOYED LIVE)
+
+Completed the native Live TV/Radio replication (commit 92458da) with a category-priority bug fix found during live QA, plus a full dead-code cleanup of the iframe-era leftovers in LiveStreamService.ts.
+
+### Bug fix — content categories now outrank country filter
+
+Symptom (found in live browser QA): selecting the "Movies" category in Live TV showed 1555 channels (ALL country channels incl. news/kids) instead of movie channels. The country fetch was overriding the category fetch.
+
+Fix (LiveStreamService.ts):
+- resolveChannelFetchParams: effectiveCat = subDef?.upstreamCategory || category; content categories are global upstream, so the category now ALWAYS outranks the country filter.
+- getCuratedGoodChannels: curated YouTube news channels are only prepended for news/business/general categories — NOT for other content categories (movies/sports/kids etc.).
+
+Verified live (Cloudflare preview 15f380dd): Movies → 319 movie channels (was 1555 mixed); Movies→Action sub-category → 18 action channels (50 Cent Action, AXN, Pluto TV Action, Rakuten TV Action...); keyword genre filter works.
+
+### Dead-code cleanup (iframe-era leftovers removed)
+
+Removed ~360 lines of dead code from LiveStreamService.ts (2352 → 1993 lines). All were 0-external-use exports left over from the iframe era, only referenced by the never-imported default-export barrel: LiveNewsStream + LiveRadioStation interfaces, CANDIDATE_LIVE_NEWS_STREAMS + availabilityCache + CACHE_TTL, isYouTubeStreamAvailable (YouTube oEmbed verifier), getAvailableLiveNewsStreams / getCandidateLiveNewsStreams, resolveFetchTarget / getYouTubeEmbedUrl / YOUTUBE_EMBED_BASE, CATEGORY_LABELS / CATEGORY_COLORS / getCategoryLabel / getCategoryColor, ChannelPopularity interface + getChannelPopularity, getRecommendations ("For You" scorer), and the entire export default barrel (never imported as default). Also scrubbed the 3 remaining "tvgarden" mentions from src/ comments (client source now 0 refs; server-side api/_lib/tvgarden.ts keeps the name — it IS the reverse-engineered backend, never bundled client-side). Updated the file header comment (was describing the old iframe approach).
+
+### Live QA verification (2026-08-25, Cloudflare preview 15f380dd)
+
+Logged in as founder QA (founder.qa.fuelpro@gmail.com, US station, USD):
+- Live TV: 1544 channels, genre pills, native grid, zero provider iframe. Movies → 319 channels; Action → 18 channels.
+- Quality selection: Big Buck Bunny (HLS test loop) → quality selector shows Auto/1080p/720p/480p/288p/184p with FULL HD badge (1080p = the requested 1920x1080 top rendition).
+- Live Radio: 4100 stations, 24 genre sub-categories, styled audio player. Jazz → 904 jazz stations.
+- Search: filters within the active sub-category correctly.
+- Favorites: ♥ toggle saves combo, count badge, Recent panel shows Favorites + Recently Watched (auto-tracked history).
+- Reminders: created "Evening Jazz Session" 8:00 PM Once (showed "in 12h" countdown + delete), then deleted. Works end-to-end.
+- Error handling: dead stream shows "stream currently unreachable" with Retry + Next channel buttons.
+- Test data cleaned up after QA (reminder + favorite removed).
+
+### Lost-commit audit (2026-08-25)
+
+Re-audited all 43 unmerged remote branches. State matches the 2026-08-24 audit exactly — no NEW lost work: small branches (1-7 ahead, 200+ behind) already on main in more complete form (superseded); founder-username-login (7 ahead, 417 behind) awaiting user authorization for manual rebase (NOT auto-merged); identifying-security-vulnerabilities-8d289 (3 ahead, 179 behind) requires /api/r2/* + /api/cache/* endpoints first (NOT auto-merged); qwen-code-6a328546 (2 ahead, 157 behind) is a stale snapshot that would DELETE LiveStreamService.ts + re-add dead components (MUST NOT merge); large branches (200+ ahead, 604 behind) are old divergent snapshots.
+
+### Deploy state 2026-08-25
+
+- GitHub main: 92458da (native replicate) + category fix + dead-code cleanup (this commit).
+- Cloudflare Pages: LIVE (preview https://15f380dd.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: LIVE (prebuilt deploy, aliased to fuel-app-mobile.vercel.app; /api/live-channels movies endpoint verified returning HLS streams).
+- Supabase: no schema changes (frontend + serverless only).
+- npx tsc --noEmit 0 errors, npm run build success (clean Vite cache), vitest 19/19 pass, eslint 0 errors, prettier clean. All client bundles verified 0 "tvgarden" references.
