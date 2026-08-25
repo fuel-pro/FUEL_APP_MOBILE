@@ -8682,3 +8682,22 @@ Re-audited all 43 unmerged remote branches. State matches the 2026-08-24 audit e
 **Deploy state**: GitHub main 35f512f (pushed). Cloudflare Pages LIVE (a6c32a31 + main alias). Vercel production LIVE (prebuilt deploy). Supabase migration NOT needed (frontend-only). tsc 0 errors, build success.
 
 **Lost-commit audit (post-fix)**: re-audited 8 recently-active branches — no new lost work. Remaining documented branches (founder-username-login 7 commits, identifying-security-vulnerabilities-8d289 3 commits) remain NOT auto-merged per their manual-rebase requirements.
+## Session 2026-08-25 (cont.) — Full-site sweep + Supabase schema fix + CSP exchangerate fix
+
+**Goal**: navigate each section of the entire site and fix any bugs; fully integrate everything as if one conscience.
+
+**Sweep (Playwright headless)**: 31 tabs; 28 RENDER-OK, 2 NOT-FOUND (Documents + settings — the labels are auto-detected via button text; both are accessible via their respective IDs), 0 ERROR-BANNER on any tab. After sweep only 3 unique console errors remained: 1 legit 400 for GB country (tvgarden API returns empty for GB — gracefully handled), 1 CSP violation for api.allorigins.win (price-finder fallback proxy — was already in connect-src but the CSP tag had a parsing bug: `https://www.youtube.com https://www.youtube.com;` was missing a semicolon split between youtube and frame-src — fixed in f5cd36d), 1 ERR_FAILED (transient). The 42703/400 app_kv spam is GONE (version schema now applied).
+
+**Supabase Migration 020 applied LIVE** (was committed in repo but never applied):
+- app_kv.version BIGINT + app_kv_version_idx index
+- update_app_kv_version() trigger + trigger on app_kv (auto-increments version + updated_at on every UPDATE)
+- upsert_app_kv_versioned() RPC (optimistic-concurrency conditional upsert, SECURITY DEFINER, anon-callable). Fixed a UUID-cast bug (p_station_id TEXT→UUID) so the RPC actually runs; verified live with a real upsert + delete probe.
+- GRANT EXECUTE on the RPC (full signature). All console errors were from clients calling this RPC while it didn't exist + from the missing app_kv.version column in queries.
+
+**CSP fix (f5cd36d)**: added https://api.exchangerate-api.com to connect-src so DataSync (currency price sync) works (was violating CSP on every load).
+
+**Merged remote pricing fix (origin/main → 4ec5729)**: 8f16b08 "fix(pricing): Kenya county fallback for village geocoding + stale-cache guard" + 5638977 "fix(pricing): accurate Aug 2026 fuel prices + remove AI price fabrication" merged from origin/main (parallel session).
+
+**Deploy state**: GitHub main 4ec5729 (pushed, synced); Cloudflare Pages LIVE (1ab4c187 + main alias); Vercel production LIVE (prebuilt deploy, dpl_dhmdyw1hq); Supabase migration 020 applied live. tsc 0 errors, clean build.
+
+**Lost-commit audit**: remote main is now at 8f16b08 (merged into 4ec5729). Re-audited remaining unmerged branches — no new lost work; founder-username-login and identifying-security-vulnerabilities-8d289 still awaiting user authorization per their manual-rebase requirements.
