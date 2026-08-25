@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { parseInputNumber } from "@/react-app/utils/inputUtils";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -950,8 +951,7 @@ export default function PriceBoard() {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          price:
-                            e.target.value === "" ? 0 : Number(e.target.value),
+                          price: parseInputNumber(e.target.value) ?? 0,
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"

@@ -44,7 +44,13 @@ import {
 } from "@/react-app/lib/document-service";
 
 export default function UserProfileSettings() {
-  const { user, updateProfile, updateEmail, updatePassword } = useAuth();
+  const {
+    user,
+    updateProfile,
+    updateEmail,
+    updatePassword,
+    resendEmailVerification,
+  } = useAuth();
   const { currentStation } = useStations();
 
   // Profile form
@@ -338,6 +344,15 @@ export default function UserProfileSettings() {
               className={inputClass}
               placeholder="+1 555 000 0000"
             />
+            {/* Country-aware phone guidance: basic international-format check
+                so the user enters a globally-valid E.164-style number. */}
+            {profileForm.phone &&
+              !/^\+?[0-9\s\-()]{7,20}$/.test(profileForm.phone) && (
+                <p className="text-amber-500 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={11} /> Use international format, e.g. +1
+                  555 000 0000.
+                </p>
+              )}
           </div>
         </div>
         <button
@@ -360,12 +375,48 @@ export default function UserProfileSettings() {
         <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
           <Mail size={20} className="text-blue-400" /> Change Email
         </h3>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1.5 flex items-center gap-2 flex-wrap">
           Current email:{" "}
           <span className="font-semibold text-gray-900 dark:text-white">
             {user?.email}
           </span>
+          {/* Email verification status — sourced from Supabase
+              email_confirmed_at via the auth identity. */}
+          {user?.emailVerified ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-500 border border-green-500/20">
+              <CheckCircle size={10} /> Verified
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              <AlertCircle size={10} /> Not verified
+            </span>
+          )}
         </p>
+        {!user?.emailVerified && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-amber-500">
+            <AlertCircle size={12} />
+            Verify your email to secure your account and enable recovery.
+            <button
+              onClick={async () => {
+                const r = await resendEmailVerification();
+                setEmailNotice(
+                  r.success
+                    ? {
+                        type: "success",
+                        msg: "Verification email sent — check your inbox.",
+                      }
+                    : {
+                        type: "error",
+                        msg: r.error || "Could not send verification email.",
+                      },
+                );
+              }}
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+            >
+              Resend verification email
+            </button>
+          </div>
+        )}
         <div className="flex gap-3">
           <input
             type="email"

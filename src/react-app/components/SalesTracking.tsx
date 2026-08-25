@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from "react";
+import { parseInputNumber } from "@/react-app/utils/inputUtils";
 import {
   KENYA_BASE_PRICES,
   normalizeFuelType,
@@ -1099,9 +1100,7 @@ export default function SalesTracking() {
                       onChange={(e) =>
                         updateEditableField(
                           "tillAmount",
-                          e.target.value === ""
-                            ? 0
-                            : parseFloat(e.target.value) || 0,
+                          parseInputNumber(e.target.value) ?? 0,
                         )
                       }
                       className="text-sm"
@@ -1116,9 +1115,7 @@ export default function SalesTracking() {
                       onChange={(e) =>
                         updateEditableField(
                           "cashAmount",
-                          e.target.value === ""
-                            ? 0
-                            : parseFloat(e.target.value) || 0,
+                          parseInputNumber(e.target.value) ?? 0,
                         )
                       }
                       className="text-sm"
@@ -1165,9 +1162,7 @@ export default function SalesTracking() {
                               updateEditablePump(
                                 i,
                                 "salesAmount",
-                                e.target.value === ""
-                                  ? 0
-                                  : parseFloat(e.target.value) || 0,
+                                parseInputNumber(e.target.value) ?? 0,
                               )
                             }
                             className="w-24 px-2 py-1 rounded border text-xs"
@@ -1211,9 +1206,7 @@ export default function SalesTracking() {
                                 updateEditableExpense(
                                   i,
                                   "amount",
-                                  e.target.value === ""
-                                    ? 0
-                                    : parseFloat(e.target.value) || 0,
+                                  parseInputNumber(e.target.value) ?? 0,
                                 )
                               }
                               className="w-24 px-2 py-1 rounded border text-xs"
@@ -1412,9 +1405,7 @@ export default function SalesTracking() {
                       value={tankVal.opening ?? ""}
                       onChange={(e) =>
                         setTank(
-                          e.target.value === ""
-                            ? 0
-                            : parseFloat(e.target.value) || 0,
+                          parseInputNumber(e.target.value) ?? 0,
                           tankVal.closing,
                         )
                       }
@@ -1430,9 +1421,7 @@ export default function SalesTracking() {
                       onChange={(e) =>
                         setTank(
                           tankVal.opening,
-                          e.target.value === ""
-                            ? 0
-                            : parseFloat(e.target.value) || 0,
+                          parseInputNumber(e.target.value) ?? 0,
                         )
                       }
                       step="0.1"
@@ -1464,7 +1453,7 @@ export default function SalesTracking() {
                     type="number"
                     value={priceForType(ft)}
                     onChange={(e) =>
-                      setPriceForType(ft, parseFloat(e.target.value) || 0)
+                      setPriceForType(ft, parseInputNumber(e.target.value) ?? 0)
                     }
                     step="0.1"
                   />
@@ -1520,7 +1509,7 @@ export default function SalesTracking() {
                                 index,
                                 ft,
                                 "openingKsh",
-                                parseFloat(e.target.value) || 0,
+                                parseInputNumber(e.target.value) ?? 0,
                               )
                             }
                             step="0.1"
@@ -1536,7 +1525,7 @@ export default function SalesTracking() {
                                 index,
                                 ft,
                                 "closingKsh",
-                                parseFloat(e.target.value) || 0,
+                                parseInputNumber(e.target.value) ?? 0,
                               )
                             }
                             step="0.1"
@@ -1552,7 +1541,7 @@ export default function SalesTracking() {
                                 index,
                                 ft,
                                 "openingL",
-                                parseFloat(e.target.value) || 0,
+                                parseInputNumber(e.target.value) ?? 0,
                               )
                             }
                             step="0.1"
@@ -1568,7 +1557,7 @@ export default function SalesTracking() {
                                 index,
                                 ft,
                                 "closingL",
-                                parseFloat(e.target.value) || 0,
+                                parseInputNumber(e.target.value) ?? 0,
                               )
                             }
                             step="0.1"
@@ -1664,7 +1653,7 @@ export default function SalesTracking() {
               onChange={(e) =>
                 dispatch({
                   type: "SET_TILL_PAYMENT",
-                  payload: parseFloat(e.target.value) || 0,
+                  payload: parseInputNumber(e.target.value) ?? 0,
                 })
               }
               step="0.1"

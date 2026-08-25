@@ -30,6 +30,9 @@ export interface AuthIdentity {
   permissions?: string[];
   phone?: string;
   username?: string;
+  /** Whether the user's email address has been confirmed (Supabase email
+   * confirmation link). Sourced from `user.email_confirmed_at`. */
+  emailVerified?: boolean;
 }
 
 export interface StationRoleBinding {
@@ -95,6 +98,12 @@ interface AuthContextType {
   updatePassword: (
     newPassword: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Resend the Supabase email-confirmation link for the signed-in user.
+   * Returns a friendly success/error so the profile UI can confirm. */
+  resendEmailVerification: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   bindRole: (
     stationId: string,
     stationName: string,
@@ -160,6 +169,7 @@ async function supabaseUserToIdentityEnriched(
     authId: `supabase_${user.id}`,
     authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
+    emailVerified: Boolean(user.email_confirmed_at),
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
     role: "owner",
@@ -198,6 +208,7 @@ function supabaseUserToIdentity(
     authId: `supabase_${user.id}`,
     authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
+    emailVerified: Boolean(user.email_confirmed_at),
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
     role: "owner",
@@ -1445,6 +1456,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, token, broadcastAuthUpdate],
   );
 
+  const resendEmailVerification = useCallback(async (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => {
+    if (!user?.email) {
+      return {
+        success: false,
+        error: "You must be signed in to resend the verification email.",
+      };
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: user.email,
+      });
+      if (error) {
+        const friendly = /rate limit|too many/i.test(error.message)
+          ? "Too many verification emails sent. Please wait a few minutes before trying again."
+          : error.message;
+        return { success: false, error: friendly };
+      }
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to resend verification email",
+      };
+    }
+  }, [user?.email]);
+
   const updatePassword = useCallback(
     async (
       newPassword: string,
@@ -1502,6 +1547,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateProfile,
         updateEmail,
         updatePassword,
+        resendEmailVerification,
         bindRole,
         terminateRole,
         getActiveBinding,

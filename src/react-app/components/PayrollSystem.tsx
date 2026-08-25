@@ -27,7 +27,11 @@ import {
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { getCurrencySymbol, isKenyaStation } from "../lib/currency";
+import {
+  getCurrencySymbol,
+  isKenyaStation,
+  getDetectedCountryCode,
+} from "../lib/currency";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
@@ -221,6 +225,12 @@ function normalizePayrollSettings(
   };
 }
 
+// Payroll statutory defaults are country-aware: Kenya uses SHA (2.75%) +
+// NSSF (480); other countries get generic tax-deduction defaults so the
+// payroll adapts to the station's location rather than forcing Kenya rules.
+const countryCode = getDetectedCountryCode();
+const isKenya = countryCode === "KE";
+
 const defaultSettings: PayrollSettings = {
   organizationName: "",
   organizationAddress: "",
@@ -231,18 +241,21 @@ const defaultSettings: PayrollSettings = {
   payrollYear: new Date().getFullYear(),
   paymentMethod: "bank",
   currency: "$", // overridden by station currency on mount"
-  enableSha: true,
-  enableNssf: true,
+  // SHA/NSSF are Kenya-specific statutory deductions; disable them by
+  // default for non-Kenyan stations (still user-toggleable).
+  enableSha: isKenya,
+  enableNssf: isKenya,
   enableTax: true,
+  // Employee union/levy is a universal payroll concept — keep enabled.
   enableUnion: true,
   theme: "blue",
   customRoles: [],
   originatorAccount: "",
-  branchDao: "4021",
+  branchDao: isKenya ? "4021" : "",
   origCode: "",
   reference: "",
-  shaPercentage: 2.75,
-  nssfAmount: 480,
+  shaPercentage: isKenya ? 2.75 : 0,
+  nssfAmount: isKenya ? 480 : 0,
 };
 
 export default function PayrollSystem() {
