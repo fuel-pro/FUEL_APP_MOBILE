@@ -225,8 +225,9 @@ export default function Header({
           <div className="hidden lg:flex items-center gap-2">
             <LocationSelector compact />
             <div className="w-px h-5 bg-gray-100 dark:bg-white/10" />
-            {/* Station Selector */}
-            {stations.length > 1 ? (
+            {/* Station Selector — always visible so the user can always
+                reach Manage Stations / switch to another station. */}
+            {stations.length > 0 ? (
               <div className="relative inline-block">
                 <button
                   onClick={() => setShowStationMenu(!showStationMenu)}
@@ -302,6 +303,15 @@ export default function Header({
                   <Plus size={11} /> Add Station
                 </button>
               )
+            )}
+            {/* Add Station (always visible so users can add a second station) */}
+            {stations.length > 0 && onShowStations && (
+              <button
+                onClick={onShowStations}
+                className="flex h-10 items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-xs transition-colors"
+              >
+                <Plus size={11} /> Add Station
+              </button>
             )}
           </div>
 
