@@ -9059,3 +9059,26 @@ are old divergent snapshots superseded on main.
 - tv-4k 2560x1440: zero overflow
 
 **Deploy state**: GitHub main 80c10f0 (pushed, synced); Cloudflare Pages LIVE (9430ad6a + main alias, xs:380px + grid-cols-10 confirmed in live CSS); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets); Supabase: no schema changes (frontend-only). tsc 0 errors, clean build, prettier pass.
+
+## Session 2026-08-25 (cont.) — Live TV/Radio fullscreen toggle + mobile sub-tab visibility fix
+
+**Requirements**: (1) view Live TV and Live Radio in fullscreen mode via a toggle, (2) in mobile mode some grids were hidden (Live Radio hidden off-screen).
+
+**Fullscreen fix (was broken)**:
+- toggleFullscreen previously called requestFullscreen on the player container only, then the fullscreenchange listener flipped isFullscreen — but the isFullscreen render branch had NO ref, so the toggle appeared to do nothing.
+- Fixed: added rootRef attached to the root element of BOTH render branches (normal + fullscreen). toggleFullscreen now fullscreens the WHOLE Live TV/Radio panel (player + grid + filters) via the native Fullscreen API (works in browser + app).
+- Added a big visible fullscreen button directly ON the player (blue, always visible on touch devices) — the previous header toolbar icon (10px) was easy to miss.
+- Fullscreen mode shows the player top-to-bottom with the channel grid + filters scrolling beneath (user can switch channels while staying in fullscreen). Exit via X button OR browser Esc.
+- Fullscreen header shows the active channel name.
+- Header fullscreen button now larger, labeled (Fullscreen/Exit), highlighted blue.
+
+**Mobile sub-tab visibility fix (Live Radio hidden off-screen)**:
+- SubTabBar: edge-fade gradient hint on the right when the row overflows (signals scrollability).
+- SubTabBar: auto-scrolls the active tab into view on mobile via scrollIntoView so the selected sub-tab is always centered/visible.
+- SubTabBar: flex-shrink-0 on tabs so labels never compress/cut off; overscroll-x-contain for smooth touch scrolling.
+
+**Verified live (Cloudflare preview 2ca3012f)**:
+- desktop fullscreen: clickedFs=true, fullscreenEl=true, fullscreenUi=true (the whole panel goes fullscreen).
+- mobile Live Radio: before click, the button is off-screen (left 286 > winW 375 edge); after click, it scrolls into view (visible=true) and content renders (hasContent=true).
+
+**Deploy state**: GitHub main 1bb2db6 (pushed, synced); Cloudflare Pages LIVE (2ca3012f + main alias); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets); Supabase: no schema changes. tsc 0 errors, clean build, prettier pass.
