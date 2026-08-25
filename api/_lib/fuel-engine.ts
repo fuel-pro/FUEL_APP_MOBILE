@@ -359,21 +359,38 @@ async function fetchFreeWebPrices(countryCode: string): Promise<string> {
 }
 
 // Static reference: EPRA Kenya max retail prices (KES/litre) for the
-// July 15 – August 14, 2026 pricing cycle. These are REAL published town
-// prices (not estimates). Refreshed monthly by cron.
+// August 15 – September 14, 2026 pricing cycle (announced 14 Aug 2026:
+// diesel −KSh5.00 vs the Jul–Aug cycle; super petrol & kerosene unchanged).
+// These are REAL published town prices (not estimates). Refreshed monthly.
 const EPRA_KE_REFERENCE = [
-  "EPRA Kenya published town prices (15 Jul – 14 Aug 2026, KES per litre):",
-  "Mombasa: super_petrol=210.87, diesel=219.58, kerosene=188.09",
-  "Nairobi: super_petrol=214.03, diesel=222.86, kerosene=191.38",
-  "Nakuru: super_petrol=212.92, diesel=222.27, kerosene=190.81",
-  "Eldoret: super_petrol=213.69, diesel=223.09, kerosene=191.63",
-  "Kisumu: super_petrol=213.69, diesel=223.09, kerosene=191.63",
-  "Nyeri: super_petrol=215.90, diesel=224.87, kerosene=193.38",
-  "Embu: super_petrol=215.46, diesel=224.40, kerosene=192.91",
-  "Machakos: super_petrol=214.07, diesel=222.91, kerosene=191.41",
-  "Mandera: super_petrol=234.68, diesel=245.04, kerosene=213.56",
-  "Eldas: super_petrol=231.45, diesel=241.57",
-  "Elwak: super_petrol=230.94, diesel=241.02",
+  "EPRA Kenya published town prices (15 Aug – 14 Sep 2026, KES per litre):",
+  "Nairobi: super_petrol=214.03, diesel=217.86, kerosene=191.38",
+  "Mombasa: super_petrol=210.87, diesel=214.58, kerosene=188.09",
+  "Kisumu: super_petrol=213.69, diesel=218.08, kerosene=191.63",
+  "Nakuru: super_petrol=212.92, diesel=217.27, kerosene=190.81",
+  "Eldoret: super_petrol=213.69, diesel=218.09, kerosene=191.63",
+  "Kakamega: super_petrol=213.43, diesel=217.80, kerosene=191.35",
+  "Nyeri: super_petrol=215.90, diesel=219.87, kerosene=193.38",
+  "Machakos: super_petrol=214.07, diesel=217.91, kerosene=191.41",
+  "Thika: super_petrol=213.70, diesel=217.50, kerosene=191.02",
+  "Naivasha: super_petrol=213.11, diesel=217.47, kerosene=191.01",
+  "Meru: super_petrol=218.67, diesel=222.85, kerosene=196.35",
+  "Embu: super_petrol=215.46, diesel=219.40, kerosene=192.91",
+  "Kisii: super_petrol=214.77, diesel=219.24, kerosene=192.78",
+  "Kericho: super_petrol=214.16, diesel=218.60, kerosene=192.14",
+  "Isiolo: super_petrol=218.44, diesel=222.59, kerosene=196.11",
+  "Nanyuki: super_petrol=216.80, diesel=220.83, kerosene=194.35",
+  "Migori: super_petrol=216.03, diesel=220.61, kerosene=194.15",
+  "Narok: super_petrol=215.92, diesel=219.89, kerosene=193.41",
+  "Voi: super_petrol=212.91, diesel=216.77, kerosene=190.29",
+  "Kilifi: super_petrol=211.68, diesel=215.45, kerosene=188.96",
+  "Malindi: super_petrol=212.01, diesel=215.81, kerosene=189.32",
+  "Garissa: super_petrol=220.40, diesel=224.70, kerosene=198.21",
+  "Lodwar: super_petrol=220.08, diesel=224.95, kerosene=198.50",
+  "Moyale: super_petrol=228.87, diesel=233.80, kerosene=207.32",
+  "Mandera: super_petrol=234.68, diesel=240.04, kerosene=213.56",
+  "Eldas: super_petrol=231.45, diesel=236.57",
+  "Elwak: super_petrol=230.94, diesel=236.02",
 ].join("\n");
 
 // Parsed structured form of EPRA_KE_REFERENCE for deterministic exact-match

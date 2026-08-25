@@ -14,208 +14,6 @@ import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 // Use BASE_CITIES from pricing config
 const KENYA_CITIES = BASE_CITIES;
 
-/**
- * Baseline KES/USD exchange rate derived from the country profile rather than
- * hardcoded. Falls back to the Kenya profile (130 KES/USD) when the detected
- * country has no rate. Note: `currency.exchangeRateToUSD` is USD-per-unit-local,
- * so KES-per-USD is its reciprocal.
- */
-function getBaselineExchangeRate(): number {
-  const countryId = getDetectedCountryCode();
-  const profile = getCountryById(countryId) || getCountryById("KE");
-  const usdPerLocal = profile?.currency?.exchangeRateToUSD;
-  if (!usdPerLocal || usdPerLocal <= 0) return 130;
-  return 1 / usdPerLocal;
-}
-
-// --- AI-POWERED PRICE ESTIMATION ---
-// Since direct API access to EPRA is limited, we use AI estimation
-// that factors in:
-// 1. Global oil price trends
-// 2. Exchange rates (KES/USD)
-// 3. Historical price patterns
-// 4. Last known official prices
-const PRICE_ESTIMATION_CONFIG = {
-  // Base prices from last known EPRA prices (June 2026)
-  lastKnownBase: {
-    petrol: KENYA_BASE_PRICES.petrol, // KES/litre - Nairobi Super Petrol
-    diesel: KENYA_BASE_PRICES.diesel, // KES/litre - Nairobi Diesel (ADO)
-    kerosene: KENYA_BASE_PRICES.kerosene, // KES/litre - Nairobi Kerosene
-  },
-  // Estimated monthly change ranges (based on historical patterns)
-  monthlyChangeRange: {
-    min: -2.5, // Max decrease
-    max: 4.5, // Max increase
-  },
-  // Price adjustment factors
-  adjustmentFactors: {
-    oilPriceImpact: 0.15, // 15% of oil price change affects pump price
-    exchangeRateImpact: 0.08, // 8% of KES/USD change affects pump price
-    seasonalDemand: 0.02, // 2% seasonal variation
-  },
-};
-
-/**
- * Estimate current fuel prices using AI model
- * This provides a reasonable approximation when official prices aren't available
- */
-async function estimateKenyaFuelPrices(): Promise<{
-  petrolPrice: number;
-  dieselPrice: number;
-  kerosenePrice: number;
-  confidence: number;
-  source: string;
-}> {
-  try {
-    // Try to get exchange rate. Derive the baseline KES/USD rate from the
-    // detected country profile instead of hardcoding a value.
-    const baselineRate = getBaselineExchangeRate();
-    let exchangeRate = baselineRate;
-    try {
-      const cachedRates = localStorage.getItem("fuelpro_exchange_rates");
-      if (cachedRates) {
-        const rates = JSON.parse(cachedRates);
-        if (rates.USD?.rate) exchangeRate = rates.USD.rate;
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // Calculate months since last known prices (June 2026)
-    const lastKnownDate = new Date("2026-06-15");
-    const now = new Date();
-    const monthsSinceLastKnown =
-      (now.getFullYear() - lastKnownDate.getFullYear()) * 12 +
-      (now.getMonth() - lastKnownDate.getMonth());
-
-    // Estimate price change based on:
-    // 1. Time elapsed (monthly changes compound)
-    // 2. Exchange rate changes from the country-profile baseline rate
-    const exchangeRateChange = (exchangeRate - baselineRate) / baselineRate; // % change from baseline
-    const exchangeRateAdjustment =
-      exchangeRateChange *
-      PRICE_ESTIMATION_CONFIG.adjustmentFactors.exchangeRateImpact *
-      100;
-
-    // Get cached global oil price trend
-    let oilTrend = 0;
-    try {
-      const oilData = localStorage.getItem("fuelpro_oil_price_trend");
-      if (oilData) {
-        const parsed = JSON.parse(oilData);
-        // Brent crude trend: typically 40-120 USD/barrel
-        // Each $10 change affects pump price by ~2.5 KES/litre
-        if (parsed.brentPrice) {
-          oilTrend = ((parsed.brentPrice - 85) / 10) * 2.5; // Deviation from $85 baseline
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // Calculate total estimated change
-    const baseChange =
-      monthsSinceLastKnown *
-      (PRICE_ESTIMATION_CONFIG.monthlyChangeRange.max / 2);
-    const totalChange = baseChange + exchangeRateAdjustment + oilTrend;
-
-    // Apply change to base prices
-    const petrolPrice =
-      Math.round(
-        (PRICE_ESTIMATION_CONFIG.lastKnownBase.petrol + totalChange) * 100,
-      ) / 100;
-    const dieselPrice =
-      Math.round(
-        (PRICE_ESTIMATION_CONFIG.lastKnownBase.diesel + totalChange * 0.95) *
-          100,
-      ) / 100;
-    const kerosenePrice =
-      Math.round(
-        (PRICE_ESTIMATION_CONFIG.lastKnownBase.kerosene + totalChange * 0.85) *
-          100,
-      ) / 100;
-
-    // Clamp to reasonable ranges
-    const clampedPetrol = Math.max(160, Math.min(280, petrolPrice));
-    const clampedDiesel = Math.max(150, Math.min(260, dieselPrice));
-    const clampedKerosene = Math.max(140, Math.min(240, kerosenePrice));
-
-    return {
-      petrolPrice: clampedPetrol,
-      dieselPrice: clampedDiesel,
-      kerosenePrice: clampedKerosene,
-      confidence: 0.75, // 75% confidence in AI estimation
-      source: "AI-Estimated (FuelPro)",
-    };
-  } catch {
-    // Fallback to last known prices
-    return {
-      petrolPrice: PRICE_ESTIMATION_CONFIG.lastKnownBase.petrol,
-      dieselPrice: PRICE_ESTIMATION_CONFIG.lastKnownBase.diesel,
-      kerosenePrice: PRICE_ESTIMATION_CONFIG.lastKnownBase.kerosene,
-      confidence: 0.5,
-      source: "Fallback (Last Known)",
-    };
-  }
-}
-
-/**
- * Update Kenya city prices based on AI estimation
- * This ensures all cities get updated prices proportionally
- */
-async function updateKenyaCityPrices(basePrices: {
-  petrol: number;
-  diesel: number;
-  kerosene: number;
-}) {
-  const transportCostPerKm = 0.05; // KES per km from Mombasa
-  const avgDistanceToCity: Record<string, number> = {
-    Mombasa: 0,
-    Nairobi: 440,
-    Kisumu: 410,
-    Nakuru: 160,
-    Eldoret: 320,
-    Kakamega: 330,
-    Bungoma: 380,
-    Kisii: 300,
-    Nyeri: 150,
-    Meru: 280,
-    Thika: 60,
-    Machakos: 30,
-    Naivasha: 90,
-    Kitale: 400,
-    Malindi: 120,
-    Lamu: 240,
-    Garissa: 330,
-    Lodwar: 550,
-    Kakuma: 450,
-    Mandera: 580,
-    Moyale: 700,
-    Wundanyi: 200,
-    Voi: 180,
-    Embu: 130,
-    Kitui: 170,
-  };
-
-  return Object.entries(avgDistanceToCity).map(([city, distance]) => {
-    const transportSurcharge = (distance - 440) * transportCostPerKm; // Relative to Nairobi
-    const cityPetrol =
-      Math.round((basePrices.petrol + transportSurcharge) * 100) / 100;
-    const cityDiesel =
-      Math.round((basePrices.diesel + transportSurcharge * 1.1) * 100) / 100;
-    const cityKerosene =
-      Math.round((basePrices.kerosene + transportSurcharge * 0.9) * 100) / 100;
-
-    return {
-      city,
-      petrolPrice: Math.max(160, Math.min(280, cityPetrol)),
-      dieselPrice: Math.max(150, Math.min(270, cityDiesel)),
-      kerosenePrice: Math.max(140, Math.min(250, cityKerosene)),
-      transportSurcharge: Math.round(transportSurcharge * 100) / 100,
-    };
-  });
-}
-
 // --- GEOLOCATION-BASED CITY MATCHING ---
 interface GeoLocation {
   lat: number;
@@ -264,11 +62,6 @@ function getNearestCity(
   return nearest ? { city: nearest.name, distance: nearest.distance } : null;
 }
 
-// Cache for dynamically updated prices
-let dynamicCityPrices: typeof KENYA_CITIES | null = null;
-let lastPriceUpdate: number = 0;
-const PRICE_CACHE_DURATION = 1000 * 60 * 60; // 1 hour
-
 // Get precise price for location
 export async function getPriceForLocation(
   countryCode: string,
@@ -309,78 +102,31 @@ export async function getPriceForLocation(
     return defaultPrices;
   }
 
-  // Use dynamic prices if available and fresh
-  const now = Date.now();
-  if (!dynamicCityPrices || now - lastPriceUpdate > PRICE_CACHE_DURATION) {
-    // Try to get AI-estimated prices
-    try {
-      const estimated = await estimateKenyaFuelPrices();
-      const updatedCities = await updateKenyaCityPrices({
-        petrol: estimated.petrolPrice,
-        diesel: estimated.dieselPrice,
-        kerosene: estimated.kerosenePrice,
-      });
+  // Use the REAL published EPRA town prices (KENYA_CITIES) directly. The
+  // previous implementation overwrote them with an "AI-estimated" base that
+  // compounded +KSh2.25/month indefinitely — fabricating prices that drifted
+  // further from the official EPRA gazette every month. That fabrication was
+  // removed; the static table is refreshed each EPRA cycle.
+  const cityData = KENYA_CITIES.find((c) => c.name === nearest.city);
 
-      dynamicCityPrices = KENYA_CITIES.map((city, i) => {
-        const updated = updatedCities.find((u) => u.city === city.name);
-        return {
-          ...city,
-          petrolPrice: updated?.petrolPrice || city.petrolPrice,
-          dieselPrice: updated?.dieselPrice || city.dieselPrice,
-          kerosenePrice: updated?.kerosenePrice || city.kerosenePrice,
-          transportSurcharge:
-            updated?.transportSurcharge || city.transportSurcharge,
-        };
-      });
-      lastPriceUpdate = now;
-
-      // Cache to localStorage
-      localStorage.setItem(
-        "fuelpro_dynamic_prices",
-        JSON.stringify({
-          prices: dynamicCityPrices,
-          updated: now,
-          source: estimated.source,
-        }),
-      );
-    } catch {
-      dynamicCityPrices = KENYA_CITIES;
-    }
-  }
-
-  // Try to load from cache first
-  try {
-    const cached = localStorage.getItem("fuelpro_dynamic_prices");
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed.prices && now - parsed.updated < PRICE_CACHE_DURATION * 24) {
-        dynamicCityPrices = parsed.prices;
-        lastPriceUpdate = parsed.updated;
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  // If too far from any city (>150km), use nearest anyway with interpolation
-  if (nearest.distance > 150) {
-    // Interpolate based on distance from Mombasa
-    const mombasaDist = 440; // Nairobi distance from Mombasa
-    const distanceRatio = nearest.distance / mombasaDist;
-    const transportSurcharge = (distanceRatio - 1) * 3.28; // Relative to Nairobi surcharge
+  // If too far from any priced town (>150km), anchor to the nearest town's
+  // REAL price plus a small distance-proportional transport surcharge
+  // (~KSh0.02/km beyond the priced town, consistent with the EPRA transport
+  // differentials in the gazette).
+  if (nearest.distance > 150 && cityData) {
+    const extra = Math.round((nearest.distance - 150) * 0.02 * 100) / 100;
     return {
-      petrolPrice: Math.round((193.43 + transportSurcharge) * 100) / 100,
-      dieselPrice: Math.round((178.56 + transportSurcharge * 1.1) * 100) / 100,
-      kerosenePrice:
-        Math.round((170.22 + transportSurcharge * 0.9) * 100) / 100,
+      petrolPrice: Math.round((cityData.petrolPrice + extra) * 100) / 100,
+      dieselPrice: Math.round((cityData.dieselPrice + extra) * 100) / 100,
+      kerosenePrice: Math.round((cityData.kerosenePrice + extra) * 100) / 100,
       isRegional: true,
       cityName: `Near ${nearest.city}`,
-      transportSurcharge: Math.round(transportSurcharge * 100) / 100,
-      source: "AI-Interpolated",
+      transportSurcharge:
+        Math.round((cityData.transportSurcharge + extra) * 100) / 100,
+      source: "EPRA Nearest (distance-adjusted)",
     };
   }
 
-  const cityData = dynamicCityPrices?.find((c) => c.name === nearest.city);
   if (cityData) {
     return {
       petrolPrice: cityData.petrolPrice,
@@ -389,7 +135,7 @@ export async function getPriceForLocation(
       isRegional: true,
       cityName: cityData.name,
       transportSurcharge: cityData.transportSurcharge,
-      source: "FuelPro Auto-Updated",
+      source: "EPRA Published (15 Aug – 14 Sep 2026)",
     };
   }
 
@@ -933,7 +679,7 @@ function getRegionalPriceEstimates(
     KE: {
       petrol: KENYA_BASE_PRICES.petrol,
       diesel: KENYA_BASE_PRICES.diesel,
-      kerosene: 170.22,
+      kerosene: KENYA_BASE_PRICES.kerosene,
     },
     UG: { petrol: 5450, diesel: 4980, kerosene: 4500 },
     TZ: { petrol: 3199, diesel: 2943, kerosene: 2840 },
@@ -993,22 +739,22 @@ function getRegionalPriceEstimates(
     OM: { petrol: 0.23, diesel: 0.255, kerosene: 0.21 },
     BH: { petrol: 0.2, diesel: 0.21, kerosene: 0.18 },
     // Europe
-    DE: { petrol: 1.85, diesel: 1.65, kerosene: 1.4 },
-    FR: { petrol: 1.92, diesel: 1.72, kerosene: 1.45 },
-    GB: { petrol: 1.52, diesel: 1.58, kerosene: 1.3 },
-    IT: { petrol: 1.88, diesel: 1.68, kerosene: 1.42 },
-    ES: { petrol: 1.72, diesel: 1.58, kerosene: 1.32 },
-    NL: { petrol: 1.95, diesel: 1.72, kerosene: 1.48 },
+    DE: { petrol: 2.16, diesel: 2.25, kerosene: 1.8 },
+    FR: { petrol: 1.9, diesel: 1.95, kerosene: 1.55 },
+    GB: { petrol: 1.62, diesel: 1.82, kerosene: 1.45 },
+    IT: { petrol: 1.95, diesel: 1.98, kerosene: 1.6 },
+    ES: { petrol: 1.75, diesel: 1.8, kerosene: 1.45 },
+    NL: { petrol: 2.1, diesel: 2.0, kerosene: 1.6 },
     // Americas
-    US: { petrol: 3.45, diesel: 3.85, kerosene: 3.2 },
-    CA: { petrol: 1.55, diesel: 1.72, kerosene: 1.45 },
+    US: { petrol: 1.08, diesel: 1.48, kerosene: 1.3 },
+    CA: { petrol: 1.7, diesel: 1.95, kerosene: 1.6 },
     BR: { petrol: 5.85, diesel: 4.65, kerosene: 3.8 },
     MX: { petrol: 24.5, diesel: 25.8, kerosene: 21.5 },
     AR: { petrol: 850, diesel: 720, kerosene: 600 },
     CL: { petrol: 1180, diesel: 950, kerosene: 800 },
     CO: { petrol: 13350, diesel: 11200, kerosene: 9500 },
     // Oceania
-    AU: { petrol: 1.85, diesel: 1.92, kerosene: 1.65 },
+    AU: { petrol: 2.1, diesel: 2.1, kerosene: 1.8 },
     NZ: { petrol: 2.85, diesel: 2.15, kerosene: 1.85 },
     // Caribbean
     JM: { petrol: 215, diesel: 205, kerosene: 180 },
@@ -1030,11 +776,11 @@ function getRegionalPriceEstimates(
     // Asia defaults
     XAS: { petrol: 85, diesel: 75, kerosene: 65 },
     // Europe defaults
-    XEU: { petrol: 1.75, diesel: 1.58, kerosene: 1.35 },
+    XEU: { petrol: 1.85, diesel: 1.93, kerosene: 1.55 },
     // Americas defaults
-    XAM: { petrol: 3.5, diesel: 3.2, kerosene: 2.8 },
+    XAM: { petrol: 1.35, diesel: 1.45, kerosene: 1.2 },
     // Oceania defaults
-    XOC: { petrol: 2.2, diesel: 2.0, kerosene: 1.75 },
+    XOC: { petrol: 2.1, diesel: 2.1, kerosene: 1.8 },
   };
 
   // Determine region from country code patterns
@@ -1245,7 +991,7 @@ function getRegionalPriceEstimates(
   if (oceaniaCodes.includes(countryCode)) return regionDefaults.XOC;
 
   // Ultimate fallback - use USD estimates
-  return { petrol: 1.2, diesel: 1.1, kerosene: 0.95 };
+  return { petrol: 1.42, diesel: 1.51, kerosene: 1.3 };
 }
 
 // ============================================================
@@ -1292,7 +1038,6 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
     let petrolPrice = 0;
     let dieselPrice = 0;
     let priceSource = "Unknown";
-    let useAIEstimation = false;
 
     const response = await fetchWithFallback(urls);
     if (response) {
@@ -1343,213 +1088,35 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       }
     }
 
-    // If still no prices, use AI estimation
-    if (petrolPrice === 0 || dieselPrice === 0) {
-      const estimated = await estimateKenyaFuelPrices();
-      petrolPrice = estimated.petrolPrice;
-      dieselPrice = estimated.dieselPrice;
-      priceSource = estimated.source;
-      useAIEstimation = true;
+    // Plausibility guard: extracted prices (EPRA page regex / web search) can
+    // be stale (previous cycle) or regex garbage. EPRA monthly adjustments are
+    // small (single-digit KSh), so anything outside ±15% of the current
+    // official base is discarded in favour of the real published reference.
+    const plausible = (v: number, base: number) =>
+      v > 0 && Math.abs(v - base) / base <= 0.15;
+    if (
+      !plausible(petrolPrice, KENYA_BASE_PRICES.petrol) ||
+      !plausible(dieselPrice, KENYA_BASE_PRICES.diesel)
+    ) {
+      petrolPrice = KENYA_BASE_PRICES.petrol;
+      dieselPrice = KENYA_BASE_PRICES.diesel;
+      priceSource = "EPRA Published (15 Aug – 14 Sep 2026)";
     }
 
-    // Get updated city prices if using AI estimation
+    // Regional prices always come from the REAL published EPRA town table
+    // (KENYA_CITIES) — the single source of truth, refreshed each cycle.
     let regionalPrices: FuelPriceData["regionalPrices"] = [];
-    if (useAIEstimation || petrolPrice !== 193.43) {
-      const updatedCities = await updateKenyaCityPrices({
-        petrol: petrolPrice,
-        diesel: dieselPrice,
-        kerosene: dieselPrice * 0.95,
-      });
-
-      regionalPrices = updatedCities.map((city) => ({
-        city: city.city,
-        petrolPrice: city.petrolPrice,
-        dieselPrice: city.dieselPrice,
-        kerosenePrice: city.kerosenePrice,
-        transportSurcharge: city.transportSurcharge,
+    {
+      regionalPrices = KENYA_CITIES.map((c) => ({
+        city: c.name,
+        petrolPrice: c.petrolPrice,
+        dieselPrice: c.dieselPrice,
+        kerosenePrice: c.kerosenePrice,
+        transportSurcharge: c.transportSurcharge,
       }));
-    } else {
-      // Use default regional prices
-      regionalPrices = [
-        {
-          city: "Nairobi",
-          petrolPrice: 193.43,
-          dieselPrice: 178.56,
-          kerosenePrice: 170.22,
-          transportSurcharge: 0.0,
-        },
-        {
-          city: "Mombasa",
-          petrolPrice: 190.15,
-          dieselPrice: 175.21,
-          kerosenePrice: 167.05,
-          transportSurcharge: -3.28,
-        },
-        {
-          city: "Kisumu",
-          petrolPrice: 196.78,
-          dieselPrice: 181.92,
-          kerosenePrice: 173.45,
-          transportSurcharge: 3.35,
-        },
-        {
-          city: "Nakuru",
-          petrolPrice: 195.12,
-          dieselPrice: 180.34,
-          kerosenePrice: 171.88,
-          transportSurcharge: 1.69,
-        },
-        {
-          city: "Eldoret",
-          petrolPrice: 197.55,
-          dieselPrice: 182.67,
-          kerosenePrice: 174.21,
-          transportSurcharge: 4.12,
-        },
-        {
-          city: "Kakamega",
-          petrolPrice: 197.45,
-          dieselPrice: 182.58,
-          kerosenePrice: 174.12,
-          transportSurcharge: 4.02,
-        },
-        {
-          city: "Bungoma",
-          petrolPrice: 197.89,
-          dieselPrice: 183.01,
-          kerosenePrice: 174.55,
-          transportSurcharge: 4.46,
-        },
-        {
-          city: "Kisii",
-          petrolPrice: 197.12,
-          dieselPrice: 182.25,
-          kerosenePrice: 173.78,
-          transportSurcharge: 3.69,
-        },
-        {
-          city: "Nyeri",
-          petrolPrice: 194.76,
-          dieselPrice: 179.89,
-          kerosenePrice: 171.44,
-          transportSurcharge: 1.33,
-        },
-        {
-          city: "Meru",
-          petrolPrice: 195.88,
-          dieselPrice: 181.01,
-          kerosenePrice: 172.55,
-          transportSurcharge: 2.45,
-        },
-        {
-          city: "Thika",
-          petrolPrice: 193.87,
-          dieselPrice: 179.01,
-          kerosenePrice: 170.66,
-          transportSurcharge: 0.44,
-        },
-        {
-          city: "Machakos",
-          petrolPrice: 194.21,
-          dieselPrice: 179.34,
-          kerosenePrice: 171.01,
-          transportSurcharge: 0.78,
-        },
-        {
-          city: "Naivasha",
-          petrolPrice: 194.98,
-          dieselPrice: 180.11,
-          kerosenePrice: 171.66,
-          transportSurcharge: 1.55,
-        },
-        {
-          city: "Kitale",
-          petrolPrice: 198.12,
-          dieselPrice: 183.25,
-          kerosenePrice: 174.78,
-          transportSurcharge: 4.69,
-        },
-        {
-          city: "Malindi",
-          petrolPrice: 190.89,
-          dieselPrice: 175.95,
-          kerosenePrice: 167.79,
-          transportSurcharge: -2.54,
-        },
-        {
-          city: "Lamu",
-          petrolPrice: 192.45,
-          dieselPrice: 177.51,
-          kerosenePrice: 169.35,
-          transportSurcharge: -0.98,
-        },
-        {
-          city: "Garissa",
-          petrolPrice: 198.67,
-          dieselPrice: 183.78,
-          kerosenePrice: 175.32,
-          transportSurcharge: 5.24,
-        },
-        {
-          city: "Lodwar",
-          petrolPrice: 220.3,
-          dieselPrice: 250.01,
-          kerosenePrice: 164.9,
-          transportSurcharge: 15.92,
-        },
-        {
-          city: "Kakuma",
-          petrolPrice: 205.5,
-          dieselPrice: 204.8,
-          kerosenePrice: 166.0,
-          transportSurcharge: 12.07,
-        },
-        {
-          city: "Mandera",
-          petrolPrice: 202.45,
-          dieselPrice: 187.56,
-          kerosenePrice: 179.1,
-          transportSurcharge: 9.02,
-        },
-        {
-          city: "Moyale",
-          petrolPrice: 203.12,
-          dieselPrice: 188.23,
-          kerosenePrice: 179.77,
-          transportSurcharge: 9.69,
-        },
-        {
-          city: "Wundanyi",
-          petrolPrice: 192.34,
-          dieselPrice: 177.4,
-          kerosenePrice: 168.88,
-          transportSurcharge: -1.09,
-        },
-        {
-          city: "Voi",
-          petrolPrice: 193.56,
-          dieselPrice: 178.62,
-          kerosenePrice: 169.98,
-          transportSurcharge: 0.13,
-        },
-        {
-          city: "Embu",
-          petrolPrice: 195.34,
-          dieselPrice: 180.47,
-          kerosenePrice: 172.0,
-          transportSurcharge: 1.91,
-        },
-        {
-          city: "Kitui",
-          petrolPrice: 196.89,
-          dieselPrice: 182.02,
-          kerosenePrice: 173.55,
-          transportSurcharge: 3.46,
-        },
-      ];
     }
 
-    const kerosenePrice = petrolPrice * 0.88; // Kerosene is typically ~88% of petrol
+    const kerosenePrice = KENYA_BASE_PRICES.kerosene; // EPRA published kerosene price
 
     const data: FuelPriceData = {
       countryCode: "KE",

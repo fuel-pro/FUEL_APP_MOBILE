@@ -12,7 +12,6 @@ import { useStations } from "@/react-app/context/StationContext";
 // Unified pricing - single source of truth for all fuel prices
 import {
   KENYA_BASE_PRICES,
-  DEFAULT_PRICES,
   getCountryPrice,
   normalizeFuelType,
 } from "@/react-app/config/pricing";

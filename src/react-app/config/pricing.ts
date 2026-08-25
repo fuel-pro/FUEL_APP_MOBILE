@@ -28,16 +28,17 @@
 // ============================================
 
 export const KENYA_BASE_PRICES = {
-  // EPRA Official Prices (KSh per litre) — cycle 15 Jul 2026 to 14 Aug 2026
+  // EPRA Official Prices (KSh per litre) — cycle 15 Aug 2026 to 14 Sep 2026
+  // (announced 14 Aug 2026: diesel −KSh5.00; petrol & kerosene unchanged)
   petrol: 214.03, // Super Petrol (PMS)
-  diesel: 222.86, // Automotive Gas Oil (AGO)
+  diesel: 217.86, // Automotive Gas Oil (AGO)
   kerosene: 191.38, // Illuminating Kerosene (IK)
 } as const;
 
 // Alternative names mapped to base prices
 export const KENYA_ALT_PRICES = {
   superPetrol: 214.03,
-  automotiveDiesel: 222.86,
+  automotiveDiesel: 217.86,
   lampKerosene: 191.38,
 } as const;
 
@@ -147,15 +148,17 @@ export const REGIONAL_PRICES: Record<
 // (reverse-geocode → web search → AI extract → PostGIS nearest) is always
 // preferred when the network is available.
 //
-// USD base prices (per litre, approximate global averages):
-//   petrol  ≈ $1.05, diesel ≈ $1.10, kerosene ≈ $0.90
+// USD base prices (per litre, Q2 2026 world averages from
+// GlobalPetrolPrices.com: gasoline $1.42/L, diesel $1.51/L; kerosene
+// tracks slightly below diesel). Updated Aug 2026 — the previous baseline
+// ($1.05/$1.10/$0.90) understated current world prices by ~30%.
 // Exchange rates (units per 1 USD) mirror world-country-utils.
 // ============================================
 
 const USD_BASE_PER_LITRE = {
-  petrol: 1.05,
-  diesel: 1.1,
-  kerosene: 0.9,
+  petrol: 1.42,
+  diesel: 1.51,
+  kerosene: 1.3,
 } as const;
 
 // Exchange rates: local currency units per 1 USD. Covers every currency used
@@ -559,12 +562,17 @@ export interface KenyaCityPrice {
 }
 
 export const KENYA_CITIES: KenyaCityPrice[] = [
+  // OFFICIAL EPRA maximum retail prices, cycle 15 Aug – 14 Sep 2026
+  // (announced 14 Aug 2026). Towns marked "derived" are not in the published
+  // 36-town gazette; they are anchored to the nearest official town with a
+  // small transport premium. transportSurcharge = petrol price − Nairobi
+  // petrol price (214.03).
   {
     name: "Nairobi",
     lat: -1.2921,
     lng: 36.8219,
     petrolPrice: 214.03,
-    dieselPrice: 222.86,
+    dieselPrice: 217.86,
     kerosenePrice: 191.38,
     transportSurcharge: 0.0,
   },
@@ -572,172 +580,291 @@ export const KENYA_CITIES: KenyaCityPrice[] = [
     name: "Mombasa",
     lat: -4.0435,
     lng: 39.6682,
-    petrolPrice: 212.23,
-    dieselPrice: 221.06,
-    kerosenePrice: 189.58,
-    transportSurcharge: -1.8,
+    petrolPrice: 210.87,
+    dieselPrice: 214.58,
+    kerosenePrice: 188.09,
+    transportSurcharge: -3.16,
   },
   {
     name: "Kisumu",
     lat: -0.1022,
     lng: 34.7617,
-    petrolPrice: 220.23,
-    dieselPrice: 229.06,
-    kerosenePrice: 197.38,
-    transportSurcharge: 6.2,
+    petrolPrice: 213.69,
+    dieselPrice: 218.08,
+    kerosenePrice: 191.63,
+    transportSurcharge: -0.34,
   },
   {
     name: "Nakuru",
     lat: -0.3031,
     lng: 36.0806,
-    petrolPrice: 216.53,
-    dieselPrice: 225.36,
-    kerosenePrice: 192.88,
-    transportSurcharge: 2.5,
+    petrolPrice: 212.92,
+    dieselPrice: 217.27,
+    kerosenePrice: 190.81,
+    transportSurcharge: -1.11,
   },
   {
     name: "Eldoret",
     lat: 0.5143,
     lng: 35.2698,
-    petrolPrice: 222.63,
-    dieselPrice: 231.46,
-    kerosenePrice: 199.28,
-    transportSurcharge: 8.6,
+    petrolPrice: 213.69,
+    dieselPrice: 218.09,
+    kerosenePrice: 191.63,
+    transportSurcharge: -0.34,
   },
   {
     name: "Kakamega",
     lat: 0.2827,
     lng: 34.7519,
-    petrolPrice: 219.83,
-    dieselPrice: 228.66,
-    kerosenePrice: 197.08,
-    transportSurcharge: 5.8,
+    petrolPrice: 213.43,
+    dieselPrice: 217.8,
+    kerosenePrice: 191.35,
+    transportSurcharge: -0.6,
   },
   {
     name: "Nyeri",
     lat: -0.4197,
     lng: 36.9553,
-    petrolPrice: 217.23,
-    dieselPrice: 226.06,
-    kerosenePrice: 193.58,
-    transportSurcharge: 3.2,
+    petrolPrice: 215.9,
+    dieselPrice: 219.87,
+    kerosenePrice: 193.38,
+    transportSurcharge: 1.87,
   },
   {
     name: "Machakos",
     lat: -1.5177,
     lng: 37.2634,
-    petrolPrice: 215.53,
-    dieselPrice: 224.36,
-    kerosenePrice: 192.38,
-    transportSurcharge: 1.5,
+    petrolPrice: 214.07,
+    dieselPrice: 217.91,
+    kerosenePrice: 191.41,
+    transportSurcharge: 0.04,
   },
   {
     name: "Meru",
     lat: 0.05,
     lng: 37.65,
-    petrolPrice: 218.93,
-    dieselPrice: 227.76,
-    kerosenePrice: 196.18,
-    transportSurcharge: 4.9,
+    petrolPrice: 218.67,
+    dieselPrice: 222.85,
+    kerosenePrice: 196.35,
+    transportSurcharge: 4.64,
   },
   {
     name: "Lodwar",
     lat: 3.1219,
     lng: 35.5972,
-    petrolPrice: 229.93,
-    dieselPrice: 238.76,
-    kerosenePrice: 207.38,
-    transportSurcharge: 15.92,
+    petrolPrice: 220.08,
+    dieselPrice: 224.95,
+    kerosenePrice: 198.5,
+    transportSurcharge: 6.05,
   },
   {
     name: "Garissa",
     lat: -0.4536,
-    lng: 40.07,
-    petrolPrice: 228.23,
-    dieselPrice: 237.06,
-    kerosenePrice: 205.78,
-    transportSurcharge: 14.2,
-  },
-  {
-    name: "Mombasa",
-    lat: -4.0435,
-    lng: 39.6682,
-    petrolPrice: 212.23,
-    dieselPrice: 221.06,
-    kerosenePrice: 189.58,
-    transportSurcharge: -1.8,
+    lng: 39.6583,
+    petrolPrice: 220.4,
+    dieselPrice: 224.7,
+    kerosenePrice: 198.21,
+    transportSurcharge: 6.37,
   },
   {
     name: "Malindi",
     lat: -3.2138,
     lng: 40.1169,
-    petrolPrice: 214.03,
-    dieselPrice: 222.86,
-    kerosenePrice: 191.38,
-    transportSurcharge: 0.0,
-  },
-  {
-    name: "Kitale",
-    lat: 1.015,
-    lng: 35.0062,
-    petrolPrice: 224.13,
-    dieselPrice: 232.96,
-    kerosenePrice: 200.78,
-    transportSurcharge: 10.1,
-  },
-  {
-    name: "Bungoma",
-    lat: 0.5635,
-    lng: 34.5606,
-    petrolPrice: 221.53,
-    dieselPrice: 230.36,
-    kerosenePrice: 198.18,
-    transportSurcharge: 7.5,
+    petrolPrice: 212.01,
+    dieselPrice: 215.81,
+    kerosenePrice: 189.32,
+    transportSurcharge: -2.02,
   },
   {
     name: "Kisii",
     lat: -0.6817,
     lng: 34.766,
-    petrolPrice: 220.93,
-    dieselPrice: 229.76,
-    kerosenePrice: 197.58,
-    transportSurcharge: 6.9,
+    petrolPrice: 214.77,
+    dieselPrice: 219.24,
+    kerosenePrice: 192.78,
+    transportSurcharge: 0.74,
   },
   {
     name: "Thika",
     lat: -1.0334,
     lng: 37.0692,
-    petrolPrice: 215.23,
-    dieselPrice: 224.06,
-    kerosenePrice: 192.08,
-    transportSurcharge: 1.2,
+    petrolPrice: 213.7,
+    dieselPrice: 217.5,
+    kerosenePrice: 191.02,
+    transportSurcharge: -0.33,
   },
   {
     name: "Naivasha",
     lat: -0.7172,
     lng: 36.432,
-    petrolPrice: 217.53,
-    dieselPrice: 226.36,
-    kerosenePrice: 193.88,
-    transportSurcharge: 3.5,
+    petrolPrice: 213.11,
+    dieselPrice: 217.47,
+    kerosenePrice: 191.01,
+    transportSurcharge: -0.92,
   },
   {
-    name: "Mlimani",
-    lat: -6.8,
-    lng: 39.2,
-    petrolPrice: 218.23,
-    dieselPrice: 227.06,
-    kerosenePrice: 194.58,
-    transportSurcharge: 4.2,
+    name: "Kericho",
+    lat: -0.3689,
+    lng: 35.2863,
+    petrolPrice: 214.16,
+    dieselPrice: 218.6,
+    kerosenePrice: 192.14,
+    transportSurcharge: 0.13,
   },
   {
-    name: "Diani",
+    name: "Embu",
+    lat: -0.5311,
+    lng: 37.4506,
+    petrolPrice: 215.46,
+    dieselPrice: 219.4,
+    kerosenePrice: 192.91,
+    transportSurcharge: 1.43,
+  },
+  {
+    name: "Isiolo",
+    lat: 0.3546,
+    lng: 37.5822,
+    petrolPrice: 218.44,
+    dieselPrice: 222.59,
+    kerosenePrice: 196.11,
+    transportSurcharge: 4.41,
+  },
+  {
+    name: "Nanyuki",
+    lat: 0.0167,
+    lng: 37.0728,
+    petrolPrice: 216.8,
+    dieselPrice: 220.83,
+    kerosenePrice: 194.35,
+    transportSurcharge: 2.77,
+  },
+  {
+    name: "Migori",
+    lat: -1.0634,
+    lng: 34.4731,
+    petrolPrice: 216.03,
+    dieselPrice: 220.61,
+    kerosenePrice: 194.15,
+    transportSurcharge: 2.0,
+  },
+  {
+    name: "Narok",
+    lat: -1.0833,
+    lng: 35.8667,
+    petrolPrice: 215.92,
+    dieselPrice: 219.89,
+    kerosenePrice: 193.41,
+    transportSurcharge: 1.89,
+  },
+  {
+    name: "Voi",
+    lat: -3.396,
+    lng: 38.556,
+    petrolPrice: 212.91,
+    dieselPrice: 216.77,
+    kerosenePrice: 190.29,
+    transportSurcharge: -1.12,
+  },
+  {
+    name: "Kilifi",
+    lat: -3.6307,
+    lng: 39.8499,
+    petrolPrice: 211.68,
+    dieselPrice: 215.45,
+    kerosenePrice: 188.96,
+    transportSurcharge: -2.35,
+  },
+  {
+    name: "Moyale",
+    lat: 3.5167,
+    lng: 39.05,
+    petrolPrice: 228.87,
+    dieselPrice: 233.8,
+    kerosenePrice: 207.32,
+    transportSurcharge: 14.84,
+  },
+  // --- Derived towns (not in the published gazette; anchored to the nearest
+  // official town with a small transport premium) ---
+  {
+    name: "Kitale", // derived: Eldoret + 1.50 transport premium
+    lat: 1.015,
+    lng: 35.0062,
+    petrolPrice: 215.19,
+    dieselPrice: 219.59,
+    kerosenePrice: 193.13,
+    transportSurcharge: 1.16,
+  },
+  {
+    name: "Bungoma", // derived: Kakamega + 1.20 transport premium
+    lat: 0.5635,
+    lng: 34.5606,
+    petrolPrice: 214.63,
+    dieselPrice: 219.0,
+    kerosenePrice: 192.55,
+    transportSurcharge: 0.6,
+  },
+  {
+    name: "Diani", // derived: Mombasa + 0.50 transport premium
     lat: -4.35,
     lng: 39.5833,
-    petrolPrice: 213.53,
-    dieselPrice: 222.36,
-    kerosenePrice: 190.88,
-    transportSurcharge: -0.5,
+    petrolPrice: 211.37,
+    dieselPrice: 215.08,
+    kerosenePrice: 188.59,
+    transportSurcharge: -2.66,
+  },
+  {
+    name: "Lamu", // derived: Malindi + 0.80 transport premium
+    lat: -2.2717,
+    lng: 40.902,
+    petrolPrice: 212.81,
+    dieselPrice: 216.61,
+    kerosenePrice: 190.12,
+    transportSurcharge: -1.22,
+  },
+  {
+    name: "Wundanyi", // derived: Voi + 0.60 transport premium
+    lat: -3.4,
+    lng: 38.3667,
+    petrolPrice: 213.51,
+    dieselPrice: 217.37,
+    kerosenePrice: 190.89,
+    transportSurcharge: -0.52,
+  },
+  {
+    name: "Kitui", // derived: Machakos + 0.80 transport premium
+    lat: -1.3667,
+    lng: 38.0167,
+    petrolPrice: 214.87,
+    dieselPrice: 218.71,
+    kerosenePrice: 192.21,
+    transportSurcharge: 0.84,
+  },
+  {
+    name: "Kakuma", // derived: Lodwar + 2.00 transport premium
+    lat: 3.7167,
+    lng: 34.8667,
+    petrolPrice: 222.08,
+    dieselPrice: 226.95,
+    kerosenePrice: 200.5,
+    transportSurcharge: 8.05,
+  },
+  {
+    name: "Mandera", // derived: EPRA reference, diesel −5.00 cycle adjustment
+    lat: 3.9366,
+    lng: 41.867,
+    petrolPrice: 234.68,
+    dieselPrice: 240.04,
+    kerosenePrice: 213.56,
+    transportSurcharge: 20.65,
+  },
+  {
+    name: "Wajir", // derived: previous-cycle value, diesel −5.00 adjustment
+    lat: 1.7471,
+    lng: 40.0629,
+    petrolPrice: 217.2,
+    dieselPrice: 221.6,
+    kerosenePrice: 195.14,
+    transportSurcharge: 3.17,
   },
 ];
 
@@ -746,9 +873,9 @@ export const KENYA_CITIES: KenyaCityPrice[] = [
 // ============================================
 
 export const DEFAULT_PRICES = {
-  petrol: 220.3, // KSh per litre
-  diesel: 250.01, // KSh per litre
-  kerosene: 164.9, // KSh per litre
+  petrol: KENYA_BASE_PRICES.petrol, // KSh per litre (EPRA 15 Aug – 14 Sep 2026)
+  diesel: KENYA_BASE_PRICES.diesel, // KSh per litre
+  kerosene: KENYA_BASE_PRICES.kerosene, // KSh per litre
   currency: "KES",
   currencySymbol: "KSh",
 } as const;
