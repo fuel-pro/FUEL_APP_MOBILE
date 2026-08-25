@@ -9017,3 +9017,26 @@ Same documented state — no new lost work. founder-username-login (7
 ahead) awaits user authorization; identifying-security-vulnerabilities-
 8d289 needs /api/r2/* + /api/cache/* endpoints first; all other branches
 are old divergent snapshots superseded on main.
+
+## Session 2026-08-25 (cont.) — Responsive grid safety layer (every grid adapts to device)
+
+**Requirement**: "ensure each Grid throughout the site adapts to each ASPECT RATIOS (on each type of device; phone, tablet, laptop, tv, etc...) for clarity and accessibility of grids."
+
+**What was done**:
+1. Audited all grids: 248 grid-cols-2, 114 grid-cols-1, 98 grid-cols-3, 76 grid-cols-4, 9 grid-cols-5, 6 grid-cols-6. Found 19 multi-column grids (3+ cols) declared WITHOUT a mobile breakpoint — these crushed to unreadable cells on a 320-420px phone.
+2. New `src/react-app/styles/grid-responsive.css` (imported in main.tsx):
+   - Phone (<=480px): 3+ col grids without a mobile breakpoint collapse to 2 cols
+   - Small phone (<=360px): 3-col grids go 1-col for readability
+   - Tablet portrait (481-820px): 4+ col grids cap at 3 cols
+   - All grid children get min-width: 0 (prevents forced overflow)
+   - Wide/TV (>=1920px): default page gutters widen (.max-w-6xl -> 80rem)
+3. Fixed worst hardcoded component grids with explicit mobile breakpoints: ExpenseTracker/FuelQualityTesting/AuditTrail/TrialAnalyticsSection KPI cards (grid-cols-3 -> 1/2/3), founder Payout/Subscription/Analytics (4 -> 2/4), PerformanceSection (5 -> 2/3/5), PaywallControlSection (4 -> 2/4), FirstLoginChoice (4 -> 2/4).
+
+**Verified live via Playwright across 5 device sizes** (after deploy to preview 4e4b13f5):
+- phone-320: zero overflow, all KPI grids 2-col
+- phone-375: zero overflow, all KPI grids 2-col
+- tablet 768x1024: zero overflow, 3-col
+- laptop 1280x800: zero overflow, 4-col
+- tv-4k 3840x2160: zero overflow, 4-col, widened gutters
+
+**Deploy state**: GitHub main 7d94d25 (pushed, synced); Cloudflare Pages LIVE (4e4b13f5 + main alias fuel-app-mobile.pages.dev, grid rules confirmed in live CSS); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets). tsc 0 errors, clean build, prettier pass.
