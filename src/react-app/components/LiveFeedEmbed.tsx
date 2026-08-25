@@ -185,6 +185,7 @@ function ChannelPlayer({
   onNext,
   onToggleFullscreen,
   isFullscreen,
+  onCaptionFallback,
 }: {
   channel: LiveChannel;
   isAudio: boolean;
@@ -192,6 +193,9 @@ function ChannelPlayer({
   onNext: () => void;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  /** Called when subtitles are toggled ON but the stream carries no embedded
+   * tracks — lets the parent auto-advance to a captioned channel. */
+  onCaptionFallback?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -443,6 +447,10 @@ function ChannelPlayer({
     if (subtitleTracks.length > 0) {
       const match = findSubtitleTrackIndex(subtitleTracks, lang);
       if (match >= 0) applySubtitleTrack(match);
+    } else {
+      // No embedded tracks on this stream — auto-advance to a channel that
+      // DOES carry captions so the toggle always lands on a subtitled stream.
+      onCaptionFallback?.();
     }
   };
 
@@ -570,7 +578,9 @@ function ChannelPlayer({
                   ))}
                   {subtitleTracks.length === 0 && (
                     <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                      No subtitle tracks in this stream
+                      This stream has no embedded subtitles. Pick a preferred
+                      language below — it will auto-activate on any stream or
+                      channel that carries captions (including YouTube).
                     </p>
                   )}
                   {/* Preferred language (auto-selects on streams that carry it) */}
@@ -622,7 +632,7 @@ function ChannelPlayer({
       <div className="flex-1 relative bg-black">
         {ytId ? (
           <iframe
-            key={`${channel.nanoid}-${retryKey}`}
+            key={`${channel.nanoid}-${retryKey}-${subtitleLang}`}
             src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0&cc_load_policy=1&cc_lang_pref=${encodeURIComponent(subtitleLang)}`}
             title={channel.name}
             className="absolute inset-0 w-full h-full border-0"
@@ -1177,6 +1187,26 @@ export default function LiveFeedEmbed({
     );
     const next = filteredChannels[(idx + 1) % filteredChannels.length];
     if (next) setActiveChannel(next);
+  }, [activeChannel, filteredChannels]);
+
+  // When the user enables subtitles on a stream with NO embedded tracks,
+  // auto-advance to a channel that DOES carry captions (YouTube embeds always
+  // can via cc_load_policy; HLS channels with a subtitle track). This keeps
+  // the CC toggle from landing on a dead "no subtitles" state.
+  const advanceToCaptionedChannel = useCallback(() => {
+    if (!activeChannel || filteredChannels.length === 0) return;
+    const start = filteredChannels.findIndex(
+      (c) => c.nanoid === activeChannel.nanoid,
+    );
+    for (let i = 1; i < filteredChannels.length; i++) {
+      const cand = filteredChannels[(start + i) % filteredChannels.length];
+      const hasYt = (cand.youtube_urls?.length || 0) > 0;
+      // HLS channels may carry embedded subtitle tracks — try them too.
+      if (hasYt || (cand.stream_urls?.length || 0) > 0) {
+        setActiveChannel(cand);
+        return;
+      }
+    }
   }, [activeChannel, filteredChannels]);
 
   // ─── EPG / REMINDERS CRUD ───────────────────────────────────────────────
@@ -1789,6 +1819,7 @@ export default function LiveFeedEmbed({
             onNext={nextChannel}
             onToggleFullscreen={toggleFullscreen}
             isFullscreen={isFullscreen}
+            onCaptionFallback={advanceToCaptionedChannel}
           />
         )}
       </div>
