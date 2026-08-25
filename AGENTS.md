@@ -8927,3 +8927,19 @@ GitHub main: c0b967f -> 5107414 -> 34d05f8. Cloudflare LIVE (075e8cbf + main ali
 
 ### Lost-commit audit (pre + post)
 Same documented state — no new lost work. founder-username-login (7 ahead) awaits authorization; identifying-security-vulnerabilities-8d289 needs /api/r2/* + /api/cache/* endpoints first.
+
+## Session 2026-08-25 (cont.) — Live TV/Radio responsive aspect-ratio player
+
+**Requirement**: enable the preview in Live TV and Live Radio to adapt to the device aspect ratio (phone, tablet, TV, laptop) for visibility.
+
+**Problem found**: the native player used FIXED pixel heights (320px compact / 480px default / 100% fullscreen). 480px was too tall on a 375px phone (wasted most of the screen) and a thin strip on a 1920px TV. No width-based scaling.
+
+**Fix** (LiveFeedEmbed.tsx, commit 72a2ffa): replaced fixed pixel heights with a true 16:9 aspect-ratio box (pb-[56.25%]) that scales with the container width on every device, clamped to minHeight 260 / maxHeight 560. Live Radio uses a shorter box (pb-[60%] sm:pb-[45%]) since audio has no video. Fullscreen still fills the viewport. All existing features (HLS quality selector, PiP, VLC controls, favorites, history, reminders) untouched.
+
+**Verified live via Playwright across 4 viewport sizes** (after deploy to preview 8b08c313):
+- phone 375x812: ratio 1.78 (exact 16:9), no horizontal overflow
+- tablet 768x1024: ratio 1.78 (exact 16:9), no overflow
+- laptop 1280x800: ratio 1.97 (maxHeight 560 clamp kicks in), no overflow
+- tv 1920x1080: ratio 1.97 (maxHeight 560 clamp), no overflow
+
+**Deploy state**: GitHub main 72a2ffa (pushed, synced); Cloudflare Pages LIVE (8b08c313 + main alias fuel-app-mobile.pages.dev, chunk News-BAkRN6_j.js with pb-[56.25%]/pb-[60%] markers confirmed); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets). tsc 0 errors, prettier pass, clean Vite-cache build.
