@@ -8701,3 +8701,86 @@ Re-audited all 43 unmerged remote branches. State matches the 2026-08-24 audit e
 **Deploy state**: GitHub main 4ec5729 (pushed, synced); Cloudflare Pages LIVE (1ab4c187 + main alias); Vercel production LIVE (prebuilt deploy, dpl_dhmdyw1hq); Supabase migration 020 applied live. tsc 0 errors, clean build.
 
 **Lost-commit audit**: remote main is now at 8f16b08 (merged into 4ec5729). Re-audited remaining unmerged branches — no new lost work; founder-username-login and identifying-security-vulnerabilities-8d289 still awaiting user authorization per their manual-rebase requirements.
+
+
+## Session 2026-08-25 — Auto "Current Pump Prices" precise-location fix (DEPLOYED LIVE)
+
+**User report**: "the fuel prices are inaccurate" for the auto-location
+Current Pump Prices. Full investigation + fix + live verification.
+
+### Root causes found + fixed (commits 5638977, 8f16b08, 3ba977b, 7147a04, 71d020b)
+
+1. **Stale/incorrect EPRA diesel price**: the published EPRA reference had
+   diesel 222.86 for Nairobi; the official gazette (15 Aug – 14 Sep 2026
+   cycle) is 217.86. Corrected across KENYA_BASE_PRICES, KENYA_CITIES, the
+   server EPRA_KE_REFERENCE table, and the Supabase fuel_prices rows.
+2. **Village-level geocoding misses (Lodwar/Moyale broken)**: Nominatim
+   resolves remote Kenya coords to villages (e.g. "Carlifonia" near Lodwar,
+   "Burji Manyatta" near Moyale) which never exact-match the EPRA town
+   table. Fix in api/_lib/fuel-engine.ts: PlaceInfo gains town/county/state;
+   the EPRA lookup now tries ALL locality candidates (village -> town ->
+   sub-county -> state) against the gazette table + a KE_COUNTY_TO_TOWN map
+   (Turkana->Lodwar, Marsabit->Moyale, ...). Kenya county is read from the
+   Nominatim `state` field (Nominatim `county` = sub-county in Kenya).
+3. **AI-extracted implausible prices**: gazette-maximum cap (EPRA_KE_MIN
+   guard) rejects AI-extracted KE prices outside the regulated band.
+4. **Stale localStorage cache**: DataSyncService.getSyncedFuelPrice()
+   validates cached KE national + regional-town prices (±15% of the current
+   official base) and discards stale values.
+5. **niceRound precision loss**: sub-10 prices rounded to 1 decimal
+   (1.42 -> 1.40 silently misstated USD prices). Now keeps 2 decimals
+   (per-litre convention).
+6. **/api/fuel-prices hard error without OILPRICE_API_KEY**: Kenya EPRA
+   mode + geolocation mode now serve the embedded published EPRA reference
+   (Nairobi 214.03/217.86/191.38) with success:true instead of an error.
+7. **USD base prices** updated to Q2 2026 GlobalPetrolPrices.com averages
+   (gasoline $1.42/L, diesel $1.51/L, kerosene $1.30/L).
+
+### DB cleanup
+
+Deleted bad partial fuel_prices rows ("Carlifonia", "Burji Manyatta"
+AI-Verified rows with null prices). Final scan: 22 KE rows, 0 outside the
+gazette range; world rows (US/IN/GB/AE/SA/ZA/NG/EG/TZ) all plausible.
+
+### Verified live (fuel-app-mobile.vercel.app/api/fuel-local)
+
+- Nairobi -> 214.03/217.86/191.38 "Published Reference" OK
+- Lodwar coords (Carlifonia) -> 220.08/224.95/198.50 OK
+- Moyale coords (Burji Manyatta) -> 228.87/233.80/207.32 OK
+- Mombasa OK, Nakuru OK, Eldoret OK (approx nearest)
+- /api/fuel-prices?country=KE -> success:true with published reference OK
+
+### Live browser test (fuel-app-mobile.pages.dev, founder QA user, US station)
+
+- Dashboard: Current Pump Prices shows station-configured $1.40/$1.50
+  (US, no Kenya leak) OK
+- Fuel Price Finder: Scan Local Fuel Rates -> country-aware US fallback
+  ($1.40/$1.50/$1.30, "Regulator Estimate (offline)" — no GPS in headless
+  browser, correct behavior) OK
+- POS: 15L Super Petrol @ $1.40 = $21.00 cash sale INV20260825000002RQIY,
+  0% VAT (US), receipt + celebration OK cloud-synced (pos_transactions__uid__sid)
+- Sales Tracking: added pump PMS-1-pohp, readings 1000->1050, auto-calc 50L,
+  saved OK cloud-synced (station-scoped compact blob)
+- Invoice: QA Test Client Ltd, 100L @ $1.40 = $140.00, fuel-price interlink
+  ("use fuel price"), saved INV-2026-002 OK
+- Credit: $700 purchase on QA Credit Customer -> Used $700/Available $4,300,
+  Collect via M-PESA + Create Invoice interlinks OK
+- Live Transaction: Shared Analytics, payment sources, accurate
+  "No Payment Integration Connected" status OK
+- Stock Management: 8 sub-tabs, inactive products visible (PR #113 fix) OK
+
+### Deploy state 2026-08-25 (HEAD 71d020b)
+
+- GitHub main: 71d020b (pushed)
+- Cloudflare Pages: LIVE (preview f7b6e224 + main alias)
+- Vercel production: LIVE (prebuilt, aliased fuel-app-mobile.vercel.app)
+- Supabase: no schema changes; fuel_prices table cleaned
+- tsc 0 errors, 27/27 tests pass, prettier clean
+
+### Lost-commit audit 2026-08-25
+
+Re-audited all unmerged branches. Same state as prior audits: large
+branches (200-309 ahead, 600+ behind) are old divergent snapshots already
+superseded on main; founder-username-login (7 ahead) awaiting user
+authorization for manual rebase; identifying-security-vulnerabilities-8d289
+requires /api/r2/* + /api/cache/* endpoints first. No new lost work.
