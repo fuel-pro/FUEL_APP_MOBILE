@@ -177,10 +177,13 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
       {showLeftArrow && (
         <button
           onClick={scrollLeft}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-r from-gray-900/90 to-transparent hover:from-gray-900 transition-all"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-r from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all"
           aria-label="Scroll tabs left"
         >
-          <ChevronLeft size={18} className="text-gray-400 hover:text-white" />
+          <ChevronLeft
+            size={18}
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          />
         </button>
       )}
 
@@ -214,8 +217,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
                 first:ml-0 last:mr-0
                 ${
                   isActive
-                    ? "text-blue-400 border-blue-500 bg-blue-500/5"
-                    : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/5 hover:border-gray-700"
+                    ? "text-blue-600 dark:text-blue-400 border-blue-500 bg-blue-500/5"
+                    : "text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 hover:border-gray-300 dark:hover:border-gray-700"
                 }
               `}
             >
@@ -234,10 +237,13 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
       {showRightArrow && (
         <button
           onClick={scrollRight}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-l from-gray-900/90 to-transparent hover:from-gray-900 transition-all"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-l from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all"
           aria-label="Scroll tabs right"
         >
-          <ChevronRight size={18} className="text-gray-400 hover:text-white" />
+          <ChevronRight
+            size={18}
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          />
         </button>
       )}
     </div>
