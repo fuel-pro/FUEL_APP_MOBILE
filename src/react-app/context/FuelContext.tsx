@@ -642,12 +642,22 @@ const initialState: FuelState = {
       visible: true,
     },
     {
+      id: "delivery",
+      label: "Fuel Statement Report",
+      originalLabel: "Delivery Tracker",
+      description: "Track fuel deliveries to customers",
+      // Deliveries happen daily; Stock Management is weekly/periodic, so
+      // Delivery outranks it in the day-to-day ordering.
+      order: 5,
+      visible: true,
+    },
+    {
       id: "inventory",
       label: "Stock Management",
       originalLabel: "Inventory",
       description:
         "Products catalog, stock adjustments, transfers, counts, wastage & auto-reorders",
-      order: 5,
+      order: 6,
       visible: true,
     },
     {
@@ -655,14 +665,6 @@ const initialState: FuelState = {
       label: "Fuel Sales Report",
       originalLabel: "Fuel Sales Report",
       description: "Monthly fuel sales reporting",
-      order: 6,
-      visible: true,
-    },
-    {
-      id: "delivery",
-      label: "Fuel Statement Report",
-      originalLabel: "Delivery Tracker",
-      description: "Track fuel deliveries to customers",
       order: 7,
       visible: true,
     },
