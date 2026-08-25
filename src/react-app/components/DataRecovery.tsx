@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Download, Upload, AlertCircle, CheckCircle, Cloud } from "lucide-react";
+import {
+  Download,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+  Cloud,
+} from "lucide-react";
 import EnhancedCard from "./EnhancedCard";
 import EnhancedButton from "./EnhancedButton";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -63,7 +69,9 @@ export default function DataRecovery({ onRestore }: DataRecoveryProps) {
       URL.revokeObjectURL(url);
 
       setStatus("success");
-      setMessage(`Cloud backup exported (${Object.keys(allData).length} records)`);
+      setMessage(
+        `Cloud backup exported (${Object.keys(allData).length} records)`,
+      );
       setTimeout(() => setStatus("idle"), 3000);
     } catch (error) {
       setStatus("error");

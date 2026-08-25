@@ -107,7 +107,10 @@ function rewritePlaylist(
   return out.join("\n");
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse,
+) {
   const r = wrapRes(res);
   const query = parseQuery(req);
   (req as ApiRequest).query = query;

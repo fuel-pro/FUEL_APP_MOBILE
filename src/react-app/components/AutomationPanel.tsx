@@ -144,12 +144,14 @@ export default function AutomationPanel() {
         <div className="bg-white/5 border border-white/10 rounded-xl p-3">
           <p className="text-[10px] text-gray-400">Active Automations</p>
           <p className="text-lg font-bold text-amber-400">
-            {[
-              prefs.autoReorderEnabled,
-              prefs.autoRecordStockOnProductEdit,
-              prefs.autoRefreshDashboard,
-              prefs.autoSyncPricesAcrossTabs,
-            ].filter(Boolean).length}
+            {
+              [
+                prefs.autoReorderEnabled,
+                prefs.autoRecordStockOnProductEdit,
+                prefs.autoRefreshDashboard,
+                prefs.autoSyncPricesAcrossTabs,
+              ].filter(Boolean).length
+            }
           </p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-3">

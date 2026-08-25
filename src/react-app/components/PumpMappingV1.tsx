@@ -1032,13 +1032,17 @@ const PumpMappingV1: React.FC = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">Total Pumps</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Total Pumps
+            </p>
             <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
               {extractedData?.pumps?.length || 0}
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">Total Sales</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Total Sales
+            </p>
             <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
               {extractedData?.metadata?.currency || ""}{" "}
               {extractedData?.metadata?.total_value
@@ -1047,13 +1051,17 @@ const PumpMappingV1: React.FC = () => {
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">Custom Rules</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Custom Rules
+            </p>
             <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
               {customRules.length}
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm">
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">Chat Messages</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Chat Messages
+            </p>
             <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
               {chatMessages.length}
             </p>

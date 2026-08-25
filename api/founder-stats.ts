@@ -132,7 +132,9 @@ export async function GET(request: Request): Promise<Response> {
   // 4) Fetch ALL stations (service_role bypasses the per-owner RLS).
   const { data: stationsRows, error: stationsErr } = await supabaseAdmin
     .from("stations")
-    .select("id, name, owner_id, created_by, location, created_at, updated_at, code, currency, country")
+    .select(
+      "id, name, owner_id, created_by, location, created_at, updated_at, code, currency, country",
+    )
     .order("created_at", { ascending: false });
 
   if (stationsErr) {
@@ -168,7 +170,10 @@ export async function GET(request: Request): Promise<Response> {
       revenueByStation.set(sid, existing + (Number(r.total_amount) || 0));
     }
   } else if (revenueErr) {
-    console.warn("[founder-stats] sales_enhanced query error:", revenueErr.message);
+    console.warn(
+      "[founder-stats] sales_enhanced query error:",
+      revenueErr.message,
+    );
   }
 
   // Also fetch from legacy sales table (total column) as fallback
@@ -190,7 +195,8 @@ export async function GET(request: Request): Promise<Response> {
       id: s.id,
       name: s.name || "Unnamed Station",
       ownerId: s.owner_id || s.created_by || "",
-      ownerName: ownerNameById.get(String(s.owner_id || s.created_by)) || "Owner",
+      ownerName:
+        ownerNameById.get(String(s.owner_id || s.created_by)) || "Owner",
       location: s.location || "Unknown",
       members: 1,
       createdAt: s.created_at,
@@ -232,7 +238,7 @@ export async function GET(request: Request): Promise<Response> {
     .from("sales_enhanced")
     .select("*", { count: "exact", head: true });
 
-  const totalSales = salesCountErr ? 0 : (salesCount || 0);
+  const totalSales = salesCountErr ? 0 : salesCount || 0;
   const avgSale = totalSales > 0 ? totalRevenue / totalSales : 0;
 
   const byFuelType = Array.from(byFuelTypeMap.entries()).map(
