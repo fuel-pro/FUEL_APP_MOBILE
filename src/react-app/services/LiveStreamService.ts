@@ -1523,6 +1523,13 @@ export function resolveChannelFetchParams(
   // Determine the effective upstream category
   const effectiveCat = subDef?.upstreamCategory || category;
 
+  // An explicitly-chosen sub-category outranks the country (fetch by
+  // upstream category — otherwise sub-category selection had no effect on
+  // the station list and the country list of thousands always won).
+  if (subDef && subCategoryId !== "all") {
+    return [{ mode, type: "categories", id: effectiveCat }];
+  }
+
   // If a specific country is selected (and not showAll), fetch by country
   if (country && !showAll) {
     return [{ mode, type: "countries", id: country }];
