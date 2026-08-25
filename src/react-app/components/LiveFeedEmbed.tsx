@@ -1087,8 +1087,18 @@ export default function LiveFeedEmbed({
   const accentBg =
     accent === "purple" ? "bg-purple-500 text-white" : "bg-blue-500 text-white";
 
-  // 16:9 player — renders up to 1920x1080 (and beyond) display size.
-  const playerHeight = compact ? 320 : isFullscreen ? "100%" : 480;
+  // ─── RESPONSIVE PLAYER HEIGHT ────────────────────────────────────────────
+  // Fixed pixel heights break across devices: 480px is way too tall on a
+  // 375px phone and a thin strip on a 1920px TV. Use a true 16:9 aspect ratio
+  // so the player scales with the container width (phone → TV), clamped to a
+  // sensible min/max. Radio uses a shorter 4:3-ish box (audio has no video).
+  // Fullscreen always fills the viewport.
+  const aspectBox = isRadio ? "pb-[60%] sm:pb-[45%]" : "pb-[56.25%]";
+  const playerHeightStyle: React.CSSProperties = isFullscreen
+    ? { height: "100%" }
+    : compact
+      ? {}
+      : { minHeight: 260, maxHeight: 560 };
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
   const embedContent = (
@@ -1543,17 +1553,17 @@ export default function LiveFeedEmbed({
         </div>
       )}
 
-      {/* NATIVE PLAYER — plays the active channel (16:9, up to 1080p+) */}
+      {/* NATIVE PLAYER — plays the active channel (responsive 16:9; radio uses
+          a shorter box). Scales with container width on every device:
+          phone → tablet → laptop → TV. */}
       <div
         ref={playerContainerRef}
-        className="relative w-full bg-black overflow-hidden"
-        style={{
-          height:
-            typeof playerHeight === "number"
-              ? `${playerHeight}px`
-              : playerHeight,
-        }}
+        className={`relative w-full bg-black overflow-hidden ${isFullscreen ? "h-full" : ""}`}
+        style={playerHeightStyle}
       >
+        {/* Aspect-ratio spacer keeps the box 16:9 (or shorter for radio) when
+            NOT in fullscreen — the inner player fills it absolutely. */}
+        {!isFullscreen && <div className={`${aspectBox} w-full`} />}
         {channelsLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
             <div className="text-center">
