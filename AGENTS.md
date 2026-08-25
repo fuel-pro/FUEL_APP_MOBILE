@@ -8908,3 +8908,22 @@ Fix (commit 6487f65): station dropdown trigger now always shows when stations.le
 Verified live (Cloudflare preview 58b3e190 + main alias): Station dropdown visible; clicked → Combined View + Manage Stations; Manage Stations → Station Manager modal with 7 sub-tabs; Overview: Station Health panel (score 50, Critical with issue list); Quick Actions: all 10 buttons including Team Manager; Team Manager quick action → Team Manager tab with 4 sub-tabs; two-way integration confirmed.
 
 Deploy: GitHub main 6487f65 (pushed, synced); Cloudflare LIVE (58b3e190 + main alias); Vercel BLOCKED (quota); Supabase: no schema changes. tsc 0 errors, prettier pass.
+
+
+## Session 2026-08-25 — Mega batch: verification + inputs + payroll country + tab order + tabnav adaptivity (DEPLOYED LIVE)
+
+### Completed (verified live)
+1. Email/phone verification (commit c0b967f): AuthIdentity.emailVerified + resendEmailVerification(); UserProfileSettings verification badge + resend link + country-aware phone hint.
+2. Payroll country flexibility (c0b967f): SHA/NSSF/branchDao defaults now country-aware (Kenya: SHA 2.75% + NSSF 480 + 4021; others OFF/0, toggleable).
+3. Clear-to-empty numeric inputs (c0b967f): replaced forced-0 pattern with parseInputNumber in SalesTracking (12 sites) + PriceBoard. Clearing a field now stays empty.
+4. Tab order by day-to-day usage (5107414): Delivery outranks Stock Management (order 5 vs 6); rest already usage-ordered.
+5. Tab nav light/dark adaptivity (34d05f8): scroll arrows + tab text now paired for both themes.
+
+### Verified already-correct (no change needed)
+Task 3 export completeness (exports include tank inventory + expenses + till/mpesa/cash); Task 6 Tutorial (Basic/Advanced with start/skip/prev/next/remind, one-time, context-aware); Task 7 Google sign-in (GIS + redirect implemented; blocker is Google Cloud Console redirect URI — user action); Task 8 latency (currentUserIdSync + 5-min cache + in-flight dedup); Task 10 export live data; Task 12 Price Board/Fuel Quality derive from Fuel Types; Task 14 dynamic fuel-type consistency.
+
+### Deploy state
+GitHub main: c0b967f -> 5107414 -> 34d05f8. Cloudflare LIVE (075e8cbf + main alias). Vercel BLOCKED by api-deployments-free-per-day (auto-deploys on reset ~24h). Supabase: no schema changes. tsc 0 errors, 27/27 tests, prettier clean.
+
+### Lost-commit audit (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead) awaits authorization; identifying-security-vulnerabilities-8d289 needs /api/r2/* + /api/cache/* endpoints first.
