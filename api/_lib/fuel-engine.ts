@@ -74,8 +74,11 @@ export interface PlaceInfo {
   region?: string;
   /** Parent town/city when the resolved name is a village/suburb */
   town?: string;
-  /** County / state_district (Kenya counties, e.g. "Turkana") */
+  /** County / sub-county (Nominatim "county", e.g. "Moyale") */
   county?: string;
+  /** First-level admin (Nominatim "state" — the real county in Kenya,
+   *  e.g. "Marsabit" / "Turkana") */
+  state?: string;
   raw: string;
 }
 
@@ -201,7 +204,8 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
     countryCode,
     region: addr.state || addr.region,
     town: addr.town || addr.city || addr.municipality,
-    county: addr.county || addr.state_district || addr.state,
+    county: addr.county || addr.state_district,
+    state: addr.state,
     raw: data.display_name || `${name}, ${country}`,
   };
 }
@@ -507,40 +511,41 @@ function lookupExactReference(
 // instead of surfacing misleading data. This is a data-quality guard, NOT an
 // estimation: we never substitute a fabricated price — we only accept prices
 // that are consistent with the known real-price range.
-const EPRA_KE_MIN = (() => {
+const EPRA_KE_RANGE = (() => {
   const vals = Object.values(EPRA_KE_REFERENCE_MAP);
-  const minOf = (k: keyof FuelPriceSet) =>
-    Math.min(
-      ...vals
-        .map((p) => p[k])
-        .filter(
-          (v): v is number => typeof v === "number" && Number.isFinite(v),
-        ),
-    );
+  const rangeOf = (k: keyof FuelPriceSet) => {
+    const nums = vals
+      .map((p) => p[k])
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return { min: Math.min(...nums), max: Math.max(...nums) };
+  };
   return {
-    super_petrol: minOf("super_petrol"),
-    diesel: minOf("diesel"),
-    kerosene: minOf("kerosene"),
+    super_petrol: rangeOf("super_petrol"),
+    diesel: rangeOf("diesel"),
+    kerosene: rangeOf("kerosene"),
   };
 })();
 
 function isPlausibleKenyaPrice(prices: FuelPriceSet): boolean {
-  // A price is plausible if every non-null value is within [85%, 115%] of the
-  // lowest EPRA reference price for that product. EPRA maxima vary by ~10%
-  // between towns; a real pump price will not be 15%+ below the cheapest
-  // regulated town, nor far above the dearest (which would be illegal).
+  // EPRA sets MAXIMUM retail pump prices per town. A real Kenyan pump price
+  // therefore (a) is not 15%+ below the cheapest regulated town, and
+  // (b) NEVER exceeds the dearest gazetted town (selling above the cap is
+  // illegal). AI-extracted values above the gazette maximum (e.g. diesel
+  // 242.92 when the Mandera maximum is 240.04) are rejected as wrong.
   const PLAUSIBLE_MIN = 0.85;
-  const PLAUSIBLE_MAX = 1.15;
-  const checks: Array<[number | null | undefined, number]> = [
-    [prices.super_petrol, EPRA_KE_MIN.super_petrol],
-    [prices.diesel, EPRA_KE_MIN.diesel],
-    [prices.kerosene, EPRA_KE_MIN.kerosene],
+  const CAP_TOLERANCE = 1.005; // 0.5% headroom for rounding
+  const checks: Array<
+    [number | null | undefined, { min: number; max: number }]
+  > = [
+    [prices.super_petrol, EPRA_KE_RANGE.super_petrol],
+    [prices.diesel, EPRA_KE_RANGE.diesel],
+    [prices.kerosene, EPRA_KE_RANGE.kerosene],
   ];
   let checkedAny = false;
-  for (const [val, refMin] of checks) {
+  for (const [val, ref] of checks) {
     if (val == null) continue;
     checkedAny = true;
-    if (val < refMin * PLAUSIBLE_MIN || val > refMin * PLAUSIBLE_MAX)
+    if (val < ref.min * PLAUSIBLE_MIN || val > ref.max * CAP_TOLERANCE)
       return false;
   }
   return checkedAny;
@@ -809,16 +814,25 @@ export async function getLocalFuelPrices(
   // These are REAL published prices for named towns — returned directly
   // without (unreliable) AI extraction. No estimation, no interpolation;
   // only an exact town-name match yields a price.
-  let refPrices = lookupExactReference(place.name, place.countryCode);
-  // Village/ward names miss the gazette; fall back to the parent town, then
-  // to the county's gazetted pricing town (Kenya only).
-  if (!refPrices && place.town) {
-    refPrices = lookupExactReference(place.town, place.countryCode);
+  // Village/ward/sub-county names miss the gazette. Try every locality
+  // candidate against the EPRA town table first (a sub-county like "Moyale"
+  // is itself a gazetted town), then map each candidate through the
+  // county -> gazetted pricing town table (Kenya only).
+  const candidates = [place.name, place.town, place.county, place.state]
+    .filter((c): c is string => Boolean(c && c.trim()))
+    .map((c) => c.trim());
+  let refPrices: FuelPriceSet | null = null;
+  for (const cand of candidates) {
+    refPrices = lookupExactReference(cand, place.countryCode);
+    if (refPrices) break;
   }
-  if (!refPrices && place.county) {
-    const countyTown = KE_COUNTY_TO_TOWN[place.county.trim().toLowerCase()];
-    if (countyTown) {
-      refPrices = lookupExactReference(countyTown, place.countryCode);
+  if (!refPrices) {
+    for (const cand of candidates) {
+      const countyTown = KE_COUNTY_TO_TOWN[cand.toLowerCase()];
+      if (countyTown) {
+        refPrices = lookupExactReference(countyTown, place.countryCode);
+        if (refPrices) break;
+      }
     }
   }
   if (refPrices) {
