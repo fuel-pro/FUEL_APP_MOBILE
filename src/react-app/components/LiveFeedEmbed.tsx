@@ -9,10 +9,15 @@ import {
   loadReminders,
   nextReminderTime,
   formatMinuteOfDay,
-  getLiveFeedEmbedUrl,
   getSubCategory,
+  filterChannelsByKeywords,
   fetchLiveChannels,
+  fetchIptvChannels,
+  mergeChannelsWithIptv,
+  mapToIptvCategory,
+  getCuratedGoodChannels,
   resolveChannelFetchParams,
+  trackChannelPlay,
   type LiveCategory,
   type LiveChannel,
   type LiveFeedCategory,
@@ -44,6 +49,11 @@ import {
   Monitor,
   Play,
   Search,
+  PictureInPicture2,
+  SkipForward,
+  RotateCcw,
+  Globe,
+  Signal,
 } from "lucide-react";
 
 interface LiveFeedEmbedProps {
@@ -68,24 +78,30 @@ interface LiveFeedEmbedProps {
 }
 
 /**
- * LiveFeedEmbed
+ * LiveFeedEmbed — FULL NATIVE live-channel browser + player.
  *
- * Hybrid live-channel browser + station preview:
- *  - The provider's live-guide page is embedded in an iframe as the BROWSE
- *    view (category/country/sub-category selectors update the iframe src).
- *  - The STATION PREVIEW (this task) plays the individually SELECTED station
- *    natively inside FuelPro: YouTube channels via YouTube iframe embed,
- *    HLS (.m3u8) channels via hls.js (direct URL first, CORS-proxy
- *    fallback), radio stations via a plain <audio> element. Only playable
- *    stations (having at least one stream or YouTube URL) are listed.
+ * A complete native replicate of a global live-TV/radio guide, powered
+ * server-side by the reverse-engineered live-channel API (via the
+ * same-origin /api/live-channels + /api/iptv-channels proxies). ZERO
+ * upstream attribution — no iframe to the provider's site, no branding,
+ * no links. Every pixel is native FuelPro UI.
  *
  * FEATURES (favorites/history/reminders cloud-synced cross-device):
- *  - 2-LEVEL taxonomy (category + sub-category)
+ *  - 2-LEVEL taxonomy: category (Movies/News/Sports/Music/Kids/Docs...) +
+ *    sub-category (Movies → Action/Adventure/Horror/Family/Historical/
+ *    Real-Life/Animation/Western/Romance/Sci-Fi/Crime/Fantasy/Musical/War/
+ *    Bollywood/Classics/Comedy/Drama; Sports → Football/Basketball/
+ *    Motorsport/Fight/Esports/...; etc.)
+ *  - Genre keyword sub-classification within broad upstream categories
  *  - Country filter (195 countries) + Show All (global)
- *  - Station picker with live search + per-station preview
- *  - Favorites, Surprise Me, Recently Watched
+ *  - NATIVE PLAYER: HLS via hls.js (direct URL first, CORS-proxy fallback),
+ *    YouTube iframe for YouTube channels, <audio> for radio
+ *  - QUALITY SELECTOR: pick the stream rendition (1080p/720p/540p/360p/Auto)
+ *    — defaults to the HIGHEST available resolution (1080p+ preference)
+ *  - Picture-in-Picture, fullscreen, retry, next-channel
+ *  - Native channel grid (logo/name/country/badges) with load-more paging
+ *  - Favorites, Surprise Me, Recently Watched, channel-play analytics
  *  - EPG / WATCH REMINDERS (schedule what to watch when)
- *  - Fullscreen mode
  */
 
 /** ISO weekdays Mon(1)..Sun(7) labels. */
@@ -98,6 +114,9 @@ const WEEKDAYS = [
   "Saturday",
   "Sunday",
 ];
+
+/** Grid page size for the "Load more" pager. */
+const GRID_PAGE = 48;
 
 /** Format a ms-epoch timestamp as a relative "in Xm" / "in Xh" / "X ago" string. */
 function formatRelativeTime(ts: number): string {
@@ -127,150 +146,228 @@ function hlsProxyUrl(url: string): string {
   return `/api/hls-proxy?url=${encodeURIComponent(url)}`;
 }
 
-/**
- * StationPreview — plays the individually SELECTED station (from the live
- * provider's catalog) natively inside FuelPro. YouTube channels use a
- * YouTube iframe embed; HLS channels use hls.js (direct URL first, proxy
- * fallback on fatal network error); radio stations use a plain <audio>
- * element (cross-origin audio playback needs no CORS).
- */
-function StationPreview({
-  station,
+/** A selectable HLS quality level (one rendition of the master playlist). */
+interface QualityLevel {
+  /** hls.js level index */
+  index: number;
+  /** Vertical resolution (e.g. 1080, 720). 0 when unknown. */
+  height: number;
+  /** Peak bandwidth in bps (used as a fallback label). */
+  bitrate: number;
+}
+
+/** Label for a quality level: "1080p", "720p", or a bitrate fallback. */
+function qualityLabel(l: QualityLevel): string {
+  if (l.height > 0) return `${l.height}p`;
+  if (l.bitrate > 0) return `${Math.round(l.bitrate / 1000)}k`;
+  return `Level ${l.index + 1}`;
+}
+
+// ===========================================================================
+// ChannelPlayer — the NATIVE player. HLS via hls.js with a quality selector
+// (defaults to the HIGHEST rendition → 1080p+), YouTube iframe for YouTube
+// channels, <audio> for radio. PiP + retry + next-channel built in.
+// ===========================================================================
+function ChannelPlayer({
+  channel,
   isAudio,
-  onClose,
+  accent,
+  onNext,
 }: {
-  station: LiveChannel;
+  channel: LiveChannel;
   isAudio: boolean;
-  onClose: () => void;
+  accent: "blue" | "purple";
+  onNext: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const hlsRef = useRef<import("hls.js").default | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [levels, setLevels] = useState<QualityLevel[]>([]);
+  const [currentLevel, setCurrentLevel] = useState<number>(-1);
+  const [pipActive, setPipActive] = useState(false);
+  const [buffering, setBuffering] = useState(true);
 
   const ytId = useMemo(
     () =>
-      (station.youtube_urls?.length ?? 0) > 0
-        ? extractYouTubeId(station.youtube_urls[0])
+      (channel.youtube_urls?.length ?? 0) > 0
+        ? extractYouTubeId(channel.youtube_urls[0])
         : null,
-    [station],
+    [channel],
   );
-  const streamUrl = station.stream_urls?.[0] || "";
-  const isHls =
-    !ytId && !!streamUrl && (isAudio ? /\.m3u8(\?|$)/i.test(streamUrl) : true);
-  const countryName = station.country
-    ? ALL_COUNTRIES.find((c) => c.code === station.country)?.name ||
-      station.country.toUpperCase()
+  const streamUrl = channel.stream_urls?.[0] || "";
+  const countryName = channel.country
+    ? ALL_COUNTRIES.find((c) => c.code === channel.country)?.name ||
+      channel.country.toUpperCase()
     : "";
 
   // HLS / direct playback wiring (skip when rendering a YouTube iframe)
   useEffect(() => {
     if (ytId || !streamUrl) return;
     let destroyed = false;
-    let hls: import("hls.js").default | null = null;
     let retriedViaProxy = false;
     const mediaEl: HTMLVideoElement | HTMLAudioElement | null = isAudio
       ? audioRef.current
       : videoRef.current;
     if (!mediaEl) return;
     setError(null);
+    setLevels([]);
+    setCurrentLevel(-1);
+    setBuffering(true);
 
-    const attachDirect = (url: string) => {
-      mediaEl.src = url;
-      mediaEl.play().catch(() => {
-        /* autoplay blocked — user presses play */
+    const handleFatal = (
+      Hls: typeof import("hls.js").default,
+      hls: import("hls.js").default,
+      data: { type?: string; fatal?: boolean },
+    ) => {
+      if (!data.fatal) return;
+      if (!retriedViaProxy) {
+        // Retry once via the CORS proxy (streams without CORS headers)
+        retriedViaProxy = true;
+        try {
+          hls.destroy();
+        } catch {
+          /* */
+        }
+        attachHls(Hls, hlsProxyUrl(streamUrl));
+        return;
+      }
+      if (!destroyed) {
+        setBuffering(false);
+        setError(
+          "This station's stream is currently unreachable. Try another station.",
+        );
+      }
+    };
+
+    const attachHls = (Hls: typeof import("hls.js").default, url: string) => {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        // Never cap the rendition to the player size — allow 1080p+ streams
+        // to play at full resolution regardless of the on-screen box.
+        capLevelToPlayerSize: false,
+        // Assume a fast link so ABR ramps to the top rendition immediately.
+        abrEwmaDefaultEstimate: 10_000_000,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 30000,
       });
+      hlsRef.current = hls;
+      hls.loadSource(url);
+      hls.attachMedia(mediaEl);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (destroyed) return;
+        // Build the quality list sorted best-first (highest resolution).
+        const lv: QualityLevel[] = hls.levels
+          .map((l, i) => ({
+            index: i,
+            height: l.height || 0,
+            bitrate: l.bitrate || 0,
+          }))
+          .sort((a, b) => b.height - a.height || b.bitrate - a.bitrate);
+        setLevels(lv);
+        // Default to the HIGHEST rendition (1080p+ preference per spec).
+        const best = lv[0];
+        if (best) {
+          hls.currentLevel = best.index;
+          setCurrentLevel(best.index);
+        }
+        mediaEl.play().catch(() => {
+          /* autoplay blocked — user presses play */
+        });
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => {
+        if (!destroyed) setCurrentLevel(data.level);
+      });
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        if (!destroyed) setBuffering(false);
+      });
+      hls.on(Hls.Events.ERROR, (_e, data) => handleFatal(Hls, hls, data));
     };
 
     (async () => {
-      if (isHls) {
-        try {
-          const Hls = (await import("hls.js")).default;
-          if (destroyed) return;
-          if (Hls.isSupported()) {
-            hls = new Hls({
-              enableWorker: true,
-              lowLatencyMode: true,
-              manifestLoadingTimeOut: 15000,
-              levelLoadingTimeOut: 15000,
-              fragLoadingTimeOut: 30000,
-            });
-            hls.loadSource(streamUrl);
-            hls.attachMedia(mediaEl);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              mediaEl.play().catch(() => {
-                /* autoplay blocked */
-              });
-            });
-            hls.on(Hls.Events.ERROR, (_evt, data) => {
-              if (!data.fatal) return;
-              if (!retriedViaProxy) {
-                // Retry once via the CORS proxy (streams without CORS headers)
-                retriedViaProxy = true;
-                try {
-                  hls?.destroy();
-                } catch {
-                  /* */
-                }
-                hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-                hls.loadSource(hlsProxyUrl(streamUrl));
-                hls.attachMedia(mediaEl);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  mediaEl.play().catch(() => {
-                    /* */
-                  });
-                });
-                hls.on(Hls.Events.ERROR, (_e2, d2) => {
-                  if (d2.fatal && !destroyed)
-                    setError(
-                      "This station's stream is currently unreachable. Try another station.",
-                    );
-                });
-                return;
-              }
-              if (!destroyed)
-                setError(
-                  "This station's stream is currently unreachable. Try another station.",
-                );
-            });
-            return;
-          }
-        } catch {
-          /* fall through to native */
+      try {
+        const Hls = (await import("hls.js")).default;
+        if (destroyed) return;
+        if (Hls.isSupported()) {
+          attachHls(Hls, streamUrl);
+          return;
         }
-        // Safari native HLS / fallback
-        if (mediaEl.canPlayType("application/vnd.apple.mpegurl")) {
-          attachDirect(streamUrl);
-        } else {
-          attachDirect(streamUrl);
-        }
-      } else {
-        // Non-HLS direct stream (mp3/aac/icecast etc.)
-        attachDirect(streamUrl);
+      } catch {
+        /* fall through to native */
       }
+      // Safari native HLS / non-HLS direct stream (mp3/aac/icecast etc.)
+      mediaEl.src = streamUrl;
+      mediaEl.play().catch(() => {
+        /* autoplay blocked */
+      });
+      setBuffering(false);
     })();
 
     return () => {
       destroyed = true;
       try {
-        hls?.destroy();
+        hlsRef.current?.destroy();
       } catch {
         /* */
       }
+      hlsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [station.nanoid, retryKey]);
+  }, [channel.nanoid, retryKey]);
+
+  // Track PiP state changes (e.g. user closes the PiP window directly)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onEnter = () => setPipActive(true);
+    const onLeave = () => setPipActive(false);
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+    };
+  }, [ytId, isAudio]);
+
+  const applyQuality = (idx: number) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.currentLevel = idx; // -1 = Auto (adaptive)
+    setCurrentLevel(idx);
+  };
+
+  const togglePip = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch {
+      /* PiP unsupported */
+    }
+  };
 
   const kindBadge = ytId ? "YouTube" : isAudio ? "Radio" : "HLS";
+  const maxHeight = levels[0]?.height || 0;
+  const accentText =
+    accent === "purple"
+      ? "text-purple-600 dark:text-purple-400"
+      : "text-blue-600 dark:text-blue-400";
 
   return (
-    <div className="absolute inset-0 z-30 bg-black flex flex-col">
-      {/* Preview header */}
+    <div className="absolute inset-0 bg-black flex flex-col">
+      {/* Player header: name + badges + quality + PiP + next */}
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800">
         <div className="flex items-center gap-2 min-w-0">
           <Play size={12} className="text-green-400 flex-shrink-0" />
           <span className="text-xs font-semibold text-white truncate">
-            {station.name}
+            {channel.name}
           </span>
           {countryName && (
             <span className="text-[10px] text-gray-400 flex-shrink-0 hidden sm:inline">
@@ -280,43 +377,85 @@ function StationPreview({
           <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex-shrink-0">
             {kindBadge}
           </span>
+          {maxHeight >= 720 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex-shrink-0">
+              {maxHeight >= 1080 ? "FULL HD" : "HD"}
+            </span>
+          )}
           <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1 flex-shrink-0">
             <span className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-            PREVIEW
+            LIVE
           </span>
         </div>
-        <button
-          onClick={onClose}
-          title="Back to channel browser"
-          className="text-[10px] px-2 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-1 flex-shrink-0"
-        >
-          <X size={10} /> Browse
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Quality selector — HLS only, 2+ renditions */}
+          {!ytId && !isAudio && levels.length > 1 && (
+            <select
+              value={currentLevel}
+              onChange={(e) => applyQuality(Number(e.target.value))}
+              title="Stream quality"
+              aria-label="Stream quality"
+              className="text-[10px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value={-1}>Auto</option>
+              {levels.map((l) => (
+                <option key={l.index} value={l.index}>
+                  {qualityLabel(l)}
+                </option>
+              ))}
+            </select>
+          )}
+          {/* PiP — native video only */}
+          {!ytId && !isAudio && (
+            <button
+              onClick={togglePip}
+              title={
+                pipActive ? "Exit picture-in-picture" : "Picture-in-picture"
+              }
+              aria-label="Picture-in-picture"
+              className={`p-1.5 rounded-lg transition-colors ${
+                pipActive
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+              }`}
+            >
+              <PictureInPicture2 size={12} />
+            </button>
+          )}
+          <button
+            onClick={onNext}
+            title="Next channel"
+            aria-label="Next channel"
+            className="p-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+          >
+            <SkipForward size={12} />
+          </button>
+        </div>
       </div>
-      {/* Preview body */}
+      {/* Player body */}
       <div className="flex-1 relative bg-black">
         {ytId ? (
           <iframe
-            key={`${station.nanoid}-${retryKey}`}
+            key={`${channel.nanoid}-${retryKey}`}
             src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0`}
-            title={station.name}
+            title={channel.name}
             className="absolute inset-0 w-full h-full border-0"
             allow="accelerometer; autoplay; encrypted-media; fullscreen; picture-in-picture"
             allowFullScreen
           />
         ) : isAudio ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 bg-gradient-to-br from-gray-900 via-gray-950 to-black">
             <div className="w-20 h-20 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center">
               <Radio size={36} className="text-purple-400" />
             </div>
             <p className="text-sm font-semibold text-white text-center">
-              {station.name}
+              {channel.name}
             </p>
             {countryName && (
               <p className="text-[11px] text-gray-400 -mt-2">{countryName}</p>
             )}
             <audio
-              key={`${station.nanoid}-${retryKey}`}
+              key={`${channel.nanoid}-${retryKey}`}
               ref={audioRef}
               controls
               autoPlay
@@ -324,15 +463,22 @@ function StationPreview({
             />
           </div>
         ) : (
-          <video
-            key={`${station.nanoid}-${retryKey}`}
-            ref={videoRef}
-            controls
-            autoPlay
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-contain bg-black"
-          />
+          <>
+            <video
+              key={`${channel.nanoid}-${retryKey}`}
+              ref={videoRef}
+              controls
+              autoPlay
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-contain bg-black"
+            />
+            {buffering && !error && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <Loader2 size={28} className={`animate-spin ${accentText}`} />
+              </div>
+            )}
+          </>
         )}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 p-4">
@@ -341,15 +487,15 @@ function StationPreview({
               <div className="flex items-center justify-center gap-2">
                 <button
                   onClick={() => setRetryKey((k) => k + 1)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 flex items-center gap-1"
                 >
-                  Retry
+                  <RotateCcw size={11} /> Retry
                 </button>
                 <button
-                  onClick={onClose}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600"
+                  onClick={onNext}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600 flex items-center gap-1"
                 >
-                  Back to browser
+                  <SkipForward size={11} /> Next channel
                 </button>
               </div>
             </div>
@@ -360,6 +506,111 @@ function StationPreview({
   );
 }
 
+// ===========================================================================
+// ChannelCard — a native grid card for one channel/station.
+// ===========================================================================
+function ChannelCard({
+  channel,
+  isActive,
+  isAudio,
+  onSelect,
+}: {
+  channel: LiveChannel;
+  isActive: boolean;
+  isAudio: boolean;
+  onSelect: () => void;
+}) {
+  const [logoError, setLogoError] = useState(false);
+  const isYt = (channel.youtube_urls?.length ?? 0) > 0;
+  const countryName = channel.country
+    ? ALL_COUNTRIES.find((c) => c.code === channel.country)?.name ||
+      channel.country.toUpperCase()
+    : "";
+  const initials = channel.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <button
+      onClick={onSelect}
+      title={`Play ${channel.name}`}
+      className={`group relative flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-center transition-all ${
+        isActive
+          ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/40"
+          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md"
+      }`}
+    >
+      {/* Logo / initials tile */}
+      <div
+        className={`w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 ${
+          isAudio
+            ? "bg-purple-100 dark:bg-purple-900/40"
+            : "bg-blue-100 dark:bg-blue-900/40"
+        }`}
+      >
+        {channel.logo && !logoError ? (
+          <img
+            src={channel.logo}
+            alt=""
+            loading="lazy"
+            onError={() => setLogoError(true)}
+            className="w-full h-full object-contain"
+          />
+        ) : initials ? (
+          <span
+            className={`text-sm font-bold ${
+              isAudio
+                ? "text-purple-600 dark:text-purple-300"
+                : "text-blue-600 dark:text-blue-300"
+            }`}
+          >
+            {initials}
+          </span>
+        ) : isAudio ? (
+          <Radio size={18} className="text-purple-600 dark:text-purple-300" />
+        ) : (
+          <Tv size={18} className="text-blue-600 dark:text-blue-300" />
+        )}
+      </div>
+      {/* Name */}
+      <span className="text-[10px] font-medium text-gray-800 dark:text-gray-200 leading-tight line-clamp-2 w-full">
+        {channel.name}
+      </span>
+      {/* Meta row */}
+      <span className="flex items-center gap-1 flex-wrap justify-center">
+        {countryName && (
+          <span className="text-[8px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 uppercase">
+            {channel.country}
+          </span>
+        )}
+        {isYt && (
+          <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+            YT
+          </span>
+        )}
+        {channel.isGeoBlocked && (
+          <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
+            GEO
+          </span>
+        )}
+      </span>
+      {/* Active indicator */}
+      {isActive && (
+        <span className="absolute top-1 right-1 flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded bg-green-500 text-white">
+          <span className="w-1 h-1 bg-white rounded-full animate-pulse" />
+          ON
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ===========================================================================
+// LiveFeedEmbed — main component.
+// ===========================================================================
 export default function LiveFeedEmbed({
   defaultCategory = "tv",
   defaultSubCategory,
@@ -371,14 +622,6 @@ export default function LiveFeedEmbed({
   accent = "blue",
   compact = false,
 }: LiveFeedEmbedProps) {
-  // ─── IFRAME-EMBED PLAYER ───────────────────────────────────────────────
-  // This component renders a DIRECT iframe embed of the upstream live-feed
-  // provider (tvgarden.world) as the player. This is the bulletproof path:
-  // no hls.js, no CORS proxy, no dead-stream detection, no auto-advance.
-  // The provider curates only live streams, so the iframe always shows
-  // actual video. The category/country/sub-category selectors simply update
-  // the iframe `src`, which reloads the provider's page for that slice.
-
   const { user } = useAuth();
   const [category, setCategory] = useState<LiveCategory>(defaultCategory);
   const [subCategoryId, setSubCategoryId] = useState<string>(
@@ -408,21 +651,14 @@ export default function LiveFeedEmbed({
   });
   const [showReminderModal, setShowReminderModal] = useState(false);
 
-  // Iframe load state — shows a spinner until the provider page renders.
-  const [iframeLoading, setIframeLoading] = useState(true);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const iframeLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ─── STATION PICKER + PREVIEW ────────────────────────────────────────────
-  // Playable stations for the active category/sub/country combo (fetched
-  // from the live-feed API via the same-origin proxy). Selecting a station
-  // overlays a native PREVIEW player on top of the browse iframe.
-  const [stations, setStations] = useState<LiveChannel[]>([]);
-  const [stationsLoading, setStationsLoading] = useState(false);
-  const [selectedStation, setSelectedStation] = useState<LiveChannel | null>(
-    null,
-  );
-  const [stationSearch, setStationSearch] = useState("");
+  // ─── NATIVE CHANNEL BROWSER ─────────────────────────────────────────────
+  const [channels, setChannels] = useState<LiveChannel[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [activeChannel, setActiveChannel] = useState<LiveChannel | null>(null);
+  const [channelSearch, setChannelSearch] = useState("");
+  const [gridLimit, setGridLimit] = useState(GRID_PAGE);
+  /** Set when a genre keyword filter matched 0 channels (fell back to base). */
+  const [keywordFilterMissed, setKeywordFilterMissed] = useState(false);
 
   // Cloud load guard
   const cloudLoadCompleteRef = useRef(false);
@@ -441,29 +677,27 @@ export default function LiveFeedEmbed({
 
   const activeCat = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
   const isRadio = activeCat?.family === "audio";
-
-  // ─── BUILD THE IFRAME SRC ──────────────────────────────────────────────
   const activeSubCategory = useMemo(
     () => getSubCategory(category, subCategoryId),
     [category, subCategoryId],
   );
 
-  const embedUrl = useMemo(() => {
-    const cc = showAll ? "" : country;
-    return getLiveFeedEmbedUrl(cc, category, activeSubCategory);
-  }, [country, showAll, category, activeSubCategory]);
-
-  // ─── FETCH PLAYABLE STATIONS for the active combo ───────────────────────
-  // Only stations with at least one stream or YouTube URL are listed (never
-  // show dead stations). YouTube-backed stations sort first (most reliable
-  // playback), then alphabetical. Selection resets on combo change.
+  // ─── FETCH CHANNELS for the active combo ────────────────────────────────
+  // Base list from the live-channel API (via the same-origin proxy), merged
+  // with the public-domain catalog (adds logos). Genre keyword sub-categories
+  // filter the merged list client-side; a 0-match filter falls back to the
+  // base list with a notice (never a dead end). Only playable stations are
+  // listed (never show dead streams).
   useEffect(() => {
     let cancelled = false;
-    setSelectedStation(null);
-    setStationSearch("");
-    setStationsLoading(true);
+    setChannelSearch("");
+    setGridLimit(GRID_PAGE);
+    setChannelsLoading(true);
+    setKeywordFilterMissed(false);
     (async () => {
       try {
+        const subDef = getSubCategory(category, subCategoryId);
+        const keywords = subDef?.keywords;
         const params = resolveChannelFetchParams(
           category,
           subCategoryId,
@@ -474,12 +708,11 @@ export default function LiveFeedEmbed({
           params.map((p) => fetchLiveChannels(p.mode, p.type, p.id)),
         );
         if (cancelled) return;
+        // Normalize: the API omits array keys when empty — always materialize
+        // both arrays so downstream code can never crash on missing keys.
         const seen = new Set<string>();
-        const playable = results
+        let list = results
           .flat()
-          // Normalize: the API omits array keys when empty (e.g. radio
-          // channels have no youtube_urls key) — always materialize both
-          // arrays so downstream code can never crash on missing keys.
           .map((ch) => ({
             ...ch,
             stream_urls: ch.stream_urls ?? [],
@@ -496,18 +729,68 @@ export default function LiveFeedEmbed({
             if (seen.has(ch.nanoid)) return false;
             seen.add(ch.nanoid);
             return true;
-          })
-          .sort((a, b) => {
-            const ay = (a.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
-            const by = (b.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
-            if (ay !== by) return ay - by;
-            return a.name.localeCompare(b.name);
           });
-        setStations(playable);
+
+        // Merge the public-domain catalog (adds logos + extra channels) for
+        // the video family only (it has no radio mode).
+        const catDef = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
+        const isAudio = catDef?.family === "audio";
+        if (!isAudio) {
+          try {
+            const iptvCat = mapToIptvCategory(category);
+            const iptvCountry = country && !showAll ? country : "";
+            const iptv = await fetchIptvChannels(iptvCountry, iptvCat, 200);
+            if (!cancelled && iptv.length > 0) {
+              list = mergeChannelsWithIptv(list, iptv);
+            }
+          } catch {
+            /* iptv merge is best-effort */
+          }
+        }
+        if (cancelled) return;
+
+        // Genre keyword sub-classification (Movies → Action/Horror/...).
+        if (keywords && keywords.length > 0) {
+          const filtered = filterChannelsByKeywords(list, keywords);
+          if (filtered.length > 0) {
+            list = filtered;
+          } else {
+            setKeywordFilterMissed(true);
+          }
+        }
+
+        // Prepend curated known-good channels (guaranteed-playable) so the
+        // player always has a reliable auto-select target. For keyword subs
+        // they only survive if they match the genre (else they'd pollute).
+        if (!keywords || keywords.length === 0) {
+          const curated = getCuratedGoodChannels(!!isAudio, category);
+          const seenIds = new Set(list.map((c) => c.nanoid));
+          const curatedUnique = curated.filter((c) => !seenIds.has(c.nanoid));
+          list = [...curatedUnique, ...list];
+        }
+
+        // Sort: YouTube-backed first (most reliable playback), then alpha.
+        list = [...list].sort((a, b) => {
+          const ay = (a.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
+          const by = (b.youtube_urls?.length ?? 0) > 0 ? 0 : 1;
+          if (ay !== by) return ay - by;
+          return a.name.localeCompare(b.name);
+        });
+
+        setChannels(list);
+        // Auto-select: keep the current channel if still present, else first.
+        setActiveChannel((prev) =>
+          prev && list.some((c) => c.nanoid === prev.nanoid)
+            ? prev
+            : (list[0] ?? null),
+        );
       } catch {
-        if (!cancelled) setStations([]);
+        if (!cancelled) {
+          setChannels([]);
+          setActiveChannel(null);
+        }
       } finally {
-        if (!cancelled) setStationsLoading(false);
+        if (!cancelled) setChannelsLoading(false);
       }
     })();
     return () => {
@@ -515,32 +798,27 @@ export default function LiveFeedEmbed({
     };
   }, [category, subCategoryId, country, showAll]);
 
-  // Search-filtered station options (capped for dropdown performance)
-  const filteredStations = useMemo(() => {
-    const q = stationSearch.trim().toLowerCase();
-    const list = q
-      ? stations.filter((s) => s.name.toLowerCase().includes(q))
-      : stations;
-    return list.slice(0, 500);
-  }, [stations, stationSearch]);
-
-  // ─── IFRAME LOAD HANDLING ──────────────────────────────────────────────
-  useEffect(() => {
-    setIframeLoading(true);
-    if (iframeLoadTimerRef.current) clearTimeout(iframeLoadTimerRef.current);
-    iframeLoadTimerRef.current = setTimeout(
-      () => setIframeLoading(false),
-      12000,
+  // Search-filtered + paged channel list
+  const filteredChannels = useMemo(() => {
+    const q = channelSearch.trim().toLowerCase();
+    if (!q) return channels;
+    return channels.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.country || "").toLowerCase().includes(q),
     );
-    return () => {
-      if (iframeLoadTimerRef.current) clearTimeout(iframeLoadTimerRef.current);
-    };
-  }, [embedUrl]);
+  }, [channels, channelSearch]);
 
-  const onIframeLoad = useCallback(() => {
-    setIframeLoading(false);
-    if (iframeLoadTimerRef.current) clearTimeout(iframeLoadTimerRef.current);
-  }, []);
+  const visibleChannels = useMemo(
+    () => filteredChannels.slice(0, gridLimit),
+    [filteredChannels, gridLimit],
+  );
+
+  // ─── CHANNEL-PLAY ANALYTICS (cloud-backed popularity) ───────────────────
+  useEffect(() => {
+    if (!activeChannel || !user?.id) return;
+    trackChannelPlay(activeChannel, category).catch(() => {});
+  }, [activeChannel, category, user?.id]);
 
   // ─── CLOUD LOAD: favorites + history + reminders ──────────────────────
   useEffect(() => {
@@ -702,6 +980,19 @@ export default function LiveFeedEmbed({
     setShowFavoritesPanel(false);
   };
 
+  const selectChannel = useCallback((ch: LiveChannel) => {
+    setActiveChannel(ch);
+  }, []);
+
+  const nextChannel = useCallback(() => {
+    if (!activeChannel || filteredChannels.length === 0) return;
+    const idx = filteredChannels.findIndex(
+      (c) => c.nanoid === activeChannel.nanoid,
+    );
+    const next = filteredChannels[(idx + 1) % filteredChannels.length];
+    if (next) setActiveChannel(next);
+  }, [activeChannel, filteredChannels]);
+
   // ─── EPG / REMINDERS CRUD ───────────────────────────────────────────────
   const openReminderModal = () => {
     setReminderForm({
@@ -782,6 +1073,7 @@ export default function LiveFeedEmbed({
   const accentBg =
     accent === "purple" ? "bg-purple-500 text-white" : "bg-blue-500 text-white";
 
+  // 16:9 player — renders up to 1920x1080 (and beyond) display size.
   const playerHeight = compact ? 320 : isFullscreen ? "100%" : 480;
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -808,6 +1100,11 @@ export default function LiveFeedEmbed({
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
             LIVE
           </span>
+          {channels.length > 0 && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:inline">
+              {channels.length} {isRadio ? "stations" : "channels"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {showFeatureToolbar && (
@@ -909,7 +1206,7 @@ export default function LiveFeedEmbed({
         </div>
       </div>
 
-      {/* Dropdown filters: Category + Sub-category */}
+      {/* Dropdown filters: Category + Sub-category + Station search */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
         {showCategorySwitcher && availableCategories.length > 1 && (
           <label className="flex items-center gap-1.5 flex-shrink-0">
@@ -949,51 +1246,25 @@ export default function LiveFeedEmbed({
               </select>
             </label>
           )}
-        {/* Station picker — select an individual station to PREVIEW it */}
-        <label className="flex items-center gap-1.5 flex-shrink-0">
-          <Monitor size={12} className="text-gray-400 flex-shrink-0" />
-          <select
-            value={selectedStation?.nanoid || ""}
-            onChange={(e) => {
-              const st = stations.find((s) => s.nanoid === e.target.value);
-              setSelectedStation(st || null);
-            }}
-            disabled={stationsLoading}
-            className="text-xs font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 pr-7 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors max-w-[180px]"
-            aria-label="Select a station to preview"
-          >
-            <option value="">
-              {stationsLoading
-                ? "Loading stations…"
-                : stations.length === 0
-                  ? "No stations found"
-                  : `Preview a station (${stations.length})`}
-            </option>
-            {filteredStations.map((st) => (
-              <option key={st.nanoid} value={st.nanoid}>
-                {st.name}
-                {st.country ? ` (${st.country.toUpperCase()})` : ""}
-              </option>
-            ))}
-          </select>
+        {/* Station search — filters the grid (10+ items rule) */}
+        <label className="flex items-center gap-1 flex-shrink-0 relative">
+          <Search
+            size={11}
+            className="absolute left-1.5 text-gray-400 pointer-events-none"
+          />
+          <input
+            type="text"
+            value={channelSearch}
+            onChange={(e) => setChannelSearch(e.target.value)}
+            placeholder={
+              channelsLoading
+                ? "Loading…"
+                : `Search ${channels.length} ${isRadio ? "stations" : "channels"}…`
+            }
+            className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg pl-6 pr-2 py-1 w-40 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Search channels"
+          />
         </label>
-        {/* Station search — filters the picker options (10+ items rule) */}
-        {stations.length > 10 && (
-          <label className="flex items-center gap-1 flex-shrink-0 relative">
-            <Search
-              size={11}
-              className="absolute left-1.5 text-gray-400 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={stationSearch}
-              onChange={(e) => setStationSearch(e.target.value)}
-              placeholder="Search stations…"
-              className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg pl-6 pr-2 py-1 w-32 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Search stations"
-            />
-          </label>
-        )}
         <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
           {showAll
             ? "Global"
@@ -1003,6 +1274,38 @@ export default function LiveFeedEmbed({
               : "All countries"}
         </span>
       </div>
+
+      {/* Genre pills — native sub-category quick navigation */}
+      {showSubCategorySwitcher &&
+        activeCat &&
+        activeCat.subCategories.length > 1 && (
+          <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto bg-gray-50/30 dark:bg-gray-900/20 border-b border-gray-200 dark:border-gray-700">
+            {activeCat.subCategories.map((sub) => (
+              <button
+                key={sub.id}
+                onClick={() => setSubCategoryId(sub.id)}
+                title={sub.description}
+                className={`text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap transition-colors flex-shrink-0 ${
+                  subCategoryId === sub.id
+                    ? accentBg
+                    : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 dark:hover:border-blue-500"
+                }`}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+      {/* Keyword-filter fallback notice */}
+      {keywordFilterMissed && activeSubCategory && (
+        <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
+          <p className="text-[10px] text-amber-700 dark:text-amber-300">
+            No {activeSubCategory.label} {isRadio ? "stations" : "channels"}{" "}
+            live right now — showing all {activeCat?.label}.
+          </p>
+        </div>
+      )}
 
       {/* Favorites + History panel */}
       {showFavoritesPanel && (
@@ -1226,7 +1529,7 @@ export default function LiveFeedEmbed({
         </div>
       )}
 
-      {/* PLAYER — direct iframe embed of the live-feed provider */}
+      {/* NATIVE PLAYER — plays the active channel (16:9, up to 1080p+) */}
       <div
         ref={playerContainerRef}
         className="relative w-full bg-black overflow-hidden"
@@ -1237,7 +1540,7 @@ export default function LiveFeedEmbed({
               : playerHeight,
         }}
       >
-        {iframeLoading && (
+        {channelsLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
             <div className="text-center">
               <Loader2
@@ -1248,29 +1551,92 @@ export default function LiveFeedEmbed({
             </div>
           </div>
         )}
-        <iframe
-          ref={iframeRef}
-          key={embedUrl}
-          src={embedUrl}
-          title={activeCat?.label || "Live Channels"}
-          onLoad={onIframeLoad}
-          className="absolute inset-0 w-full h-full border-0 bg-black"
-          allow="accelerometer; autoplay; encrypted-media; fullscreen; picture-in-picture"
-          allowFullScreen
-          referrerPolicy="no-referrer-when-downgrade"
-          loading="eager"
-        />
-        {/* STATION PREVIEW — overlays the browse iframe when a station is selected */}
-        {selectedStation && (
-          <StationPreview
-            station={selectedStation}
-            isAudio={isRadio}
-            onClose={() => setSelectedStation(null)}
+        {!channelsLoading && !activeChannel && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-black">
+            <div className="text-center space-y-2 px-4">
+              <Monitor size={28} className="text-gray-600 mx-auto" />
+              <p className="text-xs text-gray-400">
+                No live {isRadio ? "stations" : "channels"} found for this
+                selection. Try another category, sub-category, or country.
+              </p>
+            </div>
+          </div>
+        )}
+        {!channelsLoading && activeChannel && (
+          <ChannelPlayer
+            key={activeChannel.nanoid}
+            channel={activeChannel}
+            isAudio={!!isRadio}
+            accent={accent}
+            onNext={nextChannel}
           />
         )}
       </div>
 
-      {/* Footer — active combo label (+ selected station when previewing) */}
+      {/* NATIVE CHANNEL GRID */}
+      <div className="px-3 py-3 bg-gray-50/30 dark:bg-gray-900/20 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <Signal size={11} className="text-green-500" />
+            {isRadio ? "All Stations" : "All Channels"}
+            {filteredChannels.length > 0 && (
+              <span className="text-gray-400 dark:text-gray-500 font-normal">
+                ({filteredChannels.length})
+              </span>
+            )}
+          </h4>
+          {channelSearch && (
+            <button
+              onClick={() => setChannelSearch("")}
+              className="text-[10px] text-blue-500 hover:text-blue-600"
+            >
+              Clear search
+            </button>
+          )}
+        </div>
+        {channelsLoading ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            {Array.from({ length: 16 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-24 rounded-xl bg-gray-200 dark:bg-gray-700/50 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : visibleChannels.length > 0 ? (
+          <>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+              {visibleChannels.map((ch) => (
+                <ChannelCard
+                  key={ch.nanoid}
+                  channel={ch}
+                  isActive={activeChannel?.nanoid === ch.nanoid}
+                  isAudio={!!isRadio}
+                  onSelect={() => selectChannel(ch)}
+                />
+              ))}
+            </div>
+            {filteredChannels.length > gridLimit && (
+              <div className="flex justify-center mt-3">
+                <button
+                  onClick={() => setGridLimit((l) => l + GRID_PAGE)}
+                  className="text-xs px-4 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+                >
+                  Load more ({filteredChannels.length - gridLimit} remaining)
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center py-4">
+            {channelSearch
+              ? `No ${isRadio ? "stations" : "channels"} match "${channelSearch}".`
+              : `No live ${isRadio ? "stations" : "channels"} available for this selection.`}
+          </p>
+        )}
+      </div>
+
+      {/* Footer — active combo label (+ active channel) */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50/50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700">
         <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
           <Sparkles size={10} className="inline mr-1 text-blue-400" />
@@ -1283,9 +1649,10 @@ export default function LiveFeedEmbed({
             : country
               ? ` · ${ALL_COUNTRIES.find((c) => c.code === country)?.name || country.toUpperCase()}`
               : " · All countries"}
-          {selectedStation ? ` · ▶ ${selectedStation.name}` : ""}
+          {activeChannel ? ` · ▶ ${activeChannel.name}` : ""}
         </span>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center gap-1">
+          <Globe size={9} />
           Live sync{cloudLoadCompleteRef.current ? " ✓" : "…"}
         </span>
       </div>

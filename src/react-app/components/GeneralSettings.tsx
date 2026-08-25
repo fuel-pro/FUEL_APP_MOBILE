@@ -2253,9 +2253,9 @@ function IntegrationsTab() {
         connected: true,
       },
       {
-        name: "TVGarden Live Feed",
+        name: "Global Live Feed",
         desc: "Live TV/Radio channels (News tab)",
-        docs: "https://tvgarden.world",
+        docs: "",
         tab: "news",
         status: "Connected via /api/live-channels proxy",
         connected: true,
@@ -2324,15 +2324,17 @@ function IntegrationsTab() {
                   {int.name}
                 </h4>
               </div>
-              <a
-                href={int.docs}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-blue-500"
-                title="View documentation"
-              >
-                <ExternalLink size={14} />
-              </a>
+              {int.docs && (
+                <a
+                  href={int.docs}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-blue-500"
+                  title="View documentation"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              )}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
               {int.desc}

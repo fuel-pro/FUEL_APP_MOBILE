@@ -115,6 +115,17 @@ export interface LiveFeedSubCategory {
    * sub-category uses the parent's category path with no extra filter.
    */
   upstreamCategory?: LiveCategory;
+  /**
+   * Genre keyword filter — client-side sub-classification WITHIN the parent
+   * category's channel list. The upstream provider only exposes broad
+   * category endpoints (movies, sports, news...), so genre-level
+   * sub-categories (action, horror, western, romance...) are derived by
+   * matching these keywords against each channel's name. When present, the
+   * fetch loads the parent category list and this filter is applied; when
+   * the filtered result is empty the UI falls back to the parent list with
+   * a notice (never a dead end).
+   */
+  keywords?: string[];
   description: string;
 }
 
@@ -266,6 +277,41 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         upstreamCategory: "weather",
         description: "Weather updates & forecasts",
       },
+      {
+        id: "technology",
+        label: "Technology",
+        upstreamCategory: "science",
+        keywords: ["tech", "technology", "digital", "cyber", "gadget"],
+        description: "Technology & innovation news",
+      },
+      {
+        id: "health",
+        label: "Health",
+        upstreamCategory: "news",
+        keywords: ["health", "medical", "wellness", "medicine"],
+        description: "Health & medical news",
+      },
+      {
+        id: "sciencenews",
+        label: "Science",
+        upstreamCategory: "science",
+        keywords: ["science", "space", "nasa", "research"],
+        description: "Science & discovery news",
+      },
+      {
+        id: "entertainmentnews",
+        label: "Entertainment News",
+        upstreamCategory: "entertainment",
+        keywords: ["entertainment", "celebrity", "showbiz", "hollywood"],
+        description: "Entertainment & celebrity news",
+      },
+      {
+        id: "regional",
+        label: "Regional & Local",
+        upstreamCategory: "general",
+        keywords: ["local", "regional", "city", "county"],
+        description: "Regional & local news",
+      },
     ],
   },
   {
@@ -284,37 +330,15 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         id: "action",
         label: "Action",
         upstreamCategory: "movies",
+        keywords: ["action", "axn", "charge", "bolt", "adrenaline", "combat"],
         description: "Action & adventure films",
       },
       {
         id: "adventure",
         label: "Adventure",
         upstreamCategory: "outdoor",
+        keywords: ["adventure", "outdoor", "expedition", "quest"],
         description: "Adventure & outdoor films",
-      },
-      {
-        id: "comedy",
-        label: "Comedy",
-        upstreamCategory: "comedy",
-        description: "Comedy films & stand-up",
-      },
-      {
-        id: "drama",
-        label: "Drama",
-        upstreamCategory: "series",
-        description: "Drama films & features",
-      },
-      {
-        id: "horror",
-        label: "Horror & Thriller",
-        upstreamCategory: "relax",
-        description: "Suspense & horror films",
-      },
-      {
-        id: "family",
-        label: "Family",
-        upstreamCategory: "family",
-        description: "Family-friendly films",
       },
       {
         id: "animation",
@@ -323,34 +347,133 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         description: "Animated films & cartoons",
       },
       {
+        id: "bollywood",
+        label: "Bollywood & International",
+        upstreamCategory: "movies",
+        keywords: [
+          "bollywood",
+          "bhojpuri",
+          "indian",
+          "hindi",
+          "asianet",
+          "farsi",
+          "latino",
+          "latin",
+        ],
+        description: "Bollywood & international cinema",
+      },
+      {
         id: "classic",
         label: "Classics",
         upstreamCategory: "classic",
+        keywords: ["classic", "classique", "vintage", "retro"],
         description: "Classic & vintage films",
+      },
+      {
+        id: "comedy",
+        label: "Comedy",
+        upstreamCategory: "comedy",
+        keywords: ["comedy", "comedie", "funny", "humor", "laugh", "parody"],
+        description: "Comedy films & stand-up",
+      },
+      {
+        id: "crime",
+        label: "Crime & Mystery",
+        upstreamCategory: "movies",
+        keywords: [
+          "crime",
+          "detective",
+          "mystery",
+          "noir",
+          "investigation",
+          "true crime",
+        ],
+        description: "Crime, detective & mystery films",
       },
       {
         id: "documentary",
         label: "Real-Life Stories",
         upstreamCategory: "documentary",
+        keywords: ["documentary", "docu", "real-life", "biography", "true"],
         description: "Documentary & biographical films",
+      },
+      {
+        id: "drama",
+        label: "Drama",
+        upstreamCategory: "series",
+        keywords: ["drama", "melodrama"],
+        description: "Drama films & features",
+      },
+      {
+        id: "family",
+        label: "Family",
+        upstreamCategory: "family",
+        keywords: ["family", "kids", "children"],
+        description: "Family-friendly films",
+      },
+      {
+        id: "fantasy",
+        label: "Fantasy",
+        upstreamCategory: "movies",
+        keywords: ["fantasy", "magic", "myth", "fairy", "dragon", "wizard"],
+        description: "Fantasy & magical films",
       },
       {
         id: "historical",
         label: "Historical",
         upstreamCategory: "culture",
+        keywords: ["histor", "period", "epoch", "era"],
         description: "Historical & period films",
+      },
+      {
+        id: "horror",
+        label: "Horror & Thriller",
+        upstreamCategory: "movies",
+        keywords: [
+          "horror",
+          "scary",
+          "terror",
+          "fright",
+          "thriller",
+          "suspense",
+          "xtrema",
+        ],
+        description: "Suspense, horror & thriller films",
+      },
+      {
+        id: "musical",
+        label: "Musical",
+        upstreamCategory: "movies",
+        keywords: ["musical", "music film", "concert film"],
+        description: "Musicals & concert films",
       },
       {
         id: "romance",
         label: "Romance",
         upstreamCategory: "lifestyle",
+        keywords: ["romance", "romanti", "love", "wedding"],
         description: "Romantic films",
       },
       {
         id: "scifi",
-        label: "Sci-Fi & Fantasy",
+        label: "Sci-Fi",
         upstreamCategory: "science",
-        description: "Science-fiction & fantasy films",
+        keywords: ["sci-fi", "scifi", "sci fi", "space", "galaxy", "alien"],
+        description: "Science-fiction films",
+      },
+      {
+        id: "war",
+        label: "War & Military",
+        upstreamCategory: "movies",
+        keywords: ["war", "military", "army", "battle", "combat"],
+        description: "War & military films",
+      },
+      {
+        id: "western",
+        label: "Western",
+        upstreamCategory: "movies",
+        keywords: ["western", "cowboy", "wild west"],
+        description: "Western films",
       },
     ],
   },
@@ -370,30 +493,133 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         id: "football",
         label: "Football",
         upstreamCategory: "sports",
+        keywords: ["football", "soccer", "futbol", "fifa", "premier league"],
         description: "Football (soccer) channels",
+      },
+      {
+        id: "basketball",
+        label: "Basketball",
+        upstreamCategory: "sports",
+        keywords: ["basketball", "nba", "hoops"],
+        description: "Basketball channels",
+      },
+      {
+        id: "baseball",
+        label: "Baseball",
+        upstreamCategory: "sports",
+        keywords: ["baseball", "mlb"],
+        description: "Baseball channels",
+      },
+      {
+        id: "hockey",
+        label: "Hockey",
+        upstreamCategory: "sports",
+        keywords: ["hockey", "nhl", "ice hockey"],
+        description: "Ice hockey channels",
+      },
+      {
+        id: "cricket",
+        label: "Cricket",
+        upstreamCategory: "sports",
+        keywords: ["cricket", "ipl"],
+        description: "Cricket channels",
+      },
+      {
+        id: "tennis",
+        label: "Tennis",
+        upstreamCategory: "sports",
+        keywords: ["tennis", "wimbledon", "grand slam"],
+        description: "Tennis channels",
+      },
+      {
+        id: "golf",
+        label: "Golf",
+        upstreamCategory: "sports",
+        keywords: ["golf", "pga"],
+        description: "Golf channels",
       },
       {
         id: "auto",
         label: "Motorsport",
         upstreamCategory: "auto",
+        keywords: [
+          "motor",
+          "racing",
+          "race",
+          "f1",
+          "formula",
+          "nascar",
+          "speedway",
+          "grand prix",
+          "rally",
+        ],
         description: "Auto racing & motorsport",
+      },
+      {
+        id: "fight",
+        label: "Fight & Wrestling",
+        upstreamCategory: "sports",
+        keywords: [
+          "boxing",
+          "mma",
+          "ufc",
+          "fight",
+          "wrestling",
+          "wwe",
+          "wrestle",
+          "martial",
+          "judo",
+          "karate",
+        ],
+        description: "Boxing, MMA & wrestling",
+      },
+      {
+        id: "esports",
+        label: "Esports & Gaming",
+        upstreamCategory: "sports",
+        keywords: ["esport", "e-sport", "gaming", "gamer", "game"],
+        description: "Esports & gaming channels",
+      },
+      {
+        id: "winter",
+        label: "Winter Sports",
+        upstreamCategory: "sports",
+        keywords: ["winter", "ski", "snow", "ice"],
+        description: "Winter sports channels",
+      },
+      {
+        id: "water",
+        label: "Water Sports",
+        upstreamCategory: "sports",
+        keywords: ["water", "surf", "swim", "sail", "diving"],
+        description: "Water sports channels",
+      },
+      {
+        id: "athletics",
+        label: "Athletics & Olympics",
+        upstreamCategory: "sports",
+        keywords: ["athletics", "olympic", "marathon", "track", "field"],
+        description: "Athletics & Olympic sports",
       },
       {
         id: "outdoor",
         label: "Outdoor Sports",
         upstreamCategory: "outdoor",
+        keywords: ["outdoor", "adventure", "extreme"],
         description: "Outdoor & adventure sports",
       },
       {
         id: "news",
         label: "Sports News",
         upstreamCategory: "news",
+        keywords: ["sport"],
         description: "Sports news & analysis",
       },
       {
         id: "classic",
         label: "Classic Sports",
         upstreamCategory: "classic",
+        keywords: ["classic", "retro", "legend"],
         description: "Classic sports replays",
       },
     ],
@@ -432,7 +658,36 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         id: "reality",
         label: "Reality & Lifestyle",
         upstreamCategory: "lifestyle",
+        keywords: ["reality", "real life", "lifestyle"],
         description: "Reality & lifestyle shows",
+      },
+      {
+        id: "talkshows",
+        label: "Talk Shows",
+        upstreamCategory: "entertainment",
+        keywords: ["talk", "chat show", "late night", "interview"],
+        description: "Talk shows & interviews",
+      },
+      {
+        id: "gameshows",
+        label: "Game Shows",
+        upstreamCategory: "entertainment",
+        keywords: ["game show", "gameshow", "quiz", "trivia", "contest"],
+        description: "Game shows & quizzes",
+      },
+      {
+        id: "soaps",
+        label: "Soaps & Telenovelas",
+        upstreamCategory: "series",
+        keywords: ["soap", "telenovela", "serial"],
+        description: "Soap operas & telenovelas",
+      },
+      {
+        id: "variety",
+        label: "Variety & Talent",
+        upstreamCategory: "entertainment",
+        keywords: ["variety", "talent", "got talent", "idol", "voice"],
+        description: "Variety & talent shows",
       },
       {
         id: "cooking",
@@ -459,6 +714,69 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         label: "All Music",
         upstreamCategory: "music",
         description: "Every live music channel",
+      },
+      {
+        id: "pop",
+        label: "Pop",
+        upstreamCategory: "music",
+        keywords: ["pop", "top 40", "chart", "hits"],
+        description: "Pop music videos",
+      },
+      {
+        id: "rock",
+        label: "Rock",
+        upstreamCategory: "music",
+        keywords: ["rock", "hard rock", "punk", "grunge"],
+        description: "Rock music videos",
+      },
+      {
+        id: "hiphop",
+        label: "Hip-Hop & R&B",
+        upstreamCategory: "music",
+        keywords: ["hip hop", "hip-hop", "rap", "r&b", "rnb", "urban"],
+        description: "Hip-hop & R&B videos",
+      },
+      {
+        id: "electronic",
+        label: "Electronic & Dance",
+        upstreamCategory: "music",
+        keywords: ["electronic", "dance", "edm", "techno", "house", "club"],
+        description: "Electronic & dance music",
+      },
+      {
+        id: "latinmusic",
+        label: "Latin",
+        upstreamCategory: "music",
+        keywords: ["latin", "reggaeton", "salsa", "bachata"],
+        description: "Latin music videos",
+      },
+      {
+        id: "countrymusic",
+        label: "Country",
+        upstreamCategory: "music",
+        keywords: ["country", "nashville", "bluegrass"],
+        description: "Country music videos",
+      },
+      {
+        id: "jazzmusic",
+        label: "Jazz & Soul",
+        upstreamCategory: "music",
+        keywords: ["jazz", "soul", "blues", "funk", "motown"],
+        description: "Jazz, soul & blues",
+      },
+      {
+        id: "classicalmusic",
+        label: "Classical",
+        upstreamCategory: "music",
+        keywords: ["classical", "orchestra", "opera", "symphony"],
+        description: "Classical music",
+      },
+      {
+        id: "metal",
+        label: "Metal & Hard Rock",
+        upstreamCategory: "music",
+        keywords: ["metal", "heavy", "thrash", "death"],
+        description: "Metal & hard rock",
       },
       {
         id: "general",
@@ -511,6 +829,27 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         description: "Educational kids content",
       },
       {
+        id: "preschool",
+        label: "Preschool",
+        upstreamCategory: "kids",
+        keywords: ["baby", "toddler", "preschool", "nursery", "little"],
+        description: "Preschool & toddler shows",
+      },
+      {
+        id: "teens",
+        label: "Teens",
+        upstreamCategory: "kids",
+        keywords: ["teen", "youth", "high school"],
+        description: "Teen programming",
+      },
+      {
+        id: "anime",
+        label: "Anime",
+        upstreamCategory: "animation",
+        keywords: ["anime", "manga"],
+        description: "Anime shows",
+      },
+      {
         id: "family",
         label: "Family Shows",
         upstreamCategory: "family",
@@ -546,7 +885,36 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
         id: "history",
         label: "History",
         upstreamCategory: "culture",
+        keywords: ["history", "historical", "ancient", "war"],
         description: "Historical documentaries",
+      },
+      {
+        id: "truecrime",
+        label: "True Crime",
+        upstreamCategory: "documentary",
+        keywords: ["true crime", "crime", "investigation", "forensic"],
+        description: "True crime documentaries",
+      },
+      {
+        id: "biography",
+        label: "Biography",
+        upstreamCategory: "documentary",
+        keywords: ["biography", "biographic", "life story", "portrait"],
+        description: "Biographical documentaries",
+      },
+      {
+        id: "nature",
+        label: "Nature & Wildlife",
+        upstreamCategory: "outdoor",
+        keywords: ["nature", "wildlife", "animal", "planet", "earth"],
+        description: "Nature & wildlife documentaries",
+      },
+      {
+        id: "spacedoc",
+        label: "Space & Universe",
+        upstreamCategory: "science",
+        keywords: ["space", "universe", "cosmos", "nasa", "astronomy"],
+        description: "Space & universe documentaries",
       },
       {
         id: "travel",
@@ -994,70 +1362,6 @@ export function getCandidateLiveNewsStreams(): LiveNewsStream[] {
 }
 
 /**
- * Build a global live-feed embed URL filtered by country + category.
- * The provider manages its own channel availability — the iframe only shows
- * live, working channels. Country code is lowercased ISO-2.
- *
- * URL routing:
- *  - {tv|radio}/{cc}   → all TV/radio for a country
- *  - {category}        → global category (news, movies, sports, music, kids,
- *                        entertainment, business, documentary, religious,
- *                        education, etc.) — video family uses /tv prefix,
- *                        audio family (radio) uses /radio prefix.
- *  - {category}?category={subId} → sub-category slice (e.g. Movies→Action
- *                        surfaces the "movies" page filtered to action-ish
- *                        content; the ?category param is the upstream's own
- *                        native filter so it always surfaces real channels).
- *
- * When a subCategory is provided, its `upstreamCategory` (a real upstream
- * category id) is applied via the `?category=<id>` query param — OR, when
- * the sub-category's upstreamCategory differs from the parent category,
- * the URL is switched to that upstream category path entirely (so the
- * user always lands on a page that actually has channels for that slice).
- */
-export function getLiveFeedEmbedUrl(
-  countryCode: string,
-  category: LiveCategory = "tv",
-  subCategory?: LiveFeedSubCategory,
-): string {
-  const cc = (countryCode || "").toLowerCase();
-
-  // tv / radio categories: country-scoped path
-  if (category === "tv" || category === "radio") {
-    const base = cc
-      ? `https://tvgarden.world/${category}/${cc}`
-      : `https://tvgarden.world/${category}`;
-    if (subCategory?.upstreamCategory) {
-      return `${base}?category=${subCategory.upstreamCategory}`;
-    }
-    return base;
-  }
-
-  // Content categories (news, movies, sports, etc.) — global, no country path.
-  // If a sub-category maps to a DIFFERENT upstream category, navigate there
-  // directly (so the slice actually has channels). Otherwise apply the
-  // ?category param as a filter on the parent page.
-  if (
-    subCategory?.upstreamCategory &&
-    subCategory.upstreamCategory !== category
-  ) {
-    return `https://tvgarden.world/${subCategory.upstreamCategory}`;
-  }
-  if (subCategory?.upstreamCategory) {
-    return `https://tvgarden.world/${category}?category=${subCategory.upstreamCategory}`;
-  }
-  return `https://tvgarden.world/${category}`;
-}
-
-/** Global live-feed full globe (all countries) for a given family/category */
-export function getLiveFeedAllEmbedUrl(
-  category: LiveCategory = "tv",
-  subCategory?: LiveFeedSubCategory,
-): string {
-  return getLiveFeedEmbedUrl("", category, subCategory);
-}
-
-/**
  * Resolve a sub-category by id within a parent category.
  * Returns undefined if not found (caller falls back to the parent category).
  */
@@ -1067,6 +1371,40 @@ export function getSubCategory(
 ): LiveFeedSubCategory | undefined {
   const cat = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
   return cat?.subCategories.find((s) => s.id === subId);
+}
+
+/**
+ * Filter a channel list by a sub-category's genre keywords (case-insensitive
+ * substring match on the channel name). Used for genre-level sub-categories
+ * (Movies → Action/Horror/Western...) that have no dedicated upstream
+ * endpoint. Returns the input list unchanged when no keywords are given.
+ */
+export function filterChannelsByKeywords(
+  channels: LiveChannel[],
+  keywords?: string[],
+): LiveChannel[] {
+  if (!keywords || keywords.length === 0) return channels;
+  const kws = keywords.map((k) => k.toLowerCase());
+  return channels.filter((ch) => {
+    const name = ch.name.toLowerCase();
+    return kws.some((k) => name.includes(k));
+  });
+}
+
+/**
+ * Resolve the fetch target for a category/sub-category pair. When the
+ * sub-category carries genre `keywords`, the base list fetched is the sub's
+ * upstreamCategory (broad endpoint) and the keywords filter it client-side.
+ */
+export function resolveFetchTarget(
+  category: LiveCategory,
+  subCategoryId: string,
+): { baseSubCategoryId: string; keywords?: string[] } {
+  const subDef = getSubCategory(category, subCategoryId);
+  if (subDef?.keywords && subDef.keywords.length > 0) {
+    return { baseSubCategoryId: subCategoryId, keywords: subDef.keywords };
+  }
+  return { baseSubCategoryId: subCategoryId };
 }
 
 const YOUTUBE_EMBED_BASE = "https://www.youtube.com/embed/";
@@ -1099,10 +1437,6 @@ export function getCategoryColor(cat: LiveNewsStream["category"]): string {
     CATEGORY_COLORS[cat] || "bg-gray-500/20 text-gray-300 border-gray-500/30"
   );
 }
-
-// ---- Backward-compat aliases (other components may still import these) ----
-export const getTVGardenEmbedUrl = getLiveFeedEmbedUrl;
-export const getTVGardenAllEmbedUrl = getLiveFeedAllEmbedUrl;
 
 // ===========================================================================
 // NATIVE CHANNEL API — fetches channel data directly from the provider's
@@ -1479,7 +1813,7 @@ export async function fetchAllChannels(
  * different category names (e.g. "news", "movies", "sports", "entertainment",
  * "music", "kids", "documentary", "culture", "education").
  */
-function mapToIptvCategory(category: LiveCategory): string {
+export function mapToIptvCategory(category: LiveCategory): string {
   const map: Partial<Record<LiveCategory, string>> = {
     news: "news",
     movies: "movies",
@@ -1984,11 +2318,7 @@ export default {
   getAvailableLiveNewsStreams,
   getCandidateLiveNewsStreams,
   isYouTubeStreamAvailable,
-  getLiveFeedEmbedUrl,
-  getLiveFeedAllEmbedUrl,
   getSubCategory,
-  getTVGardenEmbedUrl,
-  getTVGardenAllEmbedUrl,
   getYouTubeEmbedUrl,
   getCategoryLabel,
   getCategoryColor,
