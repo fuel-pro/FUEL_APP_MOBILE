@@ -177,11 +177,14 @@ function getPumpsForType(state: any, type: CanonicalFuelType): any[] {
 function getPriceForType(state: any, type: CanonicalFuelType): number {
   if (type === "petrol")
     return (
-      state.pmsPrice ?? state.petrolPrice ?? state.fuelPricesByType?.petrol ?? 0
+      // Prefer the station's current LIVE price (fuelPricesByType), then the
+      // legacy scalars. This keeps the export in sync with the current on-
+      // screen price instead of a stale persisted pmsPrice.
+      state.fuelPricesByType?.petrol ?? state.pmsPrice ?? state.petrolPrice ?? 0
     );
   if (type === "diesel")
     return (
-      state.agoPrice ?? state.dieselPrice ?? state.fuelPricesByType?.diesel ?? 0
+      state.fuelPricesByType?.diesel ?? state.agoPrice ?? state.dieselPrice ?? 0
     );
   return state.fuelPricesByType?.[type] ?? 0;
 }
