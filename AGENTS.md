@@ -8784,3 +8784,25 @@ branches (200-309 ahead, 600+ behind) are old divergent snapshots already
 superseded on main; founder-username-login (7 ahead) awaiting user
 authorization for manual rebase; identifying-security-vulnerabilities-8d289
 requires /api/r2/* + /api/cache/* endpoints first. No new lost work.
+
+## Session 2026-08-25 (cont.) — Settings tab expansion: Module Behavior + API & Backend + Deployment sub-tabs
+
+**Requirement**: add more detailed features to the Settings (General Settings) tab limited to admin/owner of the station, connected to internet/referenced from documentation, and editable into production.
+
+**Added 3 new sub-tabs to GeneralSettings.tsx** (3148 → ~3900 lines, +739 lines):
+1. **Module Behavior** — per-tab functional tunables grouped by module:
+   - POS: loyalty discounts, cash drawer auto-open, auto-print receipt, shift close reminder
+   - Sales Tracking: dip-difference auto-calc, short-delivery flags
+   - Invoice: prefix + next number + receipt header/footer (editable, mirrors to FuelContext + compact blob)
+   - News/Live TV: Live TV/Radio tab visibility, auto-play streams
+   - Team Manager: invite-code approval, auto-deactivate expired members
+   - Stock Management: auto-create product on delivery, negative-stock warning
+   - Fuel Price Engine: auto-update prices, EPRA reference visibility
+2. **API & Backend** — live endpoint health checks (Supabase/Cloudflare/Vercel/Live Channels/HLS Proxy with Test All), current deployment origin display, 10 integration documentation links (Supabase REST/Realtime, PostgREST, hls.js, Nominatim, Safaricom Daraja, Kopo Kopo, EPRA, Vercel, Cloudflare Pages Functions)
+3. **Deployment** — live deployment status for 5 endpoints (Cloudflare Pages primary, Vercel production, Supabase Backend, Supabase Storage, Supabase Realtime) with timestamp, version information, sync configuration (Realtime/Compression/Low-Bandwidth/Auto-Backup/Backup Frequency/Data Retention)
+
+**Verification**: all 3 sub-tabs render OK; module-behavior toggle is clickable; Settings tab opens without "Something went wrong" (the "Monitor is not defined" crash was fixed by adding the missing lucide Monitor import).
+
+**Found + fixed during the sweep**: the Settings tab crash (Monitor icon was used but not imported — the Settings tab was inaccessible before this fix).
+
+**Deploy state**: GitHub main e8a28f5+ commits; Cloudflare Pages LIVE (853b76ee + main alias); Vercel production BLOCKED by api-deployments-free-per-day (100/100; resets ~24h — GitHub integration auto-deploys when quota resets). Supabase: no schema changes (frontend-only). tsc 0 errors, prettier pass.
