@@ -8896,3 +8896,15 @@ rebase; identifying-security-vulnerabilities-8d289 needs /api/r2/* +
 **Lost-commit audit**: all unmerged branches re-audited — no new lost work (state matches the 2026-08-24 audit).
 
 **Deploy state**: GitHub main 1466ca9 (pushed, synced with origin/main); Cloudflare Pages LIVE (283a39ff + main alias); Vercel production BLOCKED by api-deployments-free-per-day (100/100; auto-deploys when quota resets); Supabase: no schema changes (frontend-only; uses existing stations + station_members + app_kv tables). tsc 0 errors, clean build, prettier pass.
+
+## Session 2026-08-25 (cont.) — Station Manager + Team Manager visibility fix (Header)
+
+Symptom: "I cant see any changes to Station Manager and team manager."
+
+Root cause: Header station dropdown was gated behind stations.length > 1 — a single-station user had NO way to open the dropdown → no way to reach Manage Stations → Station Manager unreachable. Team Manager was reachable via the tab bar but the cross-link was dead.
+
+Fix (commit 6487f65): station dropdown trigger now always shows when stations.length > 0. Add Station button always visible. Single-station user can now open dropdown → Manage Stations → Station Manager opens with all 7 sub-tabs.
+
+Verified live (Cloudflare preview 58b3e190 + main alias): Station dropdown visible; clicked → Combined View + Manage Stations; Manage Stations → Station Manager modal with 7 sub-tabs; Overview: Station Health panel (score 50, Critical with issue list); Quick Actions: all 10 buttons including Team Manager; Team Manager quick action → Team Manager tab with 4 sub-tabs; two-way integration confirmed.
+
+Deploy: GitHub main 6487f65 (pushed, synced); Cloudflare LIVE (58b3e190 + main alias); Vercel BLOCKED (quota); Supabase: no schema changes. tsc 0 errors, prettier pass.
