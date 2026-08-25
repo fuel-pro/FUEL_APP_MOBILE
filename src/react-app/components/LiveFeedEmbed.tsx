@@ -29,6 +29,11 @@ import {
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
+import {
+  SUBTITLE_LANGUAGES,
+  detectPreferredSubtitleLang,
+  findSubtitleTrackIndex,
+} from "@/react-app/lib/subtitle-languages";
 import Hls from "hls.js";
 import {
   Tv,
@@ -197,6 +202,22 @@ function ChannelPlayer({
   const [currentLevel, setCurrentLevel] = useState<number>(-1);
   const [pipActive, setPipActive] = useState(false);
   const [buffering, setBuffering] = useState(true);
+  // ─── SUBTITLES / CC ──
+  // Preferred subtitle language: persisted to cloud (cross-device), auto-detected
+  // from the browser locale / station country on first run.
+  const [subtitleLang, setSubtitleLang] = useState<string>(() => {
+    const cached = cloudStorageService.getCached<string>(
+      "live_feed_subtitle_lang",
+    );
+    return cached || detectPreferredSubtitleLang(channel.country);
+  });
+  const [subtitleTracks, setSubtitleTracks] = useState<
+    { index: number; label: string; lang: string }[]
+  >([]);
+  const [activeSubtitleIdx, setActiveSubtitleIdx] = useState(-1); // -1 = off
+  const [showCcMenu, setShowCcMenu] = useState(false);
+  const subtitleLangRef = useRef(subtitleLang);
+  subtitleLangRef.current = subtitleLang;
 
   const ytId = useMemo(
     () =>
@@ -309,6 +330,33 @@ function ChannelPlayer({
       hls.on(Hls.Events.FRAG_BUFFERED, () => {
         if (!destroyed) setBuffering(false);
       });
+      // Subtitle tracks: list them + auto-select the track matching the
+      // preferred language (browser locale / station country).
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_e, data) => {
+        if (destroyed) return;
+        const tracks = (data.subtitleTracks || []).map(
+          (t: { name?: string; lang?: string }, i: number) => ({
+            index: i,
+            label: t.name || t.lang || `Track ${i + 1}`,
+            lang: (t.lang || "").toLowerCase(),
+          }),
+        );
+        setSubtitleTracks(tracks);
+        if (tracks.length > 0 && activeSubtitleIdx < 0) {
+          const match = findSubtitleTrackIndex(
+            data.subtitleTracks as { lang?: string; name?: string }[],
+            subtitleLangRef.current,
+          );
+          if (match >= 0) {
+            hls.subtitleTrack = match;
+            hls.subtitleDisplay = true;
+            setActiveSubtitleIdx(match);
+          }
+        }
+      });
+      hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, data) => {
+        if (!destroyed) setActiveSubtitleIdx(data.id);
+      });
       hls.on(Hls.Events.ERROR, (_e, data) => handleFatal(Hls, hls, data));
     };
 
@@ -368,6 +416,33 @@ function ChannelPlayer({
       }
     } catch {
       /* PiP unsupported */
+    }
+  };
+
+  // ─── Subtitle selection ──
+  // Apply a subtitle track by index (-1 = off). HLS only.
+  const applySubtitleTrack = (idx: number) => {
+    const hls = hlsRef.current;
+    setActiveSubtitleIdx(idx);
+    if (!hls) return;
+    if (idx < 0) {
+      hls.subtitleDisplay = false;
+      hls.subtitleTrack = -1;
+    } else {
+      hls.subtitleTrack = idx;
+      hls.subtitleDisplay = true;
+    }
+  };
+
+  // Change the PREFERRED language: persist to cloud (cross-device) and, if the
+  // current stream carries a matching track, switch to it immediately.
+  const applySubtitleLang = (lang: string) => {
+    setSubtitleLang(lang);
+    subtitleLangRef.current = lang;
+    cloudStorageService.set("live_feed_subtitle_lang", lang).catch(() => {});
+    if (subtitleTracks.length > 0) {
+      const match = findSubtitleTrackIndex(subtitleTracks, lang);
+      if (match >= 0) applySubtitleTrack(match);
     }
   };
 
@@ -440,6 +515,86 @@ function ChannelPlayer({
               <PictureInPicture2 size={12} />
             </button>
           )}
+          {/* Subtitles / CC — HLS only (radio + YouTube have their own). */}
+          {!ytId && !isAudio && (
+            <div className="relative">
+              <button
+                onClick={() => setShowCcMenu((v) => !v)}
+                title="Subtitles / Closed captions"
+                aria-label="Subtitles"
+                className={`p-1.5 rounded-lg transition-colors font-bold text-[10px] ${
+                  activeSubtitleIdx >= 0
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                CC
+              </button>
+              {showCcMenu && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-30 max-h-72 overflow-y-auto">
+                  {/* Stream tracks (from the HLS manifest) */}
+                  <p className="px-3 pt-2 text-[9px] uppercase tracking-wide text-gray-500">
+                    This stream
+                  </p>
+                  <button
+                    onClick={() => {
+                      applySubtitleTrack(-1);
+                      setShowCcMenu(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
+                      activeSubtitleIdx < 0
+                        ? "text-blue-400 font-semibold"
+                        : "text-gray-200"
+                    }`}
+                  >
+                    Off
+                  </button>
+                  {subtitleTracks.map((t) => (
+                    <button
+                      key={t.index}
+                      onClick={() => {
+                        applySubtitleTrack(t.index);
+                        setShowCcMenu(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
+                        activeSubtitleIdx === t.index
+                          ? "text-blue-400 font-semibold"
+                          : "text-gray-200"
+                      }`}
+                    >
+                      {t.label}
+                      {t.lang && (
+                        <span className="text-gray-500 ml-1">({t.lang})</span>
+                      )}
+                    </button>
+                  ))}
+                  {subtitleTracks.length === 0 && (
+                    <p className="px-3 py-1.5 text-[10px] text-gray-500">
+                      No subtitle tracks in this stream
+                    </p>
+                  )}
+                  {/* Preferred language (auto-selects on streams that carry it) */}
+                  <p className="px-3 pt-2 text-[9px] uppercase tracking-wide text-gray-500 border-t border-gray-800 mt-1">
+                    Preferred language (auto-select)
+                  </p>
+                  {SUBTITLE_LANGUAGES.map((l) => (
+                    <button
+                      key={l.label}
+                      onClick={() => applySubtitleLang(l.codes[0])}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
+                        subtitleLang === l.codes[0]
+                          ? "text-blue-400 font-semibold"
+                          : "text-gray-200"
+                      }`}
+                    >
+                      {l.label}{" "}
+                      <span className="text-gray-500">{l.native}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={onNext}
             title="Next channel"
@@ -468,7 +623,7 @@ function ChannelPlayer({
         {ytId ? (
           <iframe
             key={`${channel.nanoid}-${retryKey}`}
-            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0`}
+            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0&cc_load_policy=1&cc_lang_pref=${encodeURIComponent(subtitleLang)}`}
             title={channel.name}
             className="absolute inset-0 w-full h-full border-0"
             allow="accelerometer; autoplay; encrypted-media; fullscreen; picture-in-picture"
