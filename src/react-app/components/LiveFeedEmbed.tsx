@@ -178,11 +178,15 @@ function ChannelPlayer({
   isAudio,
   accent,
   onNext,
+  onToggleFullscreen,
+  isFullscreen,
 }: {
   channel: LiveChannel;
   isAudio: boolean;
   accent: "blue" | "purple";
   onNext: () => void;
+  onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -444,6 +448,19 @@ function ChannelPlayer({
           >
             <SkipForward size={12} />
           </button>
+          {/* Fullscreen toggle on the player itself (big + always visible on
+              touch devices — the header toolbar icon is easy to miss on a
+              phone). */}
+          {onToggleFullscreen && (
+            <button
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+            >
+              {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
+          )}
         </div>
       </div>
       {/* Player body */}
@@ -1190,13 +1207,23 @@ export default function LiveFeedEmbed({
               <button
                 onClick={toggleFullscreen}
                 title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                className="text-[10px] px-2 py-1 rounded-lg transition-colors flex items-center gap-1 flex-shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                aria-label={
+                  isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                }
+                className={`text-[10px] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 flex-shrink-0 font-medium ${
+                  isFullscreen
+                    ? "bg-blue-600 text-white"
+                    : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                }`}
               >
                 {isFullscreen ? (
-                  <Minimize2 size={10} />
+                  <Minimize2 size={12} />
                 ) : (
-                  <Maximize2 size={10} />
+                  <Maximize2 size={12} />
                 )}
+                <span className="hidden xs:inline">
+                  {isFullscreen ? "Exit" : "Fullscreen"}
+                </span>
               </button>
             </>
           )}
@@ -1593,6 +1620,8 @@ export default function LiveFeedEmbed({
             isAudio={!!isRadio}
             accent={accent}
             onNext={nextChannel}
+            onToggleFullscreen={toggleFullscreen}
+            isFullscreen={isFullscreen}
           />
         )}
       </div>
@@ -1687,20 +1716,26 @@ export default function LiveFeedEmbed({
   );
 
   if (isFullscreen) {
+    // Fullscreen mode: player fills the viewport top-to-bottom; the channel
+    // grid + filters scroll beneath it so the user can switch channels while
+    // staying in fullscreen. Exit via the X button (top-right) OR the browser
+    // Esc key (fullscreenchange listener resets isFullscreen).
     return (
       <div className="fixed inset-0 z-50 bg-black flex flex-col">
-        <div className="flex items-center justify-between p-2 bg-gray-900">
-          <div className="flex items-center gap-2 text-white">
-            <Sparkles size={14} className="text-blue-400" />
-            <span className="text-xs font-semibold">
-              Live Channels — Fullscreen
+        <div className="flex items-center justify-between p-2 bg-gray-900 border-b border-gray-800">
+          <div className="flex items-center gap-2 text-white min-w-0">
+            <Sparkles size={14} className="text-blue-400 flex-shrink-0" />
+            <span className="text-xs font-semibold truncate">
+              {isRadio ? "Live Radio" : "Live TV"} — Fullscreen
+              {activeChannel ? ` · ${activeChannel.name}` : ""}
             </span>
           </div>
           <button
             onClick={() => setIsFullscreen(false)}
-            className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800"
+            aria-label="Exit fullscreen"
+            className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
