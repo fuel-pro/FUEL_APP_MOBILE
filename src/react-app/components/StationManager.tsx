@@ -1452,6 +1452,44 @@ export default function StationManager({ onClose }: StationManagerProps) {
     return { totalRevenue: totalRev, todayRevenue: todayRev, sharedUsers };
   }, [stations]);
 
+  // ---- Station health (per-station score + issue list) ----
+  const stationHealth = useMemo(() => {
+    return stations.map((s) => {
+      const data = s.data || {};
+      let score = 50;
+      const issues: string[] = [];
+      if (s.status === "active") score += 20;
+      else if (s.status === "maintenance") {
+        score += 5;
+        issues.push("Under maintenance");
+      } else issues.push("Inactive");
+      const hasPrices = (data.fuelPrices || []).length > 0;
+      if (hasPrices) score += 15;
+      else issues.push("No fuel prices configured");
+      const hasPumps =
+        (data.pmsPumps?.length || 0) + (data.agoPumps?.length || 0) > 0;
+      if (hasPumps) score += 15;
+      else issues.push("No pumps configured");
+      if (data.companyData?.name) score += 10;
+      else issues.push("No company profile");
+      if (data.companyData?.contacts) score += 5;
+      else issues.push("No contact info");
+      if (data.companyData?.kraPin) score += 5;
+      else if ((s.country || "").toUpperCase() === "KE")
+        issues.push("No KRA PIN");
+      score = Math.min(100, score);
+      return {
+        id: s.id,
+        name: s.name,
+        score,
+        issues,
+        status: s.status,
+        healthLabel:
+          score >= 85 ? "Good" : score >= 60 ? "Warning" : "Critical",
+      };
+    });
+  }, [stations]);
+
   // ---- Owned vs shared split ----
   const ownedStations = useMemo(() => {
     return stations.filter((s) => {
@@ -2319,6 +2357,15 @@ export default function StationManager({ onClose }: StationManagerProps) {
                   Open Current
                 </span>
               </button>
+              <button
+                onClick={handleOpenTeamManager}
+                className={`${GLASS_CARD} p-4 hover:bg-gray-100 dark:hover:bg-white/10 transition-all flex flex-col items-center gap-2 text-center`}
+              >
+                <Users size={20} className="text-indigo-400" />
+                <span className="text-xs font-medium text-gray-900 dark:text-white">
+                  Team Manager
+                </span>
+              </button>
             </div>
 
             {/* Two-column: recent activity + sync status */}
@@ -2458,6 +2505,54 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 </div>
               </div>
             )}
+
+            {/* Station Health — computed from station data completeness */}
+            <SectionHeader icon={Gauge} title="Station Health" />
+            <div className={`${GLASS_CARD} p-4 space-y-2`}>
+              {stationHealth.length === 0 ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
+                  No stations yet — create one to see health status.
+                </p>
+              ) : (
+                stationHealth.map((h) => (
+                  <div
+                    key={h.id}
+                    className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-100 dark:bg-white/5"
+                  >
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                        h.healthLabel === "Good"
+                          ? "bg-emerald-500"
+                          : h.healthLabel === "Warning"
+                            ? "bg-amber-500"
+                            : "bg-red-500"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 dark:text-white truncate">
+                        {h.name}
+                      </p>
+                      {h.issues.length > 0 && (
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                          {h.issues.join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                        h.healthLabel === "Good"
+                          ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                          : h.healthLabel === "Warning"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                      }`}
+                    >
+                      {h.score}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
