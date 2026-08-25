@@ -72,6 +72,10 @@ export interface PlaceInfo {
   country: string;
   countryCode: string;
   region?: string;
+  /** Parent town/city when the resolved name is a village/suburb */
+  town?: string;
+  /** County / state_district (Kenya counties, e.g. "Turkana") */
+  county?: string;
   raw: string;
 }
 
@@ -196,6 +200,8 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
     country,
     countryCode,
     region: addr.state || addr.region,
+    town: addr.town || addr.city || addr.municipality,
+    county: addr.county || addr.state_district,
     raw: data.display_name || `${name}, ${country}`,
   };
 }
@@ -357,6 +363,65 @@ async function fetchFreeWebPrices(countryCode: string): Promise<string> {
   }
   return chunks.join("\n---\n");
 }
+
+// Kenya county -> the EPRA-gazetted pricing town for that county. When the
+// reverse-geocoder resolves a village/ward (e.g. "Carlifonia" near Lodwar)
+// that is not itself a gazetted pricing town, the parent town/county is used
+// so the village still resolves to its REAL published EPRA prices.
+const KE_COUNTY_TO_TOWN: Record<string, string> = {
+  nairobi: "Nairobi",
+  mombasa: "Mombasa",
+  kisumu: "Kisumu",
+  nakuru: "Nakuru",
+  "uasin gishu": "Eldoret",
+  kakamega: "Kakamega",
+  nyeri: "Nyeri",
+  machakos: "Machakos",
+  meru: "Meru",
+  turkana: "Lodwar",
+  garissa: "Garissa",
+  kilifi: "Kilifi",
+  "tana river": "Malindi",
+  lamu: "Malindi",
+  "taita taveta": "Voi",
+  "taita-taveta": "Voi",
+  kajiado: "Nairobi",
+  kiambu: "Thika",
+  kisii: "Kisii",
+  nyamira: "Kisii",
+  migori: "Migori",
+  "homa bay": "Kisii",
+  kericho: "Kericho",
+  bomet: "Kericho",
+  embu: "Embu",
+  "tharaka-nithi": "Embu",
+  isiolo: "Isiolo",
+  marsabit: "Isiolo",
+  mandera: "Mandera",
+  wajir: "Garissa",
+  makueni: "Machakos",
+  kitui: "Machakos",
+  narok: "Narok",
+  laikipia: "Nanyuki",
+  "trans nzoia": "Kitale",
+  "trans-nzoia": "Kitale",
+  transnzoia: "Kitale",
+  bungoma: "Bungoma",
+  busia: "Bungoma",
+  vihiga: "Kakamega",
+  baringo: "Nakuru",
+  nyandarua: "Nakuru",
+  "west pokot": "Kitale",
+  "elgeyo-marakwet": "Eldoret",
+  "elgeyo marakwet": "Eldoret",
+  nandi: "Eldoret",
+  samburu: "Isiolo",
+  "murang'a": "Nyeri",
+  muranga: "Nyeri",
+  kirinyaga: "Nyeri",
+  kwale: "Mombasa",
+  siaya: "Kisumu",
+};
 
 // Static reference: EPRA Kenya max retail prices (KES/litre) for the
 // August 15 – September 14, 2026 pricing cycle (announced 14 Aug 2026:
@@ -744,7 +809,18 @@ export async function getLocalFuelPrices(
   // These are REAL published prices for named towns — returned directly
   // without (unreliable) AI extraction. No estimation, no interpolation;
   // only an exact town-name match yields a price.
-  const refPrices = lookupExactReference(place.name, place.countryCode);
+  let refPrices = lookupExactReference(place.name, place.countryCode);
+  // Village/ward names miss the gazette; fall back to the parent town, then
+  // to the county's gazetted pricing town (Kenya only).
+  if (!refPrices && place.town) {
+    refPrices = lookupExactReference(place.town, place.countryCode);
+  }
+  if (!refPrices && place.county) {
+    const countyTown = KE_COUNTY_TO_TOWN[place.county.trim().toLowerCase()];
+    if (countyTown) {
+      refPrices = lookupExactReference(countyTown, place.countryCode);
+    }
+  }
   if (refPrices) {
     const currency = currencyForCountry(place.countryCode);
     const result: LocalFuelPrices = {

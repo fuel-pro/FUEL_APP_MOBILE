@@ -1834,7 +1834,35 @@ export function getSyncedFuelPrice(countryCode: string): FuelPriceData | null {
   const cached = localStorage.getItem(`fuelpro_fuel_prices_${countryCode}`);
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const data = JSON.parse(cached) as FuelPriceData;
+      // Cycle guard: a cached snapshot from a PREVIOUS pricing cycle (e.g.
+      // last month's EPRA table persisted in localStorage) must not outlive
+      // a code update carrying the new official reference. For Kenya, if the
+      // cached national diesel price differs from the current published base
+      // by more than the plausibility window, discard the cache so a fresh
+      // sync writes the current-cycle table.
+      if (countryCode === "KE") {
+        // Compare the cached Nairobi regional entry against the current
+        // published table — any mismatch means the snapshot is from a
+        // previous cycle (regional tables shift monthly).
+        const currentNairobi = KENYA_CITIES.find((c) => c.name === "Nairobi");
+        const cachedNairobi = data?.regionalPrices?.find(
+          (r) => r.city === "Nairobi",
+        );
+        const cachedDiesel =
+          cachedNairobi?.dieselPrice ??
+          (data as { dieselPrice?: number })?.dieselPrice;
+        if (
+          !currentNairobi ||
+          typeof cachedDiesel !== "number" ||
+          !Number.isFinite(cachedDiesel) ||
+          Math.abs(cachedDiesel - currentNairobi.dieselPrice) > 0.01
+        ) {
+          localStorage.removeItem(`fuelpro_fuel_prices_${countryCode}`);
+          return null;
+        }
+      }
+      return data;
     } catch {
       /* ignore */
     }
