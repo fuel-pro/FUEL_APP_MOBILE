@@ -54,6 +54,7 @@ import {
   Globe,
   Package,
   Fuel,
+  Monitor,
   Clock,
   DollarSign,
   Tag,
