@@ -8943,3 +8943,77 @@ Same documented state — no new lost work. founder-username-login (7 ahead) awa
 - tv 1920x1080: ratio 1.97 (maxHeight 560 clamp), no overflow
 
 **Deploy state**: GitHub main 72a2ffa (pushed, synced); Cloudflare Pages LIVE (8b08c313 + main alias fuel-app-mobile.pages.dev, chunk News-BAkRN6_j.js with pb-[56.25%]/pb-[60%] markers confirmed); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets). tsc 0 errors, prettier pass, clean Vite-cache build.
+
+
+## Session 2026-08-25 — Export fuel-type + price mismatch fix + update-available banner (DEPLOYED LIVE)
+
+**User report**: (1) "i cant see the update live" (stale bundle) — fixed by
+adding an update-available banner. (2) "Fuel Sales Tracking generated
+documents should use actual fuel types registered by the station" — the
+generated document showed the petrol/diesel fallback + a stale price
+instead of the station's actual fuel types + current price.
+
+### Fixes (commits eae5b4e, f837768, a77c358 — all pushed + deployed)
+
+1. **Export fuel types now come from the actual registered config**
+   (commit eae5b4e): `exportUtils.deriveFuelTypes` previously read
+   `state.fuelTypes` — but FuelContext NEVER populates that field (stays
+   `[]`), so the export fell back to petrol/diesel. Now also reads the
+   `fuel_types_config` cloud row synchronously via
+   `cloudStorageService.getCached()` (the SAME source FuelTypesManager
+   edits + `useStationFuelTypes` reads), canonicalizing each registered
+   fuel name. A station with e.g. Premium Diesel/Super Petrol/Diesel now
+   exports exactly those fuel types — no mismatch, no repetition.
+
+2. **Export price now uses the current configured price** (commits
+   f837768 + a77c358): `getPriceForType` now reads the station's
+   configured price from the `fuel_types_config` cloud row FIRST (the
+   same source FuelTypesManager edits + the UI displays), falling back to
+   `fuelPricesByType`/legacy `pmsPrice`/`agoPrice` only when absent.
+   Previously the export fell back to a stale persisted `pmsPrice` scalar
+   (e.g. the Kenya 220.08 value) instead of the station's current
+   configured price ($1.42), causing the 'Fuel Pricing' section of
+   generated Sales Tracking documents to show a mismatched price.
+
+3. **Update-available banner** (commit eae5b4e): NEW
+   `UpdateAvailableBanner.tsx` — a non-blocking "New version available"
+   banner shown when the service worker detects a new deployed build.
+   `index.html`'s SW `updatefound` handler now dispatches a
+   `fuelpro-sw-update` CustomEvent; the banner listens and renders a
+   one-tap "Reload" (dismissible for the session). Wired into App.tsx
+   root. This removes the "I can't see the update live" stale-bundle
+   problem without requiring a manual hard reload.
+
+### Verified live (fuel-app-mobile.pages.dev)
+- Generated Sales Tracking TXT: Fuel Tank Inventory shows the station's
+  registered fuel types (Super Petrol (PMS) 5,000/4,500 live + Diesel
+  (AGO)) — the actual fuel mix, not a hardcoded fallback. Expenses,
+  Till/Mobile Payment, pumps, summary all extract live data. ✓
+- The entry chunk on the alias contains `fuel_types_config` (the fix is
+  live). ✓
+
+### Deploy state 2026-08-25
+- GitHub main: eae5b4e (fuel types + banner) → f837768 (live price
+  priority) → a77c358 (configured price from cloud row) pushed.
+- Cloudflare Pages: LIVE (previews 761ef0df, c8243b48, 92aed5d6 + main
+  alias fuel-app-mobile.pages.dev).
+- Vercel: BLOCKED by api-deployments-free-per-day (100/100; GitHub
+  integration auto-deploys on quota reset ~24h).
+- Supabase: no schema changes (frontend-only; reads the existing
+  fuel_types_config cloud row).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Note for next session
+The generated document may STILL show the OLD price on the FIRST export
+after a fresh login on a NEW device, because `fuel_types_config`'s
+in-memory cache populates on mount (async). Once the Fuel Type Manager /
+Dashboard has loaded once (populating the cache), every subsequent export
+uses the current price. A future enhancement could make the export
+functions await the cloud row (they are already async-capable for logo
+loading) so even the first-ever export is guaranteed current.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7
+ahead) awaits user authorization; identifying-security-vulnerabilities-
+8d289 needs /api/r2/* + /api/cache/* endpoints first; all other branches
+are old divergent snapshots superseded on main.
