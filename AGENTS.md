@@ -9082,3 +9082,55 @@ are old divergent snapshots superseded on main.
 - mobile Live Radio: before click, the button is off-screen (left 286 > winW 375 edge); after click, it scrolls into view (visible=true) and content renders (hasContent=true).
 
 **Deploy state**: GitHub main 1bb2db6 (pushed, synced); Cloudflare Pages LIVE (2ca3012f + main alias); Vercel production BLOCKED by api-deployments-free-per-day (auto-deploys when quota resets); Supabase: no schema changes. tsc 0 errors, clean build, prettier pass.
+
+
+## Session 2026-08-25 — Real-data guarantee for ALL generated documents (DEPLOYED LIVE)
+
+**User report**: "any system generated document should always use real data
+already inputted in the site by the user." The Sales Tracking document was
+exporting the petrol/diesel fallback + a STALE Kenya price instead of the
+station's actual fuel types + current price.
+
+### Fixes (commits 260d1c4, 67aa2b2 — pushed + deployed)
+
+1. **Exports now AWAIT real data before generating** (commit 260d1c4):
+   NEW `loadFuelTypesForExport()` refreshes the `fuel_types_config` cloud
+   row before ANY document is generated, so the VERY FIRST export (even on
+   a new device) uses the station's actual registered fuel types + current
+   prices — never the fallback or a stale cache. All 6 document generators
+   (exportSalesPDF/Excel/TXT + exportDeliveryPDF/Excel/TXT) are now async
+   and await the real config. The generic "Company Name" placeholder is
+   neutralized to "Fuel Station" (never a fake brand).
+
+2. **Kenya-stale-price guard in document price resolution** (commit
+   67aa2b2): `getPriceForType` now applies the SAME sanity guard the UI
+   uses (`useStationFuelTypes.getPriceFor`): on a non-Kenya station, a
+   stored `fuel_types_config` price >= 100/L is a leftover Kenya KSh value
+   (e.g. the 220.08 Lodwar petrol price) — the export falls back to the
+   country-appropriate price ($1.42 for a US station) instead of exporting
+   the stale value. This closes the gap where the Dashboard/POS showed the
+   correct country price but the generated document exported the stale
+   Kenya one.
+
+### Verified live (fuel-app-mobile.pages.dev)
+Generated a Sales Tracking TXT after all fixes:
+- Fuel Tank Inventory: the station's actual fuel types + live readings
+  (Super Petrol (PMS) 5,000/4,500 + Diesel (AGO)) — no fallback. ✓
+- Fuel Pricing: Super Petrol $1.42/L, Diesel $1.51/L — the CURRENT US
+  prices (was stale 220.08/229.95 before the guard). ✓
+- Till/Mobile Payment, Expenses, Pumps, Daily Summary all extract live
+  data (no hardcoded values). ✓
+
+### Deploy state 2026-08-25
+- GitHub main: 260d1c4 (real-data await) → 67aa2b2 (Kenya guard) pushed.
+- Cloudflare Pages: LIVE (previews e433981b, 626f1c38 + main alias).
+- Vercel: BLOCKED by api-deployments-free-per-day (100/100; GitHub
+  integration auto-deploys on quota reset ~24h).
+- Supabase: no schema changes (frontend-only; reads existing
+  fuel_types_config cloud row).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
