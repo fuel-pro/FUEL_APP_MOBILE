@@ -423,11 +423,15 @@ class CloudStorageService {
    * choice survives reloads. Toggled from the Data Manager "Storage & Egress"
    * panel. Default: ENABLED (instant cross-device sync is a core feature).
    */
+  // Realtime is OFF by default to stay within the Supabase Free-plan
+  // Realtime message quota (org was >170% over). Users can re-enable it via
+  // the Data Manager "Storage & Egress" panel / General Settings. Cross-device
+  // data still syncs through the read-through cache + manual refresh.
   private realtimeEnabled = (() => {
     try {
-      return localStorage.getItem("fuelpro_realtime_disabled") !== "1";
+      return localStorage.getItem("fuelpro_realtime_enabled") === "1";
     } catch {
-      return true;
+      return false;
     }
   })();
 
@@ -436,9 +440,9 @@ class CloudStorageService {
     this.realtimeEnabled = enabled;
     try {
       if (enabled) {
-        localStorage.removeItem("fuelpro_realtime_disabled");
+        localStorage.setItem("fuelpro_realtime_enabled", "1");
       } else {
-        localStorage.setItem("fuelpro_realtime_disabled", "1");
+        localStorage.removeItem("fuelpro_realtime_enabled");
       }
     } catch {
       /* ignore quota errors */

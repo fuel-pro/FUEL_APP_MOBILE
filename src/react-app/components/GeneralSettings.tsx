@@ -201,9 +201,11 @@ const DEFAULT_CONFIG: GeneralSettingsConfig = {
   autoBackup: true,
   backupFrequency: "daily",
   dataRetentionDays: 365,
-  enableRealtime: true,
+  // Realtime is OFF by default to respect the Supabase Free-plan Realtime
+  // message quota (org was >170% over). Enable manually for instant sync.
+  enableRealtime: false,
   enableCompression: true,
-  lowBandwidthMode: false,
+  lowBandwidthMode: true,
 
   updatedAt: new Date().toISOString(),
   updatedBy: "",

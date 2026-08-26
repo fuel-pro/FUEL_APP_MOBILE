@@ -18,6 +18,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatMoney as fmtMoney } from "../lib/currency";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import {
   openTerminalSession,
   closeTerminalSession,
@@ -69,8 +70,10 @@ export default function TerminalSessions() {
   }, [loadSessions]);
 
   // Realtime: refresh when a session is opened/closed on another device.
+  // Respects the global Realtime kill-switch (egress saver).
   useEffect(() => {
     if (!currentStation?.id) return;
+    if (!cloudStorageService.isRealtimeEnabled()) return;
     const channel = supabase
       .channel(`terminal_sessions:${currentStation.id}`)
       .on(

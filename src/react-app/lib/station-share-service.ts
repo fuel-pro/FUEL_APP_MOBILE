@@ -783,6 +783,8 @@ export function subscribeToMembers(
   stationId: string,
   callback: () => void,
 ): () => void {
+  // Respect the global Realtime kill-switch (egress saver).
+  if (!cloudStorageService.isRealtimeEnabled()) return () => {};
   try {
     const supabase = getSupabaseClient();
     const channel = supabase
@@ -818,6 +820,8 @@ export function subscribeToMyMemberships(
   userId: string,
   callback: () => void,
 ): () => void {
+  // Respect the global Realtime kill-switch (egress saver).
+  if (!cloudStorageService.isRealtimeEnabled()) return () => {};
   try {
     const supabase = getSupabaseClient();
     const channel = supabase
