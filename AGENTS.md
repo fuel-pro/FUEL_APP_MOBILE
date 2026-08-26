@@ -9193,3 +9193,68 @@ A stream that genuinely has NO captions anywhere can't synthesize them — but
 the toggle now always finds a captioned stream (YouTube channels always can
 via cc_load_policy) instead of dead-ending, and the empty state explains the
 fallback so the user is never stuck.
+
+
+## Session 2026-08-25 — On-device AI live captions for ANY stream (DEPLOYED LIVE, commit 03302a6)
+
+**User request**: "always generate subtitle tracks in each stream live even
+without embedded tracks. thus generates on the go, even on non youtube
+streams."
+
+### Implementation (NEW src/react-app/lib/live-caption-engine.ts)
+
+A genuine on-device AI caption engine — OpenAI Whisper (tiny.en) running
+entirely in-browser via Transformers.js (WASM). Fully free, no server, no
+API keys, no usage limits.
+
+- **Audio capture**: `mediaEl.captureStream()` → AudioContext → 16 kHz mono
+  PCM rolling 4-second windows (captureStream requires the media element's
+  content to be CORS-enabled; HLS CDNs send `Access-Control-Allow-Origin: *`
+  so it works for them).
+- **Transcription**: Transformers.js `pipeline("automatic-speech-recognition",
+  "Xenova/whisper-tiny.en", { quantized: true })` — the ~31 MB model lazy-
+  loads on FIRST use only and is browser-cached thereafter.
+- **Silence gate**: RMS-based voice-activity check skips quiet windows (no
+  wasted ASR cycles on silence; also detects muted cross-origin audio).
+- **Fire-and-forget transcription** so caption windows never block playback.
+
+### LiveFeedEmbed.tsx wiring
+
+- New **AI toggle button** (purple, pulse dot when active) next to the
+  embedded CC button — works on HLS video AND live radio (any
+  HTMLMediaElement). Hidden on YouTube embeds (iframe handles captions via
+  cc_load_policy).
+- Turning AI captions on disables any embedded subtitle track first.
+- Engine stops on channel change / unmount.
+- **Caption overlay** (bottom-center, YouTube-style) shows the live
+  transcript + "AI live captions" badge; loading-model / listening /
+  unavailable / error states all render cleanly.
+
+### Deploy state 2026-08-25
+
+- GitHub main: 03302a6 pushed.
+- Cloudflare Pages: LIVE (preview f24c3f7e + main alias). News chunk
+  `News-YpyV6IUF.js` contains "whisper-tiny" + "live-caption-engine".
+- Vercel production: LIVE (prebuilt deploy aliased
+  fuel-app-mobile.vercel.app; News chunk has the engine).
+- Supabase: no schema changes (frontend-only; model served from the free
+  HuggingFace CDN, not Supabase).
+- @xenova/transformers 2.17.2 added as a dependency (legacy-peer-deps).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
+
+### Honest limitations (documented)
+
+- Audio capture requires the stream's CDN to serve CORS headers (most HLS
+  CDNs do); if a stream serves NO CORS, the captured audio is muted and the
+  overlay shows a clear "Live captions are not available" state instead of
+  garbage.
+- The first caption toggle downloads ~31 MB of model (browser-cached after).
+- Whisper tiny.en is English-only (multilingual models are heavier; a future
+  enhancement could auto-select the multilingual variant based on the
+  stream's language metadata).
