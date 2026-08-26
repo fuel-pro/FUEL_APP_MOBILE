@@ -31,6 +31,8 @@ import NewsService, {
 } from "@/react-app/services/NewsService";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import LiveFeedEmbed from "@/react-app/components/LiveFeedEmbed";
+import MoviesEmbed from "@/react-app/components/MoviesEmbed";
+import { Film } from "lucide-react";
 
 interface DisplayNewsItem extends ExternalNewsItem {
   bookmarked: boolean;
@@ -275,9 +277,9 @@ export default function News() {
   const [source, setSource] = useState<"curated" | "external">("curated");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sub-tab navigation: News Articles | Live TV (merged Live Channels + Live TV) | Live Radio
+  // Sub-tab navigation: News Articles | Movies | Live TV | Live Radio
   const [activeSubTab, setActiveSubTab] = useState<
-    "articles" | "live-tv" | "live-radio"
+    "articles" | "movies" | "live-tv" | "live-radio"
   >("articles");
 
   // Live feed embed state — country filter for TV / Radio sub-tabs
@@ -585,10 +587,11 @@ export default function News() {
         </div>
       </div>
 
-      {/* Sub-tab navigation: Articles | Live TV (merged channels) | Live Radio */}
+      {/* Sub-tab navigation: Articles | Movies | Live TV | Live Radio */}
       <SubTabBar
         tabs={[
           { id: "articles", label: "News Articles", icon: Newspaper },
+          { id: "movies", label: "Movies", icon: Film },
           { id: "live-tv", label: "Live TV", icon: Tv },
           { id: "live-radio", label: "Live Radio", icon: Radio },
         ]}
@@ -725,6 +728,15 @@ export default function News() {
             })}
           </div>
         </>
+      )}
+
+      {/* ===================== MOVIES SUB-TAB (reverse-engineered streaming catalog) ===================== */}
+      {activeSubTab === "movies" && (
+        <div className="space-y-4">
+          {/* Global movie catalog — full search + genre + favorites/watchlist
+              + continue-watching + embedded player. Silently integrated. */}
+          <MoviesEmbed accent="amber" />
+        </div>
       )}
 
       {/* ===================== LIVE TV SUB-TAB (merged Live Channels + Live TV) ===================== */}
