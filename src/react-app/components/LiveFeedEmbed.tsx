@@ -38,6 +38,8 @@ import {
   liveCaptionEngine,
   type CaptionStatus,
 } from "@/react-app/lib/live-caption-engine";
+import { useVLCKeyboardShortcuts } from "@/react-app/hooks/useVLCKeyboardShortcuts";
+import VLCStyleControls from "@/react-app/components/VLCStyleControls";
 import Hls from "hls.js";
 import {
   Tv,
@@ -187,6 +189,7 @@ function ChannelPlayer({
   isAudio,
   accent,
   onNext,
+  onPrev,
   onToggleFullscreen,
   isFullscreen,
   onCaptionFallback,
@@ -195,6 +198,7 @@ function ChannelPlayer({
   isAudio: boolean;
   accent: "blue" | "purple";
   onNext: () => void;
+  onPrev?: () => void;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
   /** Called when subtitles are toggled ON but the stream carries no embedded
@@ -203,6 +207,7 @@ function ChannelPlayer({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playerBodyRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<import("hls.js").default | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -248,6 +253,15 @@ function ChannelPlayer({
     ? ALL_COUNTRIES.find((c) => c.code === channel.country)?.name ||
       channel.country.toUpperCase()
     : "";
+
+  // VLC hotkeys (Space/k=f play/pause, f=fullscreen, m=mute, ↑/↓ volume,
+  // ←/→ seek, n/p next/prev channel, l=loop, [/] speed, Home/End, 0-9 seek).
+  // Wired to the currently-playing media element + channel navigation.
+  useVLCKeyboardShortcuts(isAudio ? audioRef : videoRef, {
+    onToggleFullscreen: onToggleFullscreen || (() => {}),
+    onNextChannel: onNext,
+    onPrevChannel: onPrev || onNext,
+  });
 
   // HLS / direct playback wiring (skip when rendering a YouTube iframe)
   useEffect(() => {
@@ -756,7 +770,7 @@ function ChannelPlayer({
         </div>
       </div>
       {/* Player body */}
-      <div className="flex-1 relative bg-black">
+      <div ref={playerBodyRef} className="flex-1 relative bg-black">
         {ytId ? (
           <iframe
             key={`${channel.nanoid}-${retryKey}-${subtitleLang}`}
@@ -780,8 +794,8 @@ function ChannelPlayer({
             <audio
               key={`${channel.nanoid}-${retryKey}`}
               ref={audioRef}
-              controls
               autoPlay
+              crossOrigin="anonymous"
               className="w-full max-w-md"
             />
           </div>
@@ -790,10 +804,10 @@ function ChannelPlayer({
             <video
               key={`${channel.nanoid}-${retryKey}`}
               ref={videoRef}
-              controls
               autoPlay
               muted
               playsInline
+              crossOrigin="anonymous"
               className="absolute inset-0 w-full h-full object-contain bg-black"
             />
             {buffering && !error && (
@@ -870,6 +884,19 @@ function ChannelPlayer({
               </div>
             </div>
           </div>
+        )}
+        {/* VLC-style control bar — VideoLAN look & feel (orange accent,
+            auto-hide, play/pause/seek/volume/speed/loop/fullscreen/Open-in-VLC).
+            Only on HLS video + radio (YouTube embeds have their own controls). */}
+        {!ytId && !error && (
+          <VLCStyleControls
+            mediaEl={isAudio ? audioRef.current : videoRef.current}
+            containerEl={playerBodyRef.current}
+            channelName={channel.name}
+            streamUrl={streamUrl}
+            isLive
+            onToggleFullscreen={onToggleFullscreen || (() => {})}
+          />
         )}
       </div>
     </div>
@@ -1361,6 +1388,18 @@ export default function LiveFeedEmbed({
     );
     const next = filteredChannels[(idx + 1) % filteredChannels.length];
     if (next) setActiveChannel(next);
+  }, [activeChannel, filteredChannels]);
+
+  const prevChannel = useCallback(() => {
+    if (!activeChannel || filteredChannels.length === 0) return;
+    const idx = filteredChannels.findIndex(
+      (c) => c.nanoid === activeChannel.nanoid,
+    );
+    const prev =
+      filteredChannels[
+        (idx - 1 + filteredChannels.length) % filteredChannels.length
+      ];
+    if (prev) setActiveChannel(prev);
   }, [activeChannel, filteredChannels]);
 
   // When the user enables subtitles on a stream with NO embedded tracks,
