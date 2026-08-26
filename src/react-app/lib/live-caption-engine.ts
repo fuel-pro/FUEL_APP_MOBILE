@@ -165,6 +165,10 @@ export class LiveCaptionEngine {
   /** Preferred caption language (ISO code). English transcripts are
    *  translated to this language on-device when it differs from "en". */
   private preferredLang: string = "en";
+  /** Web Speech API recognizer (fast free fallback — no model download). */
+  private webSpeech: any = null;
+  /** Which backend is active: "webspeech" (free/instant) or "whisper" (on-device ASR). */
+  private backend: "webspeech" | "whisper" | null = null;
 
   /** Roughly how much audio (seconds at the capture rate) per caption window. */
   private static readonly WINDOW_SECONDS = 4;
@@ -210,6 +214,21 @@ export class LiveCaptionEngine {
       return;
     }
 
+    // Fallback chain: Web Speech API (instant, free, no download) FIRST,
+    // Transformers.js Whisper (on-device ASR) as the fallback. If the
+    // model download fails (CDN blocked / offline / large file), the app
+    // still captions immediately via the browser's native recognizer.
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      this.backend = "webspeech";
+      this.statusCb?.("listening", "Generating live captions…");
+      this.startWebSpeech(SpeechRecognition, onCaption);
+      this.running = true;
+      return;
+    }
+
     this.statusCb?.("loading-model", "Loading on-device caption model…");
     try {
       await loadAsr();
@@ -220,6 +239,7 @@ export class LiveCaptionEngine {
       );
       return;
     }
+    this.backend = "whisper";
 
     this.audioCtx = new AudioContext();
     this.source = this.audioCtx.createMediaStreamSource(this.stream);
@@ -302,9 +322,80 @@ export class LiveCaptionEngine {
     }
   }
 
+  /** Start the browser's native Web Speech API recognizer (instant, free,
+   * no model download). Used as the primary caption path when available. */
+  private startWebSpeech(
+    RecognitionCtor: any,
+    onCaption: CaptionCallback,
+  ): void {
+    const rec = new RecognitionCtor();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang =
+      this.preferredLang && this.preferredLang !== "en"
+        ? this.preferredLang
+        : "en-US";
+    let lastInterim = "";
+    rec.onresult = (event: any) => {
+      let finalText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) finalText += result[0].transcript;
+      }
+      const text = finalText.trim();
+      if (text) {
+        lastInterim = text;
+        void translateCaption(text, this.preferredLang).then((translated) => {
+          if (translated) onCaption(translated, true);
+        });
+      } else if (event.results.length > 0) {
+        const interim =
+          event.results[event.results.length - 1][0].transcript.trim();
+        if (interim && interim !== lastInterim) {
+          lastInterim = interim;
+          onCaption(interim, false);
+        }
+      }
+    };
+    rec.onerror = (event: any) => {
+      // non-speech / no-speech errors are transient — the recognizer auto-
+      // restarts via onend.
+      if (event.error !== "no-speech" && event.error !== "aborted") {
+        this.statusCb?.("error", `Caption recognition error: ${event.error}`);
+      }
+    };
+    rec.onend = () => {
+      if (this.running && this.backend === "webspeech") {
+        try {
+          rec.start();
+        } catch {
+          /* already started */
+        }
+      }
+    };
+    this.webSpeech = rec;
+    try {
+      rec.start();
+    } catch (err) {
+      this.statusCb?.(
+        "error",
+        `Could not start live captions: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   /** Stop captioning and release all audio resources. */
   stop(): void {
     this.running = false;
+    this.backend = null;
+    if (this.webSpeech) {
+      try {
+        this.webSpeech.stop();
+      } catch {
+        /* already stopped */
+      }
+      this.webSpeech = null;
+    }
     try {
       this.processor?.disconnect();
       this.source?.disconnect();
