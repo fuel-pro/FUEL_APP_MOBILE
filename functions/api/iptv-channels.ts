@@ -33,7 +33,7 @@ const corsHeaders: Record<string, string> = {
 const cache = new Map<string, { data: IptvChannel[]; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000;
 const IPTV_BASE = "https://iptv-org.github.io/api";
-const MAX_RESULTS = 500;
+const MAX_RESULTS = 12000;
 
 interface IptvChannelRaw {
   id: string;

@@ -1319,12 +1319,12 @@ const IPTV_CACHE_TTL = 10 * 60 * 1000;
  *
  * @param country ISO 2-letter country code (lowercase), or "" for all
  * @param category category id (lowercase), or "" for all
- * @param limit max results (default 200, hard cap 500)
+ * @param limit max results (default 5000, hard cap 12000)
  */
 export async function fetchIptvChannels(
   country = "",
   category = "",
-  limit = 200,
+  limit = 5000,
 ): Promise<IptvChannel[]> {
   const c = country.toLowerCase().trim();
   const cat = category.toLowerCase().trim();
@@ -1716,7 +1716,7 @@ export async function fetchAllChannels(
   if (!isAudio) {
     const iptvCategory = mapToIptvCategory(category);
     const iptvCountry = country && !showAll ? country : "";
-    const iptv = await fetchIptvChannels(iptvCountry, iptvCategory, 200);
+    const iptv = await fetchIptvChannels(iptvCountry, iptvCategory, 5000);
     const merged = mergeChannelsWithIptv(primary, iptv);
     // Prepend curated known-good channels (guaranteed-playable) so the
     // player always has a reliable auto-select target. Dedup by nanoid.
@@ -1867,7 +1867,7 @@ export function prefetchLiveChannelsInBackground(): void {
     ];
     // Also pre-fetch iptv-org US channels (adds 200+ extra channels to the cache)
     commonFetches.push(
-      fetchIptvChannels("us", "", 200).then((chs) =>
+      fetchIptvChannels("us", "", 5000).then((chs) =>
         chs.map(iptvToLiveChannel),
       ),
     );
