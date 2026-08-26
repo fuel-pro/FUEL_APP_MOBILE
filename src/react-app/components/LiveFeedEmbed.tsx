@@ -34,6 +34,10 @@ import {
   detectPreferredSubtitleLang,
   findSubtitleTrackIndex,
 } from "@/react-app/lib/subtitle-languages";
+import {
+  liveCaptionEngine,
+  type CaptionStatus,
+} from "@/react-app/lib/live-caption-engine";
 import Hls from "hls.js";
 import {
   Tv,
@@ -222,6 +226,15 @@ function ChannelPlayer({
   const [showCcMenu, setShowCcMenu] = useState(false);
   const subtitleLangRef = useRef(subtitleLang);
   subtitleLangRef.current = subtitleLang;
+
+  // ─── LIVE AI CAPTIONS (generated on-device for streams with no embedded tracks) ──
+  const [liveCaptionsOn, setLiveCaptionsOn] = useState(false);
+  const [liveCaptionText, setLiveCaptionText] = useState<string>("");
+  const [liveCaptionStatus, setLiveCaptionStatus] =
+    useState<CaptionStatus>("idle");
+  const [liveCaptionDetail, setLiveCaptionDetail] = useState<string>("");
+  const liveCaptionTextRef = useRef<string>("");
+  liveCaptionTextRef.current = liveCaptionText;
 
   const ytId = useMemo(
     () =>
@@ -438,6 +451,69 @@ function ChannelPlayer({
     }
   };
 
+  // ─── LIVE AI CAPTION ENGINE controls ───────────────────────────────────
+  // Start the on-device caption engine on the currently-playing media element.
+  // Works for HLS video AND live radio <audio> — ANY stream can be captioned.
+  const startLiveCaptions = useCallback(() => {
+    const mediaEl: HTMLMediaElement | null = isAudio
+      ? audioRef.current
+      : videoRef.current;
+    if (!mediaEl) {
+      setLiveCaptionStatus("unavailable");
+      setLiveCaptionDetail(
+        "No playing media to caption yet — press play first.",
+      );
+      return;
+    }
+    // Ensure cross-origin audio capture works (HLS CDNs send CORS *).
+    if (!mediaEl.crossOrigin) mediaEl.crossOrigin = "anonymous";
+    setLiveCaptionStatus("loading-model");
+    setLiveCaptionDetail("");
+    liveCaptionEngine.start(
+      mediaEl,
+      (text) => {
+        setLiveCaptionText(text);
+      },
+      (status, detail) => {
+        setLiveCaptionStatus(status);
+        setLiveCaptionDetail(detail || "");
+      },
+    );
+  }, [isAudio]);
+
+  const stopLiveCaptions = useCallback(() => {
+    liveCaptionEngine.stop();
+    setLiveCaptionStatus("idle");
+    setLiveCaptionText("");
+    setLiveCaptionDetail("");
+  }, []);
+
+  const toggleLiveCaptions = useCallback(() => {
+    setLiveCaptionsOn((prev) => {
+      const next = !prev;
+      if (next) {
+        // Turn off any embedded track first — AI captions replace it.
+        if (hlsRef.current) {
+          hlsRef.current.subtitleDisplay = false;
+          hlsRef.current.subtitleTrack = -1;
+        }
+        setActiveSubtitleIdx(-1);
+        startLiveCaptions();
+      } else {
+        stopLiveCaptions();
+      }
+      return next;
+    });
+  }, [startLiveCaptions, stopLiveCaptions]);
+
+  // Stop the engine when the channel changes or the player unmounts.
+  useEffect(() => {
+    return () => {
+      liveCaptionEngine.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel.nanoid]);
+
   // Change the PREFERRED language: persist to cloud (cross-device) and, if the
   // current stream carries a matching track, switch to it immediately.
   const applySubtitleLang = (lang: string) => {
@@ -521,6 +597,33 @@ function ChannelPlayer({
               }`}
             >
               <PictureInPicture2 size={12} />
+            </button>
+          )}
+          {/* AI Live Captions — generates subtitles ON-DEVICE for ANY stream
+              (HLS video AND live radio), even with zero embedded tracks.
+              Hidden for YouTube embeds (captions handled by the iframe). */}
+          {!ytId && (
+            <button
+              onClick={toggleLiveCaptions}
+              title={
+                liveCaptionsOn
+                  ? "Stop live AI captions"
+                  : "Generate live captions (on-device AI, works on any stream)"
+              }
+              aria-label="Live AI captions"
+              aria-pressed={liveCaptionsOn}
+              className={`p-1.5 rounded-lg transition-colors font-bold text-[10px] flex items-center gap-1 ${
+                liveCaptionsOn
+                  ? "bg-purple-500 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+              }`}
+            >
+              <span className="relative flex items-center">
+                AI
+                {liveCaptionsOn && (
+                  <span className="absolute -top-1 -right-1.5 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                )}
+              </span>
             </button>
           )}
           {/* Subtitles / CC — HLS only (radio + YouTube have their own). */}
@@ -675,6 +778,53 @@ function ChannelPlayer({
               </div>
             )}
           </>
+        )}
+        {/* LIVE AI CAPTION OVERLAY — shows generated captions on top of the
+            video (bottom-center, YouTube-style). Renders whenever AI captions
+            are ON, for HLS video AND radio. */}
+        {!ytId && liveCaptionsOn && (
+          <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-1.5 pointer-events-none z-20 px-4">
+            {liveCaptionStatus === "loading-model" && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm">
+                <Loader2 size={12} className="animate-spin text-purple-400" />
+                <span className="text-[10px] text-gray-200">
+                  Loading on-device caption model (first use downloads ~31 MB)…
+                </span>
+              </div>
+            )}
+            {liveCaptionStatus === "listening" && liveCaptionText && (
+              <div className="max-w-[90%] px-4 py-2 rounded-lg bg-black/70 backdrop-blur-sm text-center">
+                <p className="text-sm md:text-base font-medium text-white leading-snug">
+                  {liveCaptionText}
+                </p>
+                <span className="block mt-1 text-[8px] uppercase tracking-wider text-purple-300/80">
+                  AI live captions
+                </span>
+              </div>
+            )}
+            {liveCaptionStatus === "listening" && !liveCaptionText && (
+              <div className="px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm">
+                <span className="text-[10px] text-gray-300">
+                  Listening — captions appear as speech is detected…
+                </span>
+              </div>
+            )}
+            {liveCaptionStatus === "unavailable" && (
+              <div className="px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm">
+                <span className="text-[10px] text-amber-300">
+                  {liveCaptionDetail ||
+                    "Live captions are not available for this stream."}
+                </span>
+              </div>
+            )}
+            {liveCaptionStatus === "error" && (
+              <div className="px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm">
+                <span className="text-[10px] text-red-300">
+                  {liveCaptionDetail || "Caption generation failed."}
+                </span>
+              </div>
+            )}
+          </div>
         )}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 p-4">
