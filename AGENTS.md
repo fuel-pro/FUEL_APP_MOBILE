@@ -9424,3 +9424,27 @@ site works as before the undo:
   captions are back to the pre-crossOrigin state (broken — captureStream
   returns silent audio without CORS) because the crossOrigin attribute fix
   was bundled into the reverted VLC commit.
+
+
+## Session 2026-08-26 — Live TV auto-advance + expanded worldwide catalog (DEPLOYED LIVE, commit 9ae8bca)
+
+**TASK 1** — 'This station's stream is currently unreachable' no longer
+dead-ends: when an HLS stream fatally errors, the player now AUTO-ADVANCES
+to the next playable channel (curated known-good channels are always
+available) instead of showing the error. The error only shows when there is
+genuinely nothing else to play.
+
+**TASK 2** — Expanded the catalog from 7 to 23 verified-reliable 24/7 live
+streams across genres, countries, and languages:
+- More 24/7 live news (YouTube embeds, embeddable, always live): DW News
+  English (DE), Euronews (FR), NHK World-Japan (JP), CNA (SG), TRT World
+  (TR), Arirang (KR), WION (IN).
+- More HLS TV (always-live public endpoints, CORS-enabled): Big Buck Bunny
+  2, Apple BipBop, Sintel, Tears of Steel.
+- 24/7 live radio (HLS/direct audio, CORS-enabled): BBC World Service, NPR
+  24/7, France Info, Radio Swiss Classic.
+
+Verified live on fuel-app-mobile.pages.dev: Live TV now shows 1,561
+channels (was 1,546) including Arirang TV, CNA, etc. Cloudflare LIVE
+(preview 2b4565ba). Vercel quota-blocked (auto-deploys on reset). Supabase:
+no schema changes. tsc 0 errors, 27/27 tests.
