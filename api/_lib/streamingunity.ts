@@ -241,14 +241,41 @@ export interface SuStreamInfo {
 export async function fetchSuStreamInfo(
   id: number | string,
   episodeId?: number | string,
+  debug?: Record<string, unknown>,
 ): Promise<SuStreamInfo | null> {
   const embedUrl = await fetchSuPlayerUrl(id, episodeId);
+  if (debug) {
+    debug.embedUrlFound = Boolean(embedUrl);
+    debug.embedUrl = embedUrl;
+  }
   if (!embedUrl) return null;
+  return fetchSuStreamInfoFromEmbed(embedUrl, debug);
+}
+
+/**
+ * Fetch + parse the vixcloud embed page given its (fresh, token-bearing) URL.
+ * Split from fetchSuStreamInfo so callers that already hold the embed URL
+ * (e.g. the Cloudflare relay) can skip the upstream iframe fetch.
+ *
+ * NOTE: vixcloud.co blocks some serverless IP ranges (Vercel/AWS -> 403) but
+ * allows Cloudflare Workers. Callers on a blocked platform should relay the
+ * embed URL to a non-blocked platform's endpoint.
+ */
+export async function fetchSuStreamInfoFromEmbed(
+  embedUrl: string,
+  debug?: Record<string, unknown>,
+): Promise<SuStreamInfo | null> {
   const res = await fetch(embedUrl, {
     headers: { "User-Agent": UA, Referer: `${SU_BASE}/` },
   });
+  if (debug) debug.embedStatus = res.status;
   if (!res.ok) return null;
   const html = await res.text();
+  if (debug) {
+    debug.embedLen = html.length;
+    debug.hasStreams = /window\.streams\s*=/.test(html);
+    debug.hasMaster = /window\.masterPlaylist\s*=/.test(html);
+  }
 
   const streamsMatch = html.match(/window\.streams\s*=\s*(\[[\s\S]*?\]);/);
   let servers: SuStreamInfo["servers"] = [];

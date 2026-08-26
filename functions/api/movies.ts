@@ -180,6 +180,18 @@ async function fetchSuStreamInfo(
 ): Promise<SuStreamInfo | null> {
   const embedUrl = await fetchSuPlayerUrl(id, episodeId);
   if (!embedUrl) return null;
+  return fetchSuStreamInfoFromEmbed(embedUrl);
+}
+
+/**
+ * Fetch + parse the vixcloud embed page given its (fresh, token-bearing) URL.
+ * Cloudflare Workers are NOT blocked by vixcloud (unlike Vercel/AWS IPs), so
+ * this is also the relay path used by the Vercel endpoint when its local
+ * vixcloud fetch is blocked (403).
+ */
+async function fetchSuStreamInfoFromEmbed(
+  embedUrl: string,
+): Promise<SuStreamInfo | null> {
   const res = await fetch(embedUrl, {
     headers: { "User-Agent": UA, Referer: `${SU_BASE}/` },
   });
@@ -255,6 +267,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // ---- STREAMS: raw HLS playlist info for native hls.js playback ----
     if (mode === "streams") {
+      // Relay path: the Vercel endpoint passes a fresh, token-bearing embed
+      // URL when its own vixcloud fetch is IP-blocked (403). Cloudflare
+      // Workers are not blocked, so fetch vixcloud from here.
+      const embedParam = url.searchParams.get("embed");
+      if (embedParam) {
+        const info = await fetchSuStreamInfoFromEmbed(embedParam);
+        return json({ streams: info });
+      }
       const id = url.searchParams.get("id");
       if (!id) return json({ error: "Missing id", streams: null }, 400);
       try {

@@ -64,10 +64,20 @@ interface Props {
   accent?: "blue" | "purple" | "amber";
 }
 
+/** Build the CORS-proxy URL for an HLS resource (same-origin on both hosts).
+ * vixcloud blocks direct browser cross-origin fetches (403 on Origin), so the
+ * player routes the playlist/rendition/segment chain through the proxy. */
+function movieHlsProxyUrl(url: string): string {
+  const origin = window.location.origin;
+  return `${origin}/api/hls-proxy?url=${encodeURIComponent(url)}`;
+}
+
 // ─── MoviePlayer — native hls.js player for the reverse-engineered stream ─────
-// Plays the raw HLS playlist (CORS-open) directly: no iframe, no ads, no
-// analytics, no frame-ancestors CSP block. Falls back to the embed iframe only
-// when the native stream cannot be loaded.
+// Plays the raw HLS playlist: no iframe, no ads, no analytics, no
+// frame-ancestors CSP block. vixcloud blocks direct browser cross-origin
+// fetches, so the chain is routed through the same-origin HLS CORS proxy
+// (the existing /api/hls-proxy used by Live TV). Falls back to the embed
+// iframe only when the native stream cannot be loaded.
 function MoviePlayer({
   streamInfo,
   title,
@@ -111,7 +121,9 @@ function MoviePlayer({
         fragLoadingTimeOut: 30000,
       });
       hlsRef.current = hls;
-      hls.loadSource(streamInfo.playlistUrl);
+      // Route through the same-origin HLS CORS proxy — vixcloud 403s direct
+      // browser cross-origin fetches of the playlist/rendition/segment chain.
+      hls.loadSource(movieHlsProxyUrl(streamInfo.playlistUrl));
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         const lv = (hls.levels || [])
@@ -142,8 +154,8 @@ function MoviePlayer({
       };
     }
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS
-      video.src = streamInfo.playlistUrl;
+      // Safari native HLS — still needs the proxy (vixcloud blocks cross-origin).
+      video.src = movieHlsProxyUrl(streamInfo.playlistUrl);
       video.play().catch(() => {});
       const onErr = () => onFatal();
       video.addEventListener("error", onErr);

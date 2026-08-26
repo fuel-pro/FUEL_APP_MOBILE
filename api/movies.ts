@@ -35,6 +35,30 @@ import {
   type SuTitle,
 } from "./_lib/streamingunity.js";
 
+/**
+ * vixcloud.co blocks Vercel/AWS serverless IPs (403) but allows Cloudflare
+ * Workers. When the local vixcloud fetch is blocked, relay the (fresh,
+ * token-bearing) embed URL to the Cloudflare Pages Function which fetches
+ * vixcloud from a non-blocked IP and returns the parsed stream info.
+ */
+const CF_RELAY_BASE = "https://fuel-app-mobile.pages.dev/api/movies";
+
+async function relayStreamsViaCloudflare(
+  embedUrl: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(
+      `${CF_RELAY_BASE}?mode=streams&embed=${encodeURIComponent(embedUrl)}`,
+      { headers: { "User-Agent": "FuelPro-Movies-Relay/1.0" } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { streams?: Record<string, unknown> };
+    return data?.streams ?? null;
+  } catch {
+    return null;
+  }
+}
+
 interface ApiResponse extends ServerResponse {
   status(code: number): ApiResponse;
   json(body: unknown): void;
@@ -125,7 +149,19 @@ export default async function handler(
         r.status(400).json({ error: "Missing id", streams: null });
         return;
       }
-      const info = await fetchSuStreamInfo(id, q.episode);
+      const debug: Record<string, unknown> = {};
+      const info = await fetchSuStreamInfo(id, q.episode, debug);
+      // vixcloud blocks Vercel IPs (403) — relay the fresh embed URL through
+      // the Cloudflare Pages Function (non-blocked IP) to get the stream info.
+      if (!info && debug.embedStatus === 403 && debug.embedUrl) {
+        const relayed = await relayStreamsViaCloudflare(
+          debug.embedUrl as string,
+        );
+        if (relayed) {
+          r.status(200).json({ streams: relayed });
+          return;
+        }
+      }
       if (!info) {
         r.status(200).json({ streams: null });
         return;
