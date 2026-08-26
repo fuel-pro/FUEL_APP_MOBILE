@@ -165,6 +165,56 @@ export class LiveCaptionEngine {
   /** Preferred caption language (ISO code). English transcripts are
    *  translated to this language on-device when it differs from "en". */
   private preferredLang: string = "en";
+  /** ISO-2 country/region of the stream's channel (e.g. "us", "ke", "br").
+   *  Used to set the ASR language to the language actually SPOKEN in the
+   *  stream (for accuracy), which differs from the preferred DISPLAY
+   *  language. */
+  private streamCountry: string = "";
+
+  /** Map a channel's ISO-2 country to the language the stream is SPOKEN in
+   *  (for the ASR recognizer). Falls back to "en" for English-speaking
+   *  regions. */
+  private asrLangForCountry(country: string): string {
+    const map: Record<string, string> = {
+      us: "en-US",
+      gb: "en-GB",
+      ca: "en-CA",
+      au: "en-AU",
+      nz: "en-NZ",
+      ie: "en-IE",
+      ke: "en-KE",
+      ng: "en-NG",
+      gh: "en-GH",
+      za: "en-ZA",
+      tz: "sw-TZ",
+      es: "es-ES",
+      mx: "es-MX",
+      ar: "es-AR",
+      co: "es-CO",
+      cl: "es-CL",
+      pe: "es-PE",
+      ve: "es-VE",
+      br: "pt-BR",
+      pt: "pt-PT",
+      fr: "fr-FR",
+      be: "fr-BE",
+      ch: "fr-CH",
+      de: "de-DE",
+      at: "de-AT",
+      it: "it-IT",
+      nl: "nl-NL",
+      ru: "ru-RU",
+      cn: "zh-CN",
+      tw: "zh-TW",
+      jp: "ja-JP",
+      kr: "ko-KR",
+      in: "hi-IN",
+      sa: "ar-SA",
+      ae: "ar-AE",
+      tr: "tr-TR",
+    };
+    return map[country] || "en-US";
+  }
   /** Web Speech API recognizer (fast free fallback — no model download). */
   private webSpeech: any = null;
   /** Which backend is active: "webspeech" (free/instant) or "whisper" (on-device ASR). */
@@ -186,9 +236,11 @@ export class LiveCaptionEngine {
     onCaption: CaptionCallback,
     onStatus?: CaptionStatusCallback,
     preferredLang: string = "en",
+    streamCountry: string = "",
   ): Promise<void> {
     this.statusCb = onStatus || null;
     this.preferredLang = preferredLang || "en";
+    this.streamCountry = (streamCountry || "").toLowerCase();
     if (this.running) return;
 
     // Capture the element's audio output. captureStream() requires the media
@@ -331,10 +383,12 @@ export class LiveCaptionEngine {
     const rec = new RecognitionCtor();
     rec.continuous = true;
     rec.interimResults = true;
-    rec.lang =
-      this.preferredLang && this.preferredLang !== "en"
-        ? this.preferredLang
-        : "en-US";
+    // ACCURACY: set the ASR language to the language SPOKEN in the stream
+    // (derived from the channel's country/region), NOT the preferred
+    // display language. This is what makes the transcription accurate for a
+    // live stream. The preferred language is only used to TRANSLATE the
+    // English transcript for display.
+    rec.lang = this.asrLangForCountry(this.streamCountry);
     let lastInterim = "";
     rec.onresult = (event: any) => {
       let finalText = "";

@@ -481,6 +481,9 @@ function ChannelPlayer({
       // Pass the user's preferred language so non-English transcripts are
       // translated on-device before display.
       subtitleLangRef.current,
+      // Pass the channel's country so the ASR language matches the language
+      // SPOKEN in the stream (accuracy), not just the display language.
+      channel.country || "",
     );
   }, [isAudio]);
 
