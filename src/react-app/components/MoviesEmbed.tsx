@@ -452,12 +452,13 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     if (!selected) return;
     setStreamInfo(null);
     setPlayerLoading(true);
-    void fetchMoviePlayerUrl(selected.id, selectedEpisode ?? undefined).then(
-      (url) => {
-        setPlayerUrl(url);
-        setPlayerLoading(false);
-      },
-    );
+    void fetchMoviePlayerUrl(
+      selected.id,
+      selectedEpisode ?? detail?.loadedSeason?.episodes?.[0]?.id ?? undefined,
+    ).then((url) => {
+      setPlayerUrl(url);
+      setPlayerLoading(false);
+    });
   };
 
   // ── Favorites / watchlist toggles ─────────────────────────────────────────
@@ -838,7 +839,15 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 </div>
               ) : (
                 <button
-                  onClick={() => play(selectedEpisode ?? undefined)}
+                  onClick={() =>
+                    play(
+                      selectedEpisode ??
+                        // TV series need an episode for the stream lookup —
+                        // default to the first episode of the loaded season.
+                        detail?.loadedSeason?.episodes?.[0]?.id ??
+                        undefined,
+                    )
+                  }
                   disabled={playerLoading}
                   className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 mb-4 transition-colors"
                 >
