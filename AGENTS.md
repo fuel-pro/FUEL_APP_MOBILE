@@ -9392,3 +9392,14 @@ not just the preferred display language:
 Same documented state — no new lost work. founder-username-login (7 ahead)
 awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 /api/r2/* + /api/cache/* endpoints first.
+
+
+## Session 2026-08-25 — REVERTED VLC player integration (commit 93a445a)
+Reverted commit c59b32e (feat(live-tv): VideoLAN VLC-style player + fix AI
+captions crossOrigin) per explicit user request (undo TASK 2). This removes
+VLCStyleControls.tsx + useVLCKeyboardShortcuts.ts + the crossOrigin
+attributes on the video/audio elements + the onPrev prop + the VLC controls
+overlay. NOTE: this revert ALSO removes the crossOrigin fix, so the AI live
+captions are back to the broken state (captureStream returns silent audio
+without CORS). The Live TV/Radio player is back to the pre-VLC state (native
+<video>/<audio> controls, no VLC hotkeys, no Open-in-VLC).
