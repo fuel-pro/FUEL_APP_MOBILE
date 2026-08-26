@@ -150,6 +150,35 @@ export async function fetchMoviePlayerUrl(
   }
 }
 
+export interface MovieStreamInfo {
+  playlistUrl: string;
+  servers: { name: string; active: boolean; url: string }[];
+  thumbnailsUrl: string | null;
+  canPlayFHD: boolean;
+}
+
+/**
+ * Fetch the raw HLS playlist info for NATIVE (hls.js) playback.
+ * The vixcloud iframe is frame-ancestors-locked to the upstream site, but
+ * the HLS playlist/rendition/segment chain is CORS-open, so the client can
+ * play the stream natively — no iframe, no ads, no CSP block. Always fetched
+ * fresh (the playlist token is time-limited).
+ */
+export async function fetchMovieStreams(
+  id: number,
+  episodeId?: number,
+): Promise<MovieStreamInfo | null> {
+  const ep = episodeId ? `&episode=${episodeId}` : "";
+  try {
+    const res = await fetch(`/api/movies?mode=streams&id=${id}${ep}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.streams ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Background prefetch — warm the catalog cache so the Movies sub-tab renders
 // instantly. Runs once per page load, ~3s after app boot, fire-and-forget.

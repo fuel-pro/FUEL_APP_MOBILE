@@ -211,6 +211,87 @@ export async function fetchSuPlayerUrl(
   return decodeEntities(m[1]);
 }
 
+/**
+ * Reverse-engineered vixcloud stream info for NATIVE (hls.js) playback.
+ *
+ * The vixcloud embed page (https://vixcloud.co/embed/{scws_id}?token=...)
+ * carries a dynamic `Content-Security-Policy: frame-ancestors` header that
+ * only allows framing from the upstream site itself, so iframing it from our
+ * domain is blocked. BUT the page's inline config exposes the raw HLS
+ * playlist endpoints, and the entire playlist/rendition/segment chain is
+ * served with `Access-Control-Allow-Origin: *` and no Referer check. So the
+ * client can play the stream natively with hls.js — no iframe, no ads, no
+ * analytics, no CSP block.
+ *
+ * This function extracts that config server-side:
+ *   window.video          -> { id, filename }
+ *   window.streams        -> [{ name, active, url }] (Server1/Server2 playlist URLs)
+ *   window.masterPlaylist -> { params: { token, expires, asn }, url }
+ *   window.thumbnailsUrl  -> storyboard sprite (seek preview)
+ *   window.canPlayFHD     -> boolean
+ */
+export interface SuStreamInfo {
+  playlistUrl: string;
+  servers: { name: string; active: boolean; url: string }[];
+  thumbnailsUrl: string | null;
+  canPlayFHD: boolean;
+  embedUrl: string | null;
+}
+
+export async function fetchSuStreamInfo(
+  id: number | string,
+  episodeId?: number | string,
+): Promise<SuStreamInfo | null> {
+  const embedUrl = await fetchSuPlayerUrl(id, episodeId);
+  if (!embedUrl) return null;
+  const res = await fetch(embedUrl, {
+    headers: { "User-Agent": UA, Referer: `${SU_BASE}/` },
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+
+  const streamsMatch = html.match(/window\.streams\s*=\s*(\[[\s\S]*?\]);/);
+  let servers: SuStreamInfo["servers"] = [];
+  try {
+    if (streamsMatch) servers = JSON.parse(streamsMatch[1]);
+  } catch {
+    servers = [];
+  }
+
+  const mpMatch = html.match(/window\.masterPlaylist\s*=\s*\{([\s\S]*?)\}\s*;/);
+  const mpBody = mpMatch?.[1] ?? "";
+  const pick = (key: string): string => {
+    // Keys may be quoted ('token': '...') or bare (url: '...').
+    const m = mpBody.match(new RegExp(`['"]?${key}['"]?:\\s*'([^']*)'`));
+    return m?.[1] ?? "";
+  };
+  const baseUrl = pick("url");
+  const token = pick("token");
+  const expires = pick("expires");
+  const asn = pick("asn");
+
+  const thumbMatch = html.match(/window\.thumbnailsUrl\s*=\s*'([^']+)'/);
+  const fhdMatch = html.match(/window\.canPlayFHD\s*=\s*(true|false)/);
+
+  // Prefer the active server URL; fall back to the masterPlaylist base url.
+  const active = servers.find((s) => s.active) ?? servers[0];
+  const rawUrl = active?.url || baseUrl;
+  if (!rawUrl || !token) return null;
+  const sep = rawUrl.includes("?") ? "&" : "?";
+  const playlistUrl =
+    `${rawUrl}${sep}token=${encodeURIComponent(token)}` +
+    `&expires=${encodeURIComponent(expires)}` +
+    (asn ? `&asn=${encodeURIComponent(asn)}` : "");
+
+  return {
+    playlistUrl,
+    servers,
+    thumbnailsUrl: thumbMatch?.[1] ?? null,
+    canPlayFHD: fhdMatch?.[1] === "true",
+    embedUrl,
+  };
+}
+
 /** Movie genre ids -> labels (type "movie" or "all", from the live catalog). */
 export const SU_MOVIE_GENRES: Record<number, string> = {
   4: "Action",
@@ -235,4 +316,15 @@ export const SU_MOVIE_GENRES: Record<number, string> = {
 /** Filter a title list to movies only (type === "movie"). */
 export function moviesOnly(titles: SuTitle[] | undefined): SuTitle[] {
   return (titles || []).filter((t) => t && t.type === "movie");
+}
+
+/**
+ * Keep every playable title — movies AND TV (series / TV shows / limited
+ * series all arrive with type "tv"). Per the product requirement, the Movies
+ * sub-tab must not be limited to movies only.
+ */
+export function playableOnly(titles: SuTitle[] | undefined): SuTitle[] {
+  return (titles || []).filter(
+    (t) => t && (t.type === "movie" || t.type === "tv"),
+  );
 }

@@ -1,8 +1,11 @@
 /**
  * MoviesEmbed — the Movies sub-tab (reverse-engineered streamingunity.vip /
- * StreamingCommunity mirror). Renders a native FuelPro movie catalog with
- * search, genre filter, surprise pick, cloud-synced favorites / watchlist /
- * continue-watching, a detail modal, and an embedded vixcloud player.
+ * StreamingCommunity mirror). Renders a native FuelPro movie + series catalog
+ * (movies, series, TV shows, limited series) with search, genre filter, type
+ * filter, surprise pick, cloud-synced favorites / watchlist / continue-
+ * watching, a detail modal with season/episode picker, and a NATIVE hls.js
+ * player (the raw HLS playlist chain is CORS-open, so playback needs no
+ * iframe — the upstream embed iframe is kept only as an explicit fallback).
  *
  * Matches the LiveFeedEmbed feature set so all live-content sub-tabs in the
  * News tab behave consistently. Cloud sync uses the 3-ref guard pattern
@@ -10,6 +13,7 @@
  * flash-then-blank data-loss bug.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import Hls from "hls.js";
 import {
   Film,
   Search,
@@ -26,6 +30,10 @@ import {
   History,
   Trash2,
   MonitorPlay,
+  Tv,
+  Clapperboard,
+  RotateCcw,
+  Settings2,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -35,9 +43,11 @@ import {
   searchMovies,
   fetchMovieDetail,
   fetchMoviePlayerUrl,
+  fetchMovieStreams,
   type MovieItem,
   type MovieDetail,
   type MovieGenre,
+  type MovieStreamInfo,
 } from "@/react-app/services/MovieService";
 
 // ─── Cloud keys ----------------------------------------------------------------
@@ -48,9 +58,181 @@ const HISTORY_MAX = 24;
 const FAVORITES_MAX = 100;
 
 type ViewMode = "catalog" | "search" | "genre";
+type TypeFilter = "all" | "movie" | "tv";
 
 interface Props {
   accent?: "blue" | "purple" | "amber";
+}
+
+// ─── MoviePlayer — native hls.js player for the reverse-engineered stream ─────
+// Plays the raw HLS playlist (CORS-open) directly: no iframe, no ads, no
+// analytics, no frame-ancestors CSP block. Falls back to the embed iframe only
+// when the native stream cannot be loaded.
+function MoviePlayer({
+  streamInfo,
+  title,
+  poster,
+  onClose,
+  onUseFallback,
+}: {
+  streamInfo: MovieStreamInfo;
+  title: string;
+  poster: string | null;
+  onClose: () => void;
+  onUseFallback: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const [levels, setLevels] = useState<
+    { height: number; bitrate: number; hlsIndex: number }[]
+  >([]);
+  const [currentLevel, setCurrentLevel] = useState(-1); // -1 = auto (hls index)
+  const [error, setError] = useState<string | null>(null);
+  const [showQuality, setShowQuality] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setError(null);
+    setLevels([]);
+    setCurrentLevel(-1);
+
+    const onFatal = () =>
+      setError(
+        "This title's stream could not be loaded. Retry or use the fallback player.",
+      );
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: false,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 30000,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(streamInfo.playlistUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const lv = (hls.levels || [])
+          .map((l, hlsIndex) => ({
+            height: l.height,
+            bitrate: l.bitrate,
+            hlsIndex,
+          }))
+          .sort((a, b) => b.height - a.height);
+        setLevels(lv);
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+          return;
+        }
+        onFatal();
+      });
+      return () => {
+        hls.destroy();
+        hlsRef.current = null;
+      };
+    }
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari native HLS
+      video.src = streamInfo.playlistUrl;
+      video.play().catch(() => {});
+      const onErr = () => onFatal();
+      video.addEventListener("error", onErr);
+      return () => video.removeEventListener("error", onErr);
+    }
+    onFatal();
+    return undefined;
+  }, [streamInfo, retryNonce]);
+
+  const setQuality = (hlsIndex: number) => {
+    setCurrentLevel(hlsIndex);
+    if (hlsRef.current) hlsRef.current.currentLevel = hlsIndex;
+    setShowQuality(false);
+  };
+
+  return (
+    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4 group">
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full"
+        controls
+        playsInline
+        poster={poster ?? undefined}
+        aria-label={title}
+      />
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+        title="Close player"
+      >
+        <X size={14} />
+      </button>
+      {/* Quality selector */}
+      {levels.length > 1 && (
+        <div className="absolute top-2 left-2 z-10">
+          <button
+            onClick={() => setShowQuality((v) => !v)}
+            className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 flex items-center gap-1 text-[10px]"
+            title="Quality"
+          >
+            <Settings2 size={13} />
+            {currentLevel === -1
+              ? "Auto"
+              : `${levels.find((l) => l.hlsIndex === currentLevel)?.height ?? ""}p`}
+          </button>
+          {showQuality && (
+            <div className="absolute top-9 left-0 rounded-lg bg-black/90 border border-white/10 py-1 min-w-[110px]">
+              <button
+                onClick={() => setQuality(-1)}
+                className={`block w-full text-left px-3 py-1.5 text-[11px] ${currentLevel === -1 ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+              >
+                Auto
+              </button>
+              {levels.map((l) => (
+                <button
+                  key={l.hlsIndex}
+                  onClick={() => setQuality(l.hlsIndex)}
+                  className={`block w-full text-left px-3 py-1.5 text-[11px] ${currentLevel === l.hlsIndex ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+                >
+                  {l.height}p
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Error overlay */}
+      {error && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
+          <p className="text-xs text-gray-300 max-w-sm">{error}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRetryNonce((n) => n + 1)}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium flex items-center gap-1.5"
+            >
+              <RotateCcw size={13} /> Retry
+            </button>
+            <button
+              onClick={onUseFallback}
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
+            >
+              Use fallback player
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MoviesEmbed({ accent = "amber" }: Props) {
@@ -75,8 +257,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [detail, setDetail] = useState<MovieDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [playerUrl, setPlayerUrl] = useState<string | null>(null);
+  const [streamInfo, setStreamInfo] = useState<MovieStreamInfo | null>(null);
   const [playerLoading, setPlayerLoading] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   // ── Cloud-synced favorites / watchlist / history ──────────────────────────
   const [favorites, setFavorites] = useState<MovieItem[]>([]);
@@ -209,6 +393,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setSelected(item);
     setDetail(null);
     setPlayerUrl(null);
+    setStreamInfo(null);
     setSelectedEpisode(null);
     setDetailLoading(true);
     void fetchMovieDetail(item.id, item.slug).then((d) => {
@@ -229,13 +414,38 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   };
 
   // ── Player ────────────────────────────────────────────────────────────────
+  // Native-first: fetch the raw HLS stream info (CORS-open playlist) and play
+  // with hls.js. The iframe embed is kept only as an explicit fallback.
   const play = (episodeId?: number) => {
     if (!selected) return;
     setPlayerLoading(true);
-    void fetchMoviePlayerUrl(selected.id, episodeId).then((url) => {
-      setPlayerUrl(url);
-      setPlayerLoading(false);
+    setPlayerUrl(null);
+    setStreamInfo(null);
+    void fetchMovieStreams(selected.id, episodeId).then((info) => {
+      if (info?.playlistUrl) {
+        setStreamInfo(info);
+        setPlayerLoading(false);
+        return;
+      }
+      // Fallback: the iframe embed (works on platforms where the upstream
+      // allows framing, or when the streams extraction fails).
+      void fetchMoviePlayerUrl(selected.id, episodeId).then((url) => {
+        setPlayerUrl(url);
+        setPlayerLoading(false);
+      });
     });
+  };
+
+  const useFallbackPlayer = () => {
+    if (!selected) return;
+    setStreamInfo(null);
+    setPlayerLoading(true);
+    void fetchMoviePlayerUrl(selected.id, selectedEpisode ?? undefined).then(
+      (url) => {
+        setPlayerUrl(url);
+        setPlayerLoading(false);
+      },
+    );
   };
 
   // ── Favorites / watchlist toggles ─────────────────────────────────────────
@@ -276,13 +486,17 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     });
   };
 
-  // ── Current movie list to render ──────────────────────────────────────────
-  const listToRender: MovieItem[] =
+  // ── Current movie list to render (movies + series, type-filtered) ─────────
+  const unfilteredList: MovieItem[] =
     view === "search"
       ? searchResults
       : view === "genre" || browseTitles.length
         ? browseTitles
         : catalogSliders.flatMap((s) => s.titles);
+  const listToRender: MovieItem[] =
+    typeFilter === "all"
+      ? unfilteredList
+      : unfilteredList.filter((t) => t.type === typeFilter);
 
   const accentBorder =
     accent === "amber"
@@ -304,9 +518,32 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearchInput(e.target.value)}
-            placeholder="Search movies..."
+            placeholder="Search movies & series..."
             className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400"
           />
+        </div>
+        {/* Type filter: All / Movies / TV Series (series, TV shows, limited series) */}
+        <div className="flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5">
+          {(
+            [
+              { id: "all", label: "All", icon: Clapperboard },
+              { id: "movie", label: "Movies", icon: Film },
+              { id: "tv", label: "TV Series", icon: Tv },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTypeFilter(t.id)}
+              className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                typeFilter === t.id
+                  ? "bg-amber-500 text-white"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              <t.icon size={12} />
+              {t.label}
+            </button>
+          ))}
         </div>
         <button
           onClick={surprise}
@@ -491,9 +728,23 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                         <Clock size={11} /> {detail.runtime} min
                       </span>
                     )}
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase">
-                      {selected.type}
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase flex items-center gap-1">
+                      {selected.type === "tv" ? (
+                        <>
+                          <Tv size={10} /> Series
+                        </>
+                      ) : (
+                        <>
+                          <Film size={10} /> Movie
+                        </>
+                      )}
                     </span>
+                    {selected.type === "tv" && selected.seasonsCount > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {selected.seasonsCount}{" "}
+                        {selected.seasonsCount === 1 ? "season" : "seasons"}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
@@ -547,8 +798,16 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 </div>
               )}
 
-              {/* PLAYER */}
-              {playerUrl ? (
+              {/* PLAYER — native hls.js first, iframe fallback */}
+              {streamInfo ? (
+                <MoviePlayer
+                  streamInfo={streamInfo}
+                  title={selected.name}
+                  poster={selected.cover ?? selected.poster}
+                  onClose={() => setStreamInfo(null)}
+                  onUseFallback={useFallbackPlayer}
+                />
+              ) : playerUrl ? (
                 <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4">
                   <iframe
                     src={playerUrl}
@@ -567,7 +826,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 </div>
               ) : (
                 <button
-                  onClick={() => play()}
+                  onClick={() => play(selectedEpisode ?? undefined)}
                   disabled={playerLoading}
                   className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 mb-4 transition-colors"
                 >
@@ -763,6 +1022,18 @@ function MovieCard({
             <Star size={9} className="fill-amber-400" /> {movie.score}
           </span>
         )}
+        {/* type badge (Series vs Movie) */}
+        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] bg-black/70 text-white/90 font-medium flex items-center gap-1 uppercase">
+          {movie.type === "tv" ? (
+            <>
+              <Tv size={9} /> Series
+            </>
+          ) : (
+            <>
+              <Film size={9} /> Movie
+            </>
+          )}
+        </span>
       </div>
       {/* action buttons */}
       <div className="absolute top-1.5 right-1.5 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

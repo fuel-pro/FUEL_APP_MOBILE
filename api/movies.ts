@@ -25,7 +25,8 @@ import type { IncomingMessage, ServerResponse } from "http";
 import {
   fetchSuPage,
   fetchSuPlayerUrl,
-  moviesOnly,
+  fetchSuStreamInfo,
+  playableOnly,
   pickImage,
   suSliderPath,
   suSearchPath,
@@ -114,6 +115,32 @@ export default async function handler(
       return;
     }
 
+    // ---- STREAMS: raw HLS playlist info for native hls.js playback ----
+    // The vixcloud iframe is frame-ancestors-locked to the upstream site, but
+    // the HLS playlist/rendition/segment chain is CORS-open. Returning the raw
+    // playlist URL lets the client play natively (no iframe, no CSP block).
+    if (mode === "streams") {
+      const id = q.id;
+      if (!id) {
+        r.status(400).json({ error: "Missing id", streams: null });
+        return;
+      }
+      const info = await fetchSuStreamInfo(id, q.episode);
+      if (!info) {
+        r.status(200).json({ streams: null });
+        return;
+      }
+      r.status(200).json({
+        streams: {
+          playlistUrl: info.playlistUrl,
+          servers: info.servers,
+          thumbnailsUrl: info.thumbnailsUrl,
+          canPlayFHD: info.canPlayFHD,
+        },
+      });
+      return;
+    }
+
     // ---- TITLE: full detail (scws_id for movie / seasons for tv) ----
     if (mode === "title") {
       const id = q.id;
@@ -184,10 +211,12 @@ export default async function handler(
       const sliders = (props.sliders || []).map((s: any) => ({
         name: s.name,
         label: s.label,
-        titles: moviesOnly(s.titles).map(normalizeTitle),
+        titles: playableOnly(s.titles).map(normalizeTitle),
       }));
       const genres = (props.genres || [])
-        .filter((g: any) => g.type === "movie" || g.type === "all")
+        .filter(
+          (g: any) => g.type === "movie" || g.type === "tv" || g.type === "all",
+        )
         .map((g: any) => ({ id: g.id, name: g.name, type: g.type }));
       const payload = { sliders, genres };
       cache.set(cacheKey, { data: payload, ts: Date.now() });
@@ -199,7 +228,7 @@ export default async function handler(
       const slider = (q.slider as string) || "trending";
       const genre = q.genre ? `?genre=${encodeURIComponent(q.genre)}` : "";
       const page = await fetchSuPage(`${suSliderPath(slider)}${genre}`);
-      const titles = moviesOnly(page?.props?.titles).map(normalizeTitle);
+      const titles = playableOnly(page?.props?.titles).map(normalizeTitle);
       const payload = {
         label: page?.props?.label ?? null,
         titles,
@@ -217,7 +246,7 @@ export default async function handler(
         return;
       }
       const page = await fetchSuPage(suSearchPath(query));
-      const titles = moviesOnly(page?.props?.titles).map(normalizeTitle);
+      const titles = playableOnly(page?.props?.titles).map(normalizeTitle);
       const payload = { titles, count: titles.length };
       cache.set(cacheKey, { data: payload, ts: Date.now() });
       r.status(200).json(payload);

@@ -123,8 +123,10 @@ function pickImage(images: SuImage[] | undefined, type: string): string | null {
   return suImageUrl(images.find((i) => i.type === type)?.filename);
 }
 
-function moviesOnly(titles: SuTitle[] | undefined): SuTitle[] {
-  return (titles || []).filter((t) => t && t.type === "movie");
+function playableOnly(titles: SuTitle[] | undefined): SuTitle[] {
+  return (titles || []).filter(
+    (t) => t && (t.type === "movie" || t.type === "tv"),
+  );
 }
 
 function normalizeTitle(t: SuTitle) {
@@ -158,6 +160,72 @@ async function fetchSuPlayerUrl(
   return m ? decodeEntities(m[1]) : null;
 }
 
+interface SuStreamInfo {
+  playlistUrl: string;
+  servers: { name: string; active: boolean; url: string }[];
+  thumbnailsUrl: string | null;
+  canPlayFHD: boolean;
+}
+
+/**
+ * Reverse-engineered vixcloud stream info for NATIVE (hls.js) playback.
+ * The vixcloud embed page is frame-ancestors-locked to the upstream site,
+ * but its inline config exposes raw HLS playlist endpoints that are served
+ * with Access-Control-Allow-Origin: * and no Referer check. Extracted
+ * server-side so the client can play natively — no iframe, no CSP block.
+ */
+async function fetchSuStreamInfo(
+  id: string,
+  episodeId?: string,
+): Promise<SuStreamInfo | null> {
+  const embedUrl = await fetchSuPlayerUrl(id, episodeId);
+  if (!embedUrl) return null;
+  const res = await fetch(embedUrl, {
+    headers: { "User-Agent": UA, Referer: `${SU_BASE}/` },
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+
+  const streamsMatch = html.match(/window\.streams\s*=\s*(\[[\s\S]*?\]);/);
+  let servers: SuStreamInfo["servers"] = [];
+  try {
+    if (streamsMatch) servers = JSON.parse(streamsMatch[1]);
+  } catch {
+    servers = [];
+  }
+
+  const mpMatch = html.match(/window\.masterPlaylist\s*=\s*\{([\s\S]*?)\}\s*;/);
+  const mpBody = mpMatch?.[1] ?? "";
+  const pick = (key: string): string => {
+    // Keys may be quoted ('token': '...') or bare (url: '...').
+    const m = mpBody.match(new RegExp(`['"]?${key}['"]?:\\s*'([^']*)'`));
+    return m?.[1] ?? "";
+  };
+  const baseUrl = pick("url");
+  const token = pick("token");
+  const expires = pick("expires");
+  const asn = pick("asn");
+
+  const thumbMatch = html.match(/window\.thumbnailsUrl\s*=\s*'([^']+)'/);
+  const fhdMatch = html.match(/window\.canPlayFHD\s*=\s*(true|false)/);
+
+  const active = servers.find((s) => s.active) ?? servers[0];
+  const rawUrl = active?.url || baseUrl;
+  if (!rawUrl || !token) return null;
+  const sep = rawUrl.includes("?") ? "&" : "?";
+  const playlistUrl =
+    `${rawUrl}${sep}token=${encodeURIComponent(token)}` +
+    `&expires=${encodeURIComponent(expires)}` +
+    (asn ? `&asn=${encodeURIComponent(asn)}` : "");
+
+  return {
+    playlistUrl,
+    servers,
+    thumbnailsUrl: thumbMatch?.[1] ?? null,
+    canPlayFHD: fhdMatch?.[1] === "true",
+  };
+}
+
 // In-memory cache (per isolate, 5-min TTL). Player URLs are NOT cached.
 const cache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
@@ -181,6 +249,23 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         url.searchParams.get("episode") || undefined,
       );
       if (playerUrl) return json({ url: playerUrl });
+      // Direct fetch blocked/empty — fall back to the Vercel endpoint.
+      return await viaVercelProxy(url.search);
+    }
+
+    // ---- STREAMS: raw HLS playlist info for native hls.js playback ----
+    if (mode === "streams") {
+      const id = url.searchParams.get("id");
+      if (!id) return json({ error: "Missing id", streams: null }, 400);
+      try {
+        const info = await fetchSuStreamInfo(
+          id,
+          url.searchParams.get("episode") || undefined,
+        );
+        if (info) return json({ streams: info });
+      } catch (e) {
+        if (e instanceof UpstreamBlocked) throw e;
+      }
       // Direct fetch blocked/empty — fall back to the Vercel endpoint.
       return await viaVercelProxy(url.search);
     }
@@ -245,10 +330,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const sliders = (props.sliders || []).map((s: any) => ({
         name: s.name,
         label: s.label,
-        titles: moviesOnly(s.titles).map(normalizeTitle),
+        titles: playableOnly(s.titles).map(normalizeTitle),
       }));
       const genres = (props.genres || [])
-        .filter((g: any) => g.type === "movie" || g.type === "all")
+        .filter(
+          (g: any) => g.type === "movie" || g.type === "tv" || g.type === "all",
+        )
         .map((g: any) => ({ id: g.id, name: g.name, type: g.type }));
       const payload = { sliders, genres };
       cache.set(cacheKey, { data: payload, ts: Date.now() });
@@ -262,7 +349,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const page = await fetchSuPage(
         `/${SU_LOCALE}/browse/${encodeURIComponent(slider)}${genreQ}`,
       );
-      const titles = moviesOnly(page?.props?.titles).map(normalizeTitle);
+      const titles = playableOnly(page?.props?.titles).map(normalizeTitle);
       const payload = {
         label: page?.props?.label ?? null,
         titles,
@@ -278,7 +365,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const page = await fetchSuPage(
         `/${SU_LOCALE}/search?q=${encodeURIComponent(query)}`,
       );
-      const titles = moviesOnly(page?.props?.titles).map(normalizeTitle);
+      const titles = playableOnly(page?.props?.titles).map(normalizeTitle);
       const payload = { titles, count: titles.length };
       cache.set(cacheKey, { data: payload, ts: Date.now() });
       return json(payload);
