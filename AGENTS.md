@@ -9355,3 +9355,40 @@ Captions now ALWAYS work via a two-tier backend:
 Same documented state — no new lost work. founder-username-login (7 ahead)
 awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 /api/r2/* + /api/cache/* endpoints first.
+
+
+## Session 2026-08-25 — Country-aware live caption accuracy (DEPLOYED LIVE, commit b458126)
+
+**User request**: "extract live audio from the video/stream/channel/radio and
+identify the language (using the video/stream/channel/radio country/region)
+then transcribe/caption each video/stream/channel currently playing live,
+thus accuracy and no delay."
+
+### Fix (src/react-app/lib/live-caption-engine.ts + LiveFeedEmbed.tsx)
+Captions now transcribe in the language SPOKEN in the stream (accuracy),
+not just the preferred display language:
+- NEW `streamCountry` field + `asrLangForCountry()` maps the channel's
+  ISO-2 country to the language the stream is SPOKEN in (e.g. a Brazilian
+  channel transcribes in pt-BR, a Kenyan channel in en-KE, a French channel
+  in fr-FR). The Web Speech recognizer now uses this country-derived
+  language so the transcription is accurate for the actual stream.
+- LiveFeedEmbed `startLiveCaptions` passes `channel.country` so the engine
+  transcribes in the stream's spoken language.
+- The preferred caption language is still used to TRANSLATE the transcript
+  for display (opus-mt) — accuracy (transcription) and localization
+  (display) are now separate concerns, matching how professional live-
+  captioning apps (Wordly, LiveCaptions-Translator) work.
+
+### Deploy state 2026-08-25
+- GitHub main: b458126 pushed.
+- Cloudflare Pages: LIVE (preview 67381c38 + main alias; News chunk
+  contains `asrLangForCountry` + `streamCountry`).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys on quota reset ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
