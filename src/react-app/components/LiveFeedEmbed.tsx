@@ -302,9 +302,17 @@ function ChannelPlayer({
       }
       if (!destroyed) {
         setBuffering(false);
-        setError(
-          "This station's stream is currently unreachable. Try another station.",
-        );
+        // AUTO-ADVANCE: don't dead-end on a dead upstream stream. Give the
+        // parent a chance to move to the next playable channel (curated
+        // known-good channels are always available). The error only shows if
+        // there is genuinely nothing else to play.
+        if (onCaptionFallback) {
+          onCaptionFallback();
+        } else {
+          setError(
+            "This station's stream is currently unreachable. Try another station.",
+          );
+        }
       }
     };
 
