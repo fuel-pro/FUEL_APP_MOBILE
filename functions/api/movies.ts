@@ -84,6 +84,21 @@ function parseDataPage(html: string): any {
   }
 }
 
+class UpstreamBlocked extends Error {}
+
+async function viaVercelProxy(search: string): Promise<Response> {
+  const r = await fetch(VERCEL_PROXY_BASE + search, {
+    headers: { "User-Agent": UA, Accept: "application/json" },
+  });
+  const data = await r.json();
+  return new Response(JSON.stringify(data), {
+    status: r.ok ? 200 : r.status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+}
+
+const VERCEL_PROXY_BASE = "https://fuel-app-mobile.vercel.app/api/movies";
+
 async function fetchSuPage(path: string): Promise<any> {
   const url = path.startsWith("http") ? path : `${SU_BASE}${path}`;
   const res = await fetch(url, {
@@ -93,6 +108,7 @@ async function fetchSuPage(path: string): Promise<any> {
       "Accept-Language": "en-US,en;q=0.9",
     },
   });
+  if (res.status === 403) throw new UpstreamBlocked("cf-blocked");
   if (!res.ok) return null;
   return parseDataPage(await res.text());
 }
@@ -163,7 +179,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         id,
         url.searchParams.get("episode") || undefined,
       );
-      return json({ url: playerUrl });
+      if (playerUrl) return json({ url: playerUrl });
+      // Direct fetch blocked/empty — fall back to the Vercel endpoint.
+      return await viaVercelProxy(url.search);
     }
 
     if (mode === "title") {
@@ -266,7 +284,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     return json({ error: "Unknown mode", titles: [] }, 400);
-  } catch {
+  } catch (e) {
+    if (e instanceof UpstreamBlocked) {
+      // The origin blocks Cloudflare Workers (error 1106). Proxy the request
+      // through the Vercel-hosted endpoint (Node runtime is allowed upstream).
+      try {
+        return await viaVercelProxy(url.search);
+      } catch {
+        return json({ error: "proxy failed" }, 502);
+      }
+    }
     return json({ error: "fetch failed", titles: [] });
   }
 };
