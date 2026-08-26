@@ -69,7 +69,8 @@ function decodeEntities(s: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
+    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)));
 }
 
 function parseDataPage(html: string): any {

@@ -143,7 +143,8 @@ function decodeEntities(s: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
+    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)));
 }
 
 /** Build the public image URL for a title image. */
