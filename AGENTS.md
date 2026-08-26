@@ -9258,3 +9258,58 @@ awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 - Whisper tiny.en is English-only (multilingual models are heavier; a future
   enhancement could auto-select the multilingual variant based on the
   stream's language metadata).
+
+
+## Session 2026-08-25 — Multilingual on-device live captions (DEPLOYED LIVE, commit e4ba4bf)
+
+**User request**: "reverse engineer using opensource methods to extract and
+create embedded subtitles tracks/captions for each stream on the go (eg;
+using translators to identify the language and translate to desired
+language). ensure if Picked a preferred language — it will auto-activate on
+any stream or channel that even does not carry captions (never limit to
+YouTube)."
+
+### Implementation (upgrades to src/react-app/lib/live-caption-engine.ts + LiveFeedEmbed.tsx)
+
+1. **MULTILINGUAL ASR**: whisper-tiny.en -> MULTILINGUAL `whisper-tiny` —
+   auto-detects the spoken language so non-English streams are captioned too
+   (still outputs an English transcript for the translation step).
+2. **ON-DEVICE TRANSLATION**: NEW MarianMT/opus-mt translation pipeline
+   (Xenova models) English -> {es, fr, de, it, pt, nl, ru, zh, ja, ko, ar,
+   hi, sw, tr}. The English transcript is translated ON-DEVICE into the
+   user's preferred language, so captions appear in the picked language even
+   when the stream has NO captions at all. Loaded on demand only (not for
+   English); fully free, no API keys, no server.
+3. **Auto-activation on ANY stream**: `applySubtitleLang` now — when the
+   current stream has no embedded track for the picked language — AUTO-
+   STARTS the AI caption engine with the preferred language (HLS video AND
+   live radio), instead of dead-ending. Never limited to YouTube.
+
+### Verified live (fuel-app-mobile.pages.dev)
+- Live TV renders the AI caption button; the live News chunk contains
+  `opus-mt`, `whisper-tiny`, `translateCaption` on BOTH Cloudflare + Vercel.
+- The preferred-language picker (Spanish/French/etc.) now translates the
+  live English transcript on-device.
+
+### Deploy state 2026-08-25
+- GitHub main: e4ba4bf pushed.
+- Cloudflare Pages: LIVE (preview f8a63a00 + main alias).
+- Vercel production: LIVE (prebuilt deploy aliased
+  fuel-app-mobile.vercel.app).
+- Supabase: no schema changes (models served from the free HuggingFace CDN).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
+
+### Honest limitations (documented)
+- Audio capture requires CORS (most HLS CDNs send it); non-CORS streams show
+  a clear "unavailable" state.
+- First toggle downloads the ASR model (~31 MB); picking a non-English
+  preferred language additionally downloads its translation model (~80 MB)
+  — both browser-cached thereafter.
+- opus-mt is single-direction (English -> target); a future enhancement
+  could auto-detect non-English speech and translate it to the preferred
+  language via a multilingual opus model.
