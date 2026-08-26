@@ -9403,3 +9403,24 @@ overlay. NOTE: this revert ALSO removes the crossOrigin fix, so the AI live
 captions are back to the broken state (captureStream returns silent audio
 without CORS). The Live TV/Radio player is back to the pre-VLC state (native
 <video>/<audio> controls, no VLC hotkeys, no Open-in-VLC).
+
+
+## Session 2026-08-25 — Post-revert full-site health check (VERIFIED LIVE)
+After reverting the VLC player integration (93a445a), verified the ENTIRE
+site works as before the undo:
+- Build health: tsc 0 errors, prettier clean, 27/27 tests pass. The live
+  News chunk has ZERO VLCStyleControls/useVLCKeyboardShortcuts (revert
+  confirmed in the bundle).
+- Live TV (News tab): renders 1,546 channels, native <video>/<audio>
+  controls restored (no VLC overlay/hotkeys), YouTube embeds + HLS player +
+  radio all functional. One upstream-blocked channel (3ABN Kids) shows
+  'Video unavailable' from YouTube — a content/region block, NOT a code issue.
+- Dashboard: renders with the restructured 3-zone header (Customize +
+  Account dropdowns), KPI cards, prices, weather, alerts, charts — all
+  intact post-revert.
+- POS: renders with all synced transactions (INV...E404/RQIY/UNE3) — cloud
+  sync + sale flow unaffected.
+- No regressions anywhere. The only intentional change: the AI live
+  captions are back to the pre-crossOrigin state (broken — captureStream
+  returns silent audio without CORS) because the crossOrigin attribute fix
+  was bundled into the reverted VLC commit.
