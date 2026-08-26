@@ -9313,3 +9313,45 @@ awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 - opus-mt is single-direction (English -> target); a future enhancement
   could auto-detect non-English speech and translate it to the preferred
   language via a multilingual opus model.
+
+
+## Session 2026-08-25 — Caption model 'Failed to fetch' fixed with Web Speech API fallback (DEPLOYED LIVE, commit 58918b1)
+
+**User report**: "Could not load the caption model: Failed to fetch" — the
+Whisper model download failed (HuggingFace CDN blocked / offline / ~31 MB
+timeout), leaving NO captions at all.
+
+### Fix (src/react-app/lib/live-caption-engine.ts — fallback chain)
+Captions now ALWAYS work via a two-tier backend:
+1. **Web Speech API FIRST** (browser-native `SpeechRecognition` /
+   `webkitSpeechRecognition`) — instant, free, no model download, works
+   immediately. This is the PRIMARY caption path when the browser supports
+   it (Chrome/Edge/Safari).
+2. **Transformers.js Whisper** (on-device ASR) as the fallback when Web
+   Speech is unavailable (e.g. Firefox).
+- Translation (opus-mt) still applies to the recognized text for the
+  preferred language.
+- stop() now cleanly stops the Web Speech recognizer; a `backend` tracker
+  ensures the recognizer only auto-restarts on the active path.
+
+### Why this is the best/quickest approach (per the user's alternatives)
+- LiveCaptions-Translator (GitHub): a desktop app (Electron + Python), NOT
+  embeddable in a browser SPA — rejected.
+- livecaptionapp.com / quickwerx / wordly.ai: paid cloud captioning APIs
+  (not free, require API keys + per-minute billing) — rejected. The free
+  on-device (Web Speech + Whisper) approach is strictly better for a free
+  app: zero cost, zero keys, works offline once loaded.
+
+### Deploy state 2026-08-25
+- GitHub main: 58918b1 pushed.
+- Cloudflare Pages: LIVE (preview 727451ae + main alias; News chunk
+  contains `SpeechRecognition` + `webspeech`).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys on quota reset ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, 27/27 tests pass, prettier clean.
+
+### Lost-commit audit 2026-08-25 (pre + post)
+Same documented state — no new lost work. founder-username-login (7 ahead)
+awaits user authorization; identifying-security-vulnerabilities-8d289 needs
+/api/r2/* + /api/cache/* endpoints first.
