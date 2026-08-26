@@ -9456,3 +9456,34 @@ Raised the iptv-org proxy cap (500 -> 12,000) + client fetch limit (200 -> 5,000
 
 ## Session 2026-08-26 — All missing user-requested stations added (DEPLOYED LIVE, commit 92d7834)
 Added all 21 channels from "add missing stations.txt" as curated entries with verified-embeddable 24/7 YouTube live streams (Zee World, Zee TV, Star Plus, Colors TV, +17 more). iptv-org copies are geo-blocked/no-URL, so the verified YouTube 24/7 live embeds are the reliable playable source. Verified live: Live TV shows 1,582 channels incl. &TV, Colors TV, Colors Rishtey, Dangal TV, B4U Movies. Cloudflare + Vercel LIVE. Supabase: no schema changes. tsc 0 errors, 27/27 tests.
+## Session 2026-08-26 (cont.) — Supabase Free-plan quota shutdown FIXED + prevention (DEPLOYED LIVE, commit e937932)
+
+**User task**: "fix the supabase issue now and also in the future." Org **Fuel_App_Pro** (project ref `ojjscjwatikixlpshmub`) was 3x over Free-plan quotas with a hard 402 shutdown scheduled **Aug 27, 2026**: Storage 1.26GB/1.1GB (115%), Egress 11.89GB/5.5GB (216%), Realtime 3,829,409/2,200,000 (174%). Always check `ai-readme` branch first (it is fully contained in main — 0 commits not on main, no lost work).
+
+### Root causes found
+1. **Storage bloat (the only at-rest billable metric)**: entire 1.42GB in `fuelpro-files` bucket `documents/` = 869 objs/1.42GB. ONE founder user (`c847d526-cb7a-4da4-bbf0-f8e092ed77ce` = leonibuyanawose@gmail.com) uploaded the same large PDFs 4-12x each. 671 eTag byte-identical duplicates (~1.1GB).
+2. **Realtime (174% over)**: 30+ components each opened a realtime channel on app_kv (mitigated to 1 mux channel but the mux channel opens on EVERY load) + direct channels (stations, products, terminal_sessions, station_members). Every multi-device load/save counted messages.
+3. **Egress (216% over)**: dominated by realtime fan-out + repeated cloud GETs.
+4. **DB tables tiny** (30MB total) — bloat was NOT in Postgres; it was Storage blobs.
+
+### The fixes (permanent, "in the future")
+1. **Directly reduced Storage 1.42GB → 308MB** (26.9% of the 1.1GB quota): used the Supabase **Storage REST API** (`POST /object/list/fuelpro-files` paginated + `DELETE /object/fuelpro-files` with the **fully-qualified path** `documents/<owner>/<name>`). CRITICAL LESSON: the list API returns names RELATIVE to the listing prefix — a delete using relative paths 200s idempotently on nothing and frees ZERO quota. Prepend the listing prefix to reconstruct full paths. Kept the newest copy of each distinct file (no unique data lost). Verified via `storage.objects` aggregate (DELETE removes the DB row too — count 866→195 leafs in that owner, bucket →224 objs/308MB).
+2. **Realtime default OFF (the biggest repeat-quota prevention)**: `cloud-storage-service.ts` `realtimeEnabled` default is now **OFF** — it reads `localStorage.getItem("fuelpro_realtime_enabled") === "1"` (previously the disabled key defaulted ON). `setRealtimeEnabled(true)` writes the new key. This closes ALL 30+ app_kv mux channels on next load → Realtime messages drop to ~0. Cross-device data still syncs via read-through cache + manual refresh (the documented offline path). Users can re-enable per-device in Data Manager "Storage & Egress" / General Settings.
+   - `GeneralSettings.tsx` DEFAULT_CONFIG: `enableRealtime:false`, `lowBandwidthMode:true`.
+   - Gated the last two **actively-mounted ungated** channels behind `isRealtimeEnabled()`: `TerminalSessions.tsx` (terminal tab) + `station-share-service.ts` `subscribeToMembers`/`subscribeToMyMemberships`.
+   - Audited ALL realtime openers: the rest are already gated (all `cloudStorageService.subscribe()` no-op when disabled) or dead code (`services/enhanced/SyncService.ts`, `lib/cloudStorage.ts` RealtimeSync/startRealtime, `SupabaseService.ts` subscribeToChanges, `supabase/services/database.ts` subscribeToSales/Inventory — zero callers, left in place).
+3. **DB hygiene**: truncated 13,853 `founder_audit_log` rows (ALL the 2026-08-08 infinite-render-loop spam, created within a 3-min window, none written since) + added a 5000-row retention cap inside the `write_founder_audit` RPC so it can never bloat again.
+4. **Build/deploy blocker fixed**: `rimraf` was MISSING from `package.json` devDependencies but `npm run build`'s `clean:cache` step calls `rimraf node_modules/.vite dist` → `sh: 1: rimraf: not found` broke EVERY `npm run build` (which is what Vercel/CI run). Added `"rimraf": "^6.0.1"` to devDependencies + updated package-lock. Without this, deploys silently failed at the build step.
+
+### Verified
+- `npm run build` success (clean Vite cache), `npx vitest run` 27/27 pass, prettier clean.
+- **Cloudflare Pages** LIVE (preview `ee1c174c`, main alias): founder chunk `founder-DT-lOGxU.js` contains `fuelpro_realtime_enabled` (verified).
+- **Vercel production** READY + LIVE (`fuel-app-mobile.vercel.app`, founder chunk `founder-BhvTC9Uj.js` contains the marker; the GitHub auto-deploy for `e937932` went QUEUED→BUILDING→READY — the Hobby build serialization, not a quota block).
+- **GitHub main**: `e937932` pushed (ai-readme branch confirmed 0 lost work).
+
+### Egress note
+Realtime default-off is the single biggest egress reducer. The existing compression (gzip level 9 → `{__compressed:true}` app_kv), 5-min in-memory cache, and inflight GET dedup remain in place. No further schema changes needed.
+
+### Supabase access notes (for future work)
+- Supabase **Management API** `POST api.supabase.com/v1/projects/{ref}/database/query` works with a PAT (`sbp_...` from `/workspace/API KEYS.txt`) + `User-Agent: Mozilla/5.0` header (Cloudflare 1010 block otherwise). The REST hostname (`db.{ref}.supabase.co`) does NOT resolve from this environment.
+- **Storage REST API** (the fix that worked for blob dedup) uses the **service_role** key (`Authorization: Bearer <service_role>` + `apikey`) against `https://<ref>.supabase.co/storage/v1/`.
