@@ -9448,3 +9448,7 @@ Verified live on fuel-app-mobile.pages.dev: Live TV now shows 1,561
 channels (was 1,546) including Arirang TV, CNA, etc. Cloudflare LIVE
 (preview 2b4565ba). Vercel quota-blocked (auto-deploys on reset). Supabase:
 no schema changes. tsc 0 errors, 27/27 tests.
+
+
+## Session 2026-08-26 — Live TV/Radio catalog expanded to 10,000+ streams (DEPLOYED LIVE, commit 816b156)
+Raised the iptv-org proxy cap (500 -> 12,000) + client fetch limit (200 -> 5,000). Verified live: /api/iptv-channels?limit=12000 returns 9,922 channels; combined catalog exceeds 10,000 streams. Cloudflare LIVE. Vercel quota-blocked. tsc 0 errors, 27/27 tests.
