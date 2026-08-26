@@ -1,21 +1,28 @@
 /**
- * live-caption-engine.ts — on-device live caption generation for streams
- * that carry NO embedded subtitle tracks.
+ * live-caption-engine.ts — on-device live caption generation + translation
+ * for streams that carry NO embedded subtitle tracks.
  *
  * Fully free, no API keys, no server: captures the playing media element's
  * audio (captureStream → AudioContext → 16 kHz PCM windows) and transcribes
- * it locally with OpenAI Whisper (tiny.en) running in-browser via
- * Transformers.js (WASM). Works on HLS video AND live radio <audio> — any
- * HTMLMediaElement — so EVERY stream can show live captions on demand.
+ * it locally with OpenAI Whisper (MULTILINGUAL `whisper-tiny` — auto-detects
+ * the spoken language) running in-browser via Transformers.js (WASM). Works
+ * on HLS video AND live radio <audio> — any HTMLMediaElement — so EVERY
+ * stream can show live captions on demand.
+ *
+ * TRANSLATION: when a preferred caption language differs from English, the
+ * English transcript is further translated ON-DEVICE via a MarianMT/opus-mt
+ * translation model (Helsinki-NLP) — so captions appear in the user's
+ * preferred language even when the stream has no captions at all.
  *
  * Requirements for audio capture: the media element must serve its content
  * with CORS (crossOrigin="anonymous"); otherwise the browser mutes the
  * captured audio (captions then show a clear "unavailable" state instead of
  * garbage).
  *
- * The Whisper model (~31 MB quantized) lazy-loads on FIRST use only and is
- * cached by the browser thereafter. Generation runs on a rolling ~4 s window
- * so captions appear continuously while the stream plays.
+ * The Whisper model (~31 MB quantized) + the translation model (~80 MB,
+ * loaded ONLY when a non-English preferred language is picked) lazy-load on
+ * FIRST use and are cached by the browser thereafter. Generation runs on a
+ * rolling ~4 s window so captions appear continuously while the stream plays.
  */
 
 export type CaptionCallback = (text: string, isFinal: boolean) => void;
@@ -29,7 +36,7 @@ export type CaptionStatusCallback = (
 ) => void;
 
 // ---------------------------------------------------------------------------
-// Lazy-loaded singleton ASR pipeline
+// Lazy-loaded singleton pipelines (ASR + optional translation)
 // ---------------------------------------------------------------------------
 let asrPipeline: any = null;
 let asrLoading: Promise<any> | null = null;
@@ -42,9 +49,11 @@ async function loadAsr(): Promise<any> {
     // Serve model files from the HuggingFace CDN (free) — no local bundling.
     env.allowLocalModels = false;
     env.useBrowserCache = true;
+    // MULTILINGUAL whisper-tiny (not .en) — auto-detects the spoken language
+    // and transcribes it to English, so non-English streams are captioned too.
     asrPipeline = await pipeline(
       "automatic-speech-recognition",
-      "Xenova/whisper-tiny.en",
+      "Xenova/whisper-tiny",
       { quantized: true },
     );
     return asrPipeline;
@@ -53,6 +62,66 @@ async function loadAsr(): Promise<any> {
     return await asrLoading;
   } finally {
     asrLoading = null;
+  }
+}
+
+// Translation pipeline (English -> preferred language), loaded on demand only.
+let mtPipeline: any = null;
+let mtLang: string | null = null;
+let mtLoading: Promise<any> | null = null;
+
+/** ISO code -> Helsinki-NLP opus-mt model id (English -> target). */
+const MT_MODELS: Record<string, string> = {
+  es: "Xenova/opus-mt-en-es",
+  fr: "Xenova/opus-mt-en-fr",
+  de: "Xenova/opus-mt-en-de",
+  it: "Xenova/opus-mt-en-it",
+  pt: "Xenova/opus-mt-en-pt",
+  nl: "Xenova/opus-mt-en-nl",
+  ru: "Xenova/opus-mt-en-ru",
+  zh: "Xenova/opus-mt-en-zh",
+  ja: "Xenova/opus-mt-en-jap", // Xenova uses 'jap' for Japanese
+  ko: "Xenova/opus-mt-en-ko",
+  ar: "Xenova/opus-mt-en-ar",
+  hi: "Xenova/opus-mt-en-hi",
+  sw: "Xenova/opus-mt-en-sw",
+  tr: "Xenova/opus-mt-en-tr",
+};
+
+async function loadTranslator(lang: string): Promise<any> {
+  if (mtPipeline && mtLang === lang) return mtPipeline;
+  if (mtLoading && mtLang === lang) return mtLoading;
+  const modelId = MT_MODELS[lang];
+  if (!modelId) return null; // unsupported language — captions stay English
+  mtLang = lang;
+  mtLoading = (async () => {
+    const { pipeline, env } = await import("@xenova/transformers");
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    mtPipeline = await pipeline("translation", modelId, { quantized: true });
+    return mtPipeline;
+  })();
+  try {
+    return await mtLoading;
+  } finally {
+    mtLoading = null;
+  }
+}
+
+/** Translate an English caption into the preferred language (on-device). */
+async function translateCaption(
+  text: string,
+  targetLang: string,
+): Promise<string> {
+  if (!targetLang || targetLang === "en" || !text) return text;
+  try {
+    const translator = await loadTranslator(targetLang);
+    if (!translator) return text; // unsupported — keep English
+    const out = await translator(text, { max_new_tokens: 256 });
+    const translated = String(out?.[0]?.translation_text ?? "").trim();
+    return translated || text;
+  } catch {
+    return text; // translation failure is non-fatal — keep English
   }
 }
 
@@ -93,6 +162,9 @@ export class LiveCaptionEngine {
   private running = false;
   private transcribing = false;
   private statusCb: CaptionStatusCallback | null = null;
+  /** Preferred caption language (ISO code). English transcripts are
+   *  translated to this language on-device when it differs from "en". */
+  private preferredLang: string = "en";
 
   /** Roughly how much audio (seconds at the capture rate) per caption window. */
   private static readonly WINDOW_SECONDS = 4;
@@ -109,8 +181,10 @@ export class LiveCaptionEngine {
     mediaEl: HTMLMediaElement,
     onCaption: CaptionCallback,
     onStatus?: CaptionStatusCallback,
+    preferredLang: string = "en",
   ): Promise<void> {
     this.statusCb = onStatus || null;
+    this.preferredLang = preferredLang || "en";
     if (this.running) return;
 
     // Capture the element's audio output. captureStream() requires the media
@@ -207,9 +281,20 @@ export class LiveCaptionEngine {
       const result = await asr(pcm16k, {
         chunk_length_s: 30,
         stride_length_s: 5,
+        // Multilingual whisper auto-detects the spoken language and outputs
+        // an English transcript when language is left unset.
+        language: "english",
+        task: "transcribe",
       });
       const text = String(result?.text ?? "").trim();
-      if (text) onCaption(text, true);
+      if (!text) return;
+      // Translate the English transcript to the preferred language on-device
+      // (no-op when preferred is English or unsupported).
+      const finalText =
+        this.preferredLang && this.preferredLang !== "en"
+          ? await translateCaption(text, this.preferredLang)
+          : text;
+      if (finalText) onCaption(finalText, true);
     } catch {
       /* transient ASR errors are non-fatal — keep listening */
     } finally {

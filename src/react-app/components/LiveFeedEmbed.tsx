@@ -478,6 +478,9 @@ function ChannelPlayer({
         setLiveCaptionStatus(status);
         setLiveCaptionDetail(detail || "");
       },
+      // Pass the user's preferred language so non-English transcripts are
+      // translated on-device before display.
+      subtitleLangRef.current,
     );
   }, [isAudio]);
 
@@ -522,12 +525,30 @@ function ChannelPlayer({
     cloudStorageService.set("live_feed_subtitle_lang", lang).catch(() => {});
     if (subtitleTracks.length > 0) {
       const match = findSubtitleTrackIndex(subtitleTracks, lang);
-      if (match >= 0) applySubtitleTrack(match);
-    } else {
-      // No embedded tracks on this stream — auto-advance to a channel that
-      // DOES carry captions so the toggle always lands on a subtitled stream.
-      onCaptionFallback?.();
+      if (match >= 0) {
+        applySubtitleTrack(match);
+        return;
+      }
     }
+    // No embedded track for this stream — generate live AI captions in the
+    // preferred language (works on ANY stream: HLS video AND radio). If the
+    // player isn't playing yet, surface the AI CC button state instead.
+    if (!liveCaptionsOn) {
+      // Auto-start the AI caption engine so the preferred language activates
+      // immediately (no dead-end "no subtitle tracks" state).
+      setLiveCaptionsOn(true);
+      if (hlsRef.current) {
+        hlsRef.current.subtitleDisplay = false;
+        hlsRef.current.subtitleTrack = -1;
+      }
+      setActiveSubtitleIdx(-1);
+      startLiveCaptions();
+    } else if (!liveCaptionEngine.isActive()) {
+      startLiveCaptions();
+    }
+    // If the player has no media yet (not playing), the status callback will
+    // show "press play first" — never a dead end.
+    onCaptionFallback?.();
   };
 
   const kindBadge = ytId ? "YouTube" : isAudio ? "Radio" : "HLS";
