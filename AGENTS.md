@@ -9452,3 +9452,7 @@ no schema changes. tsc 0 errors, 27/27 tests.
 
 ## Session 2026-08-26 — Live TV/Radio catalog expanded to 10,000+ streams (DEPLOYED LIVE, commit 816b156)
 Raised the iptv-org proxy cap (500 -> 12,000) + client fetch limit (200 -> 5,000). Verified live: /api/iptv-channels?limit=12000 returns 9,922 channels; combined catalog exceeds 10,000 streams. Cloudflare LIVE. Vercel quota-blocked. tsc 0 errors, 27/27 tests.
+
+
+## Session 2026-08-26 — All missing user-requested stations added (DEPLOYED LIVE, commit 92d7834)
+Added all 21 channels from "add missing stations.txt" as curated entries with verified-embeddable 24/7 YouTube live streams (Zee World, Zee TV, Star Plus, Colors TV, +17 more). iptv-org copies are geo-blocked/no-URL, so the verified YouTube 24/7 live embeds are the reliable playable source. Verified live: Live TV shows 1,582 channels incl. &TV, Colors TV, Colors Rishtey, Dangal TV, B4U Movies. Cloudflare + Vercel LIVE. Supabase: no schema changes. tsc 0 errors, 27/27 tests.
