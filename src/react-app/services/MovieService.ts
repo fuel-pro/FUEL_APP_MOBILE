@@ -193,7 +193,7 @@ async function getClassicJson<T>(url: string): Promise<T | null> {
   }
 }
 
-const CLASSIC_COLLECTION = "public_domain_films";
+const CLASSIC_COLLECTION = "feature_films";
 
 /** Fetch the top public-domain classic films (curated by view count). */
 export async function fetchClassicMovies(
@@ -201,7 +201,7 @@ export async function fetchClassicMovies(
 ): Promise<ClassicMovieItem[]> {
   const url =
     `https://archive.org/advancedsearch.php` +
-    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION}`)}` +
+    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION} AND (language:eng OR language:english OR language:English)`)}` +
     `&fl[]=identifier,title,year,description` +
     `&rows=${limit}&page=1&output=json&sort[]=downloads desc`;
   const data = await getClassicJson<{ response?: { docs?: any[] } }>(url);
@@ -226,7 +226,7 @@ export async function searchClassicMovies(
   if (!q.trim()) return [];
   const url =
     `https://archive.org/advancedsearch.php` +
-    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION} AND title:(${q})`)}` +
+    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION} AND (language:eng OR language:english OR language:English) AND title:(${q})`)}` +
     `&fl[]=identifier,title,year,description&rows=48&output=json`;
   const data = await getClassicJson<{ response?: { docs?: any[] } }>(url);
   const docs = data?.response?.docs ?? [];
