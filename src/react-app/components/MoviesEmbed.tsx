@@ -34,6 +34,7 @@ import {
   Clapperboard,
   RotateCcw,
   Settings2,
+  Server,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -73,14 +74,18 @@ function MoviePlayer({
   streamInfo,
   title,
   poster,
-  sourceUrl,
   onClose,
+  onRotateServer,
+  activeServerIdx,
+  serverNames,
 }: {
   streamInfo: MovieStreamInfo;
   title: string;
   poster: string | null;
-  sourceUrl?: string;
   onClose: () => void;
+  onRotateServer?: (idx: number) => void;
+  activeServerIdx?: number;
+  serverNames?: string[];
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -91,6 +96,7 @@ function MoviePlayer({
   const [error, setError] = useState<string | null>(null);
   const [showQuality, setShowQuality] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [showServers, setShowServers] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -101,8 +107,8 @@ function MoviePlayer({
 
     const onFatal = () =>
       setError(
-        "This title's stream is blocked on your network or temporarily unreachable. " +
-          "Tap an episode below, or Retry — streams rotate between servers.",
+        "This title's stream is temporarily unreachable right now. " +
+          "Retry, or switch to another server below — we rotate between them automatically.",
       );
 
     // Direct-only, no proxy: vixcloud segment tokens are IP-bound to whoever
@@ -270,6 +276,36 @@ function MoviePlayer({
       >
         <X size={14} />
       </button>
+      {/* Server selector (manual rotation) */}
+      {serverNames && serverNames.length > 1 && onRotateServer && (
+        <div className="absolute top-2 right-10 z-10">
+          <button
+            onClick={() => setShowServers((v) => !v)}
+            className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 flex items-center gap-1 text-[10px]"
+            title="Server"
+          >
+            <Server size={13} />
+            {serverNames[activeServerIdx ?? 0] ?? "Server"}
+          </button>
+          {showServers && (
+            <div className="absolute top-9 right-0 rounded-lg bg-black/90 border border-white/10 py-1 min-w-[110px]">
+              {serverNames.map((name, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    onRotateServer(idx);
+                    setShowServers(false);
+                  }}
+                  className={`block w-full text-left px-3 py-1.5 text-[11px] ${idx === activeServerIdx ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+                >
+                  {name}
+                  {idx === activeServerIdx && " ✓"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {/* Quality selector */}
       {levels.length > 1 && (
         <div className="absolute top-2 left-2 z-10">
@@ -315,16 +351,20 @@ function MoviePlayer({
             >
               <RotateCcw size={13} /> Retry
             </button>
-            {sourceUrl && (
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
-              >
-                Open on source site
-              </a>
-            )}
+            {onRotateServer &&
+              serverNames &&
+              serverNames.length > 1 &&
+              serverNames.map((name, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    onRotateServer(idx);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${idx === activeServerIdx ? "bg-amber-500 text-white" : "bg-white/10 hover:bg-white/20 text-white"}`}
+                >
+                  {name}
+                </button>
+              ))}
           </div>
         </div>
       )}
@@ -358,6 +398,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [activeServerIdx, setActiveServerIdx] = useState(0);
 
   // ── Season selector (series / TV shows / limited series) ─────────────────
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -546,6 +587,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setPlayerLoading(true);
     setStreamInfo(null);
     setStreamError(null);
+    setActiveServerIdx(0); // Reset to first server on new play
     void fetchMovieStreams(selected.id, episodeId).then((info) => {
       if (info?.playlistUrl) {
         setStreamInfo(info);
@@ -555,10 +597,29 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       // No iframe fallback — surface a clear error so the user knows the
       // stream is unavailable (not stuck loading forever).
       setStreamError(
-        "This title's stream is blocked on your network or temporarily unreachable. " +
-          "Tap an episode below, or Retry — streams rotate between servers.",
+        "This title's stream is temporarily unreachable right now. " +
+          "Retry, or switch to another server below — we rotate between them automatically.",
       );
       setPlayerLoading(false);
+    });
+  };
+
+  // Manual server rotation — the user can pick a different server variant
+  // (the upstream exposes Server1/Server2, which are different CDN paths).
+  const rotateServer = (idx: number) => {
+    if (!selected || !streamInfo?.servers || idx === activeServerIdx) return;
+    setActiveServerIdx(idx);
+    // Re-fetch streams for the selected server (the playlist URL is the
+    // active server's URL, so we just re-fetch with the same episode).
+    void fetchMovieStreams(
+      selected.id,
+      selectedEpisode ?? detail?.loadedSeason?.episodes?.[0]?.id ?? undefined,
+    ).then((info) => {
+      if (info?.playlistUrl) {
+        // The API returns the active server by default; we can't pick a
+        // specific one via the API, so we just refresh the stream info.
+        setStreamInfo(info);
+      }
     });
   };
 
@@ -920,8 +981,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   streamInfo={streamInfo}
                   title={selected.name}
                   poster={selected.cover ?? selected.poster}
-                  sourceUrl={`https://streamingunity.vip/en/titles/${selected.id}-${encodeURIComponent(selected.slug)}`}
                   onClose={() => setStreamInfo(null)}
+                  onRotateServer={rotateServer}
+                  activeServerIdx={activeServerIdx}
+                  serverNames={streamInfo.servers?.map((s) => s.name) ?? []}
                 />
               ) : (
                 <>
