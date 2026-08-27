@@ -769,11 +769,13 @@ const SLOW_LOAD_MS = 60000; // 1 min — prompt to switch server
 function EmbedFallbackPlayer({
   candidates,
   title,
+  poster,
   onClose,
   onAllFailed,
 }: {
   candidates: EmbedCandidate[];
   title: string;
+  poster?: string | null;
   onClose: () => void;
   onAllFailed?: () => void;
 }) {
@@ -781,6 +783,12 @@ function EmbedFallbackPlayer({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [slowPrompt, setSlowPrompt] = useState(false);
+  // The iframe is lazy-loaded ONLY after the user clicks play — before that
+  // we show the movie poster (like streamingunity/soap2day do) so the user
+  // sees familiar artwork + a big play button instead of a slow-loading
+  // black box. This also means the dead-provider rotation only runs once the
+  // user has actually asked to play.
+  const [started, setStarted] = useState(false);
   const deadTimerRef = useRef<number | null>(null);
   const slowTimerRef = useRef<number | null>(null);
 
@@ -798,11 +806,12 @@ function EmbedFallbackPlayer({
     });
   };
 
-  // Dead-provider rotation: only rotates if the iframe NEVER fires onLoad.
-  // Once onLoad fires the embed stays mounted (a loaded mirror player is the
-  // working video). Cross-origin iframes can't be inspected for inner-player
-  // health, so we rely on onLoad + a slow-load prompt for the UX.
+  // Dead-provider rotation: only rotates if the iframe NEVER fires onLoad,
+  // and only once the user clicked play (`started`). A loaded mirror player
+  // is the working video. Cross-origin iframes can't be inspected for
+  // inner-player health, so we rely on onLoad + a slow-load prompt.
   useEffect(() => {
+    if (!started) return;
     setLoaded(false);
     setSlowPrompt(false);
     if (deadTimerRef.current !== null)
@@ -819,7 +828,7 @@ function EmbedFallbackPlayer({
         window.clearTimeout(slowTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, candidates.length]);
+  }, [idx, candidates.length, started]);
 
   const handleLoaded = () => {
     setLoaded(true);
@@ -843,71 +852,117 @@ function EmbedFallbackPlayer({
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4">
-      <iframe
-        key={current.url}
-        src={current.url}
-        className="absolute inset-0 w-full h-full"
-        allowFullScreen
-        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-        referrerPolicy="no-referrer"
-        title={title}
-        onLoad={handleLoaded}
-      />
-      {/* Branding-hiding overlays — blurred patches over the typical
-          watermark corners + a clean top gradient with OUR title. */}
-      <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/90 via-black/50 to-transparent z-10" />
-      <div className="pointer-events-none absolute top-2 left-3 z-20 text-[11px] font-semibold text-white/90 drop-shadow">
-        {title}
-      </div>
-      <div className="pointer-events-none absolute top-1.5 right-2 z-20 w-24 h-8 rounded-lg bg-black/40 backdrop-blur-md" />
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent z-10" />
-      <div className="pointer-events-none absolute bottom-1.5 right-2 z-20 w-24 h-7 rounded-lg bg-black/40 backdrop-blur-md" />
-      <div className="pointer-events-none absolute bottom-1.5 left-2 z-20 w-20 h-7 rounded-lg bg-black/30 backdrop-blur-md" />
-      {/* Controls */}
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-28 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
-        title="Close player"
-      >
-        <X size={14} />
-      </button>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
-        {!loaded && (
-          <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/90">
-            <Loader2 size={11} className="animate-spin" /> Loading{" "}
-            {current.label}…
-          </span>
-        )}
-        {candidates.length > 1 && (
-          <button
-            onClick={() => goNext(true)}
-            className="rounded-full bg-black/70 hover:bg-black/90 px-3 py-1 text-[10px] text-white/90"
-          >
-            {idx < candidates.length - 1 ? "Next server" : "Last server"}
-          </button>
-        )}
-      </div>
-      {/* Slow-load prompt — shown after SLOW_LOAD_MS on a loaded server. */}
-      {slowPrompt && loaded && (
-        <div className="absolute inset-x-0 bottom-12 z-30 flex justify-center">
-          <div className="flex items-center gap-2 rounded-xl bg-black/85 border border-white/10 px-4 py-2.5 backdrop-blur-md">
-            <span className="text-[11px] text-white/90">
-              Taking long to load on {current.label}. Switch server?
+      {!started ? (
+        /* Poster + big play button — like streamingunity/soap2day show the
+           artwork first. No iframe = no black box, no slow auto-loading. */
+        <button
+          type="button"
+          onClick={() => setStarted(true)}
+          className="absolute inset-0 w-full h-full group"
+          title={`Play — ${current.label}`}
+        >
+          {poster ? (
+            <img
+              src={poster}
+              alt={title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
+          )}
+          <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="flex items-center justify-center w-20 h-20 rounded-full bg-amber-500 shadow-2xl shadow-amber-500/40 group-hover:scale-110 transition-transform">
+              <Play size={36} className="text-black fill-black ml-1.5" />
             </span>
-            <button
-              onClick={() => goNext(true)}
-              className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-1 text-[11px] font-semibold text-black"
-            >
-              Switch
-            </button>
-            <button
-              onClick={() => setSlowPrompt(false)}
-              className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1 text-[11px] text-white/90"
-            >
-              Keep waiting
-            </button>
           </div>
-        </div>
+          <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/80 to-transparent" />
+          <div className="pointer-events-none absolute top-2 left-3 text-[11px] font-semibold text-white/90 drop-shadow">
+            {title}
+          </div>
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/60 rounded-full px-3 py-1">
+            Click to play
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="absolute top-2 right-2 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+            title="Close player"
+          >
+            <X size={14} />
+          </button>
+        </button>
+      ) : (
+        <>
+          <iframe
+            key={current.url}
+            src={current.url}
+            className="absolute inset-0 w-full h-full"
+            allowFullScreen
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            referrerPolicy="no-referrer"
+            title={title}
+            onLoad={handleLoaded}
+          />
+          {/* Branding-hiding overlays — blurred patches over the typical
+              watermark corners + a clean top gradient with OUR title. */}
+          <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/90 via-black/50 to-transparent z-10" />
+          <div className="pointer-events-none absolute top-2 left-3 z-20 text-[11px] font-semibold text-white/90 drop-shadow max-w-[60%] truncate">
+            {title}
+          </div>
+          <div className="pointer-events-none absolute top-1.5 right-2 z-20 w-24 h-8 rounded-lg bg-black/40 backdrop-blur-md" />
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent z-10" />
+          <div className="pointer-events-none absolute bottom-1.5 right-2 z-20 w-24 h-7 rounded-lg bg-black/40 backdrop-blur-md" />
+          <div className="pointer-events-none absolute bottom-1.5 left-2 z-20 w-20 h-7 rounded-lg bg-black/30 backdrop-blur-md" />
+          {/* Controls */}
+          <button
+            onClick={onClose}
+            className="absolute top-2 right-28 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+            title="Close player"
+          >
+            <X size={14} />
+          </button>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+            {!loaded && (
+              <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/90">
+                <Loader2 size={11} className="animate-spin" /> Loading{" "}
+                {current.label}…
+              </span>
+            )}
+            {candidates.length > 1 && (
+              <button
+                onClick={() => goNext(true)}
+                className="rounded-full bg-black/70 hover:bg-black/90 px-3 py-1 text-[10px] text-white/90"
+              >
+                {idx < candidates.length - 1 ? "Next server" : "Last server"}
+              </button>
+            )}
+          </div>
+          {/* Slow-load prompt — shown after SLOW_LOAD_MS on a loaded server. */}
+          {slowPrompt && loaded && (
+            <div className="absolute inset-x-0 bottom-12 z-30 flex justify-center">
+              <div className="flex items-center gap-2 rounded-xl bg-black/85 border border-white/10 px-4 py-2.5 backdrop-blur-md">
+                <span className="text-[11px] text-white/90">
+                  Taking long to load on {current.label}. Switch server?
+                </span>
+                <button
+                  onClick={() => goNext(true)}
+                  className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-1 text-[11px] font-semibold text-black"
+                >
+                  Switch
+                </button>
+                <button
+                  onClick={() => setSlowPrompt(false)}
+                  className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1 text-[11px] text-white/90"
+                >
+                  Keep waiting
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1714,6 +1769,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                     )?.number ?? 1,
                   )}
                   title={selected.name}
+                  poster={selected.cover ?? selected.poster}
                   onClose={() => setUseEmbedFallback(false)}
                   onAllFailed={() => {
                     // Final guaranteed fallback: open the trailer so the
