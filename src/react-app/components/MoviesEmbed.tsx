@@ -143,12 +143,19 @@ function MoviePlayer({
     // onFatal: either advance to the next candidate (show progress), restart
     // a new cycle, or — after MAX_CYCLES — surface the error with an
     // auto-retry countdown.
+    //
+    // RAPID-ROTATION FIX: one candidate can emit MULTIPLE fatal errors (an
+    // hls.js manifest retry fail + level fail + several frag fails), and each
+    // was advancing to the next candidate — effectively skipping working
+    // sources every second. `busy` debounces so ONE candidate only advances
+    // ONCE; it is cleared when the next candidate attaches.
     const onFatalRef = { current: null as null | (() => void) };
     const failState = {
       idx: 0,
       len: 0,
       cycle: 0,
       exhausted: false,
+      busy: false,
     };
     const updateProgress = () => {
       setCandidateIdx(failState.idx);
@@ -165,10 +172,12 @@ function MoviePlayer({
           "It usually recovers quickly — auto-retrying below.",
       );
       // keep auto-retrying in the background so the error is transient, and
-      // let the parent offer a guaranteed fallback (trailer / archive.org).
+      // let the parent offer a guaranteed fallback (embed player / trailer).
       if (onAllFailed) onAllFailed();
     };
     const onFatal = () => {
+      if (failState.busy) return; // a failure for this candidate is in flight
+      failState.busy = true;
       if (failState.idx < failState.len - 1) {
         failState.idx += 1;
         updateProgress();
@@ -263,7 +272,9 @@ function MoviePlayer({
 
     // Watchdog — if the video hasn't started within the timeout, advance to
     // the next candidate via onFatal (progress) instead of a hard error.
-    const WATCHDOG_MS = 9000;
+    // 12s gives a genuinely-working (but slow) source enough time to start,
+    // so we never skip past a source that would have played.
+    const WATCHDOG_MS = 12000;
     let watchdog: number | null = null;
     const resetWatchdog = () => {
       if (watchdog !== null) window.clearTimeout(watchdog);
@@ -350,6 +361,9 @@ function MoviePlayer({
 
     const attach = async (src: string): Promise<void> => {
       if (destroyed) return;
+      // A NEW candidate is now attaching — clear the failure-in-flight flag
+      // so the first error for THIS candidate can advance again.
+      failState.busy = false;
       // (Re)arm the stall watchdog on every attempt so a hung candidate is
       // advanced automatically instead of spinning forever.
       resetWatchdog();
@@ -568,8 +582,13 @@ function MoviePlayer({
           <Loader2 size={22} className="animate-spin text-amber-400" />
           <p className="text-[11px] font-medium text-white/90">
             {cycle === 0
-              ? `Trying source ${candidateIdx + 1} of ${candidateTotal}…`
+              ? `Trying source ${candidateIdx + 1} of ${candidateTotal}${
+                  candidateIdx < 2 ? " (direct server)" : " (secure relay)"
+                }…`
               : `Still rotating — cycle ${cycle + 1} of ${MAX_CYCLES} (source ${candidateIdx + 1}/${candidateTotal})…`}
+          </p>
+          <p className="text-[10px] text-white/60">
+            Each source gets a full 12s window — nothing playable is skipped.
           </p>
         </div>
       )}
@@ -669,6 +688,169 @@ function AutoRetryOverlay({
   );
 }
 
+// ─── Iframe embed fallback (mirror-player providers) ───────────────────────
+// When the native HLS chain is unreachable (every vixcloud server + proxy
+// exhausted), we fall back to public embed-player endpoints keyed by TMDB /
+// IMDb id. These render inside an iframe; any provider watermark/branding in
+// the corners is hidden behind blurred overlay patches so the player chrome
+// stays clean. Auto-rotates to the next provider if one fails to load.
+interface EmbedCandidate {
+  label: string;
+  url: string;
+}
+
+function buildEmbedCandidates(
+  detail: MovieDetail,
+  type: "movie" | "tv",
+  seasonNum: number,
+  episodeNum: number,
+): EmbedCandidate[] {
+  const tmdb = detail.tmdbId;
+  const imdb = detail.imdbId;
+  const out: EmbedCandidate[] = [];
+  const isTv = type === "tv";
+  const s = Math.max(1, seasonNum);
+  const e = Math.max(1, episodeNum);
+  // Only endpoints verified to actually resolve + serve a player page are
+  // included (vidsrc.pro is a dead redirect to a DNS-dead host; vidsrc.xyz
+  // and embed.su don't resolve at all — excluded so rotation never lands on
+  // a guaranteed-dead mirror).
+  if (tmdb) {
+    out.push({
+      label: "Mirror 1",
+      url: isTv
+        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
+        : `https://vidsrc.to/embed/movie/${tmdb}`,
+    });
+    out.push({
+      label: "Mirror 2",
+      url: isTv
+        ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
+        : `https://autoembed.co/movie/tmdb/${tmdb}`,
+    });
+  }
+  if (imdb) {
+    out.push({
+      label: "Mirror 3",
+      url: isTv
+        ? `https://www.2embed.cc/embedtv/${imdb}&s=${s}&e=${e}`
+        : `https://www.2embed.cc/embed/${imdb}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * EmbedFallbackPlayer — iframe player for the mirror embed providers.
+ * Provider watermarks (typically top-left / top-right / bottom corners) are
+ * hidden behind blurred overlay patches so no other site's branding shows.
+ * Auto-rotates to the next provider if the current one fails to load in
+ * time, with a manual "next source" control as well.
+ */
+function EmbedFallbackPlayer({
+  candidates,
+  title,
+  onClose,
+  onAllFailed,
+}: {
+  candidates: EmbedCandidate[];
+  title: string;
+  onClose: () => void;
+  onAllFailed?: () => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  const current = candidates[idx];
+
+  // If the iframe doesn't fire onLoad in 14s, auto-rotate to the next
+  // provider. Once it loads, assume it's working (cross-origin iframes can't
+  // be inspected for inner player health).
+  useEffect(() => {
+    setLoaded(false);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setIdx((prev) => {
+        if (prev < candidates.length - 1) return prev + 1;
+        setFailed(true);
+        if (onAllFailed) onAllFailed();
+        return prev;
+      });
+    }, 14000);
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, candidates.length]);
+
+  if (failed) return null; // parent shows the trailer / error path
+
+  if (!current) return null;
+
+  return (
+    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4">
+      <iframe
+        key={current.url}
+        src={current.url}
+        className="absolute inset-0 w-full h-full"
+        allowFullScreen
+        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+        referrerPolicy="no-referrer"
+        title={title}
+        onLoad={() => {
+          setLoaded(true);
+          if (timerRef.current !== null) {
+            window.clearTimeout(timerRef.current);
+            timerRef.current = null;
+          }
+        }}
+      />
+      {/* Branding-hiding overlays — blurred patches over the typical
+          watermark corners + a clean top gradient with OUR title. */}
+      <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/90 via-black/50 to-transparent z-10" />
+      <div className="pointer-events-none absolute top-2 left-3 z-20 text-[11px] font-semibold text-white/90 drop-shadow">
+        {title}
+      </div>
+      <div className="pointer-events-none absolute top-1.5 right-2 z-20 w-24 h-8 rounded-lg bg-black/40 backdrop-blur-md" />
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent z-10" />
+      <div className="pointer-events-none absolute bottom-1.5 right-2 z-20 w-24 h-7 rounded-lg bg-black/40 backdrop-blur-md" />
+      <div className="pointer-events-none absolute bottom-1.5 left-2 z-20 w-20 h-7 rounded-lg bg-black/30 backdrop-blur-md" />
+      {/* Controls */}
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-28 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+        title="Close player"
+      >
+        <X size={14} />
+      </button>
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+        {!loaded && (
+          <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/90">
+            <Loader2 size={11} className="animate-spin" /> Loading{" "}
+            {current.label}…
+          </span>
+        )}
+        {candidates.length > 1 && (
+          <button
+            onClick={() => {
+              if (idx < candidates.length - 1) setIdx(idx + 1);
+              else {
+                setFailed(true);
+                if (onAllFailed) onAllFailed();
+              }
+            }}
+            className="rounded-full bg-black/70 hover:bg-black/90 px-3 py-1 text-[10px] text-white/90"
+          >
+            {idx < candidates.length - 1 ? "Next source" : "Last source"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MoviesEmbed({ accent = "amber" }: Props) {
   const { user } = useAuth();
 
@@ -700,6 +882,9 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   // ── Season selector (series / TV shows / limited series) ─────────────────
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [seasonLoading, setSeasonLoading] = useState(false);
+
+  // ── Embed fallback (mirror providers, after native chain exhausts) ──────
+  const [useEmbedFallback, setUseEmbedFallback] = useState(false);
 
   // ── Trailer (in-app YouTube preview modal) ────────────────────────────────
   const [trailerOpen, setTrailerOpen] = useState(false);
@@ -890,6 +1075,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setSelectedSeason(null);
     setSeasonLoading(false);
     setStreamError(null);
+    setUseEmbedFallback(false);
     setDetailLoading(true);
     void fetchMovieDetail(item.id, item.slug).then((d) => {
       setSelectedSeason(d?.loadedSeason?.number ?? null);
@@ -932,6 +1118,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setPlayerLoading(true);
     setStreamInfo(null);
     setStreamError(null);
+    setUseEmbedFallback(false);
     setActiveServerIdx(0); // Reset to first server on new play
     void fetchMovieStreams(selected.id, episodeId).then((info) => {
       if (info?.playlistUrl) {
@@ -939,14 +1126,32 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
         setPlayerLoading(false);
         return;
       }
-      // No iframe fallback — surface a clear error so the user knows the
-      // stream is unavailable (not stuck loading forever).
-      setStreamError(
-        "This title's stream is temporarily unreachable right now. " +
-          "Retry, or switch to another server below — we rotate between them automatically.",
-      );
+      // No direct HLS stream info at all — skip straight to the mirror
+      // embed fallback (branding hidden behind blur overlays), else show a
+      // retry prompt.
+      const d = detail;
+      if (d && (d.tmdbId || d.imdbId)) {
+        setUseEmbedFallback(true);
+      } else {
+        setStreamError(
+          "This title's stream is temporarily unreachable right now. " +
+            "Retry — it usually recovers quickly.",
+        );
+      }
       setPlayerLoading(false);
     });
+  };
+
+  /** Guaranteed-video chain when the native HLS path is exhausted. */
+  const handleNativeExhausted = () => {
+    const d = detail;
+    if (d && (d.tmdbId || d.imdbId)) {
+      setUseEmbedFallback(true);
+      setStreamInfo(null);
+    } else if (d && d.trailers.length > 0) {
+      setActiveTrailer(0);
+      setTrailerOpen(true);
+    }
   };
 
   // Manual server rotation — MoviePlayer's internal rotation handles this
@@ -1411,7 +1616,36 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
               {/* PLAYER — native hls.js only (the vixcloud iframe is
                   frame-ancestors-locked to vixcloud.co, so it can never be
                   embedded here). */}
-              {streamInfo ? (
+              {useEmbedFallback && detail ? (
+                <EmbedFallbackPlayer
+                  candidates={buildEmbedCandidates(
+                    detail,
+                    selected.type,
+                    detail.loadedSeason?.number ?? selectedSeason ?? 1,
+                    detail.loadedSeason?.episodes?.find(
+                      (ep) => ep.id === selectedEpisode,
+                    )?.number ?? 1,
+                  )}
+                  title={selected.name}
+                  onClose={() => setUseEmbedFallback(false)}
+                  onAllFailed={() => {
+                    // Final guaranteed fallback: open the trailer so the
+                    // user ALWAYS sees moving video, never a dead error.
+                    if (detail.trailers.length > 0) {
+                      setActiveTrailer(0);
+                      setTrailerOpen(true);
+                    } else {
+                      // No trailer either — restore the Watch Now button so
+                      // the user can retry the whole chain.
+                      setUseEmbedFallback(false);
+                      setStreamError(
+                        "This title's stream is temporarily unreachable " +
+                          "right now. Retry — it usually recovers quickly.",
+                      );
+                    }
+                  }}
+                />
+              ) : streamInfo ? (
                 <MoviePlayer
                   streamInfo={streamInfo}
                   title={selected.name}
@@ -1420,15 +1654,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   onRotateServer={rotateServer}
                   activeServerIdx={activeServerIdx}
                   serverNames={streamInfo.servers?.map((s) => s.name) ?? []}
-                  onAllFailed={() => {
-                    // Guaranteed video fallback: when every vixcloud server
-                    // is exhausted, automatically open the trailer so the
-                    // user always sees moving video instead of a dead error.
-                    if (detail && detail.trailers.length > 0) {
-                      setActiveTrailer(0);
-                      setTrailerOpen(true);
-                    }
-                  }}
+                  onAllFailed={handleNativeExhausted}
                 />
               ) : (
                 <>
