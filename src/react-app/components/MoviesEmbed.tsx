@@ -159,6 +159,15 @@ function MoviePlayer({
         manifestLoadingRetryDelay: 800,
         levelLoadingRetryDelay: 800,
         fragLoadingRetryDelay: 800,
+        // Some CDN edges 403 requests that carry a foreign Referer header.
+        // fetchSetup strips the Referer entirely + omits credentials so the
+        // segment requests look like anonymous cross-origin fetches.
+        fetchSetup: (context, initParams) =>
+          new Request(context.url, {
+            ...initParams,
+            referrerPolicy: "no-referrer",
+            credentials: "omit",
+          }),
       });
       hlsRef.current = hls;
       hls.loadSource(src);
@@ -346,6 +355,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [streamInfo, setStreamInfo] = useState<MovieStreamInfo | null>(null);
   const [playerLoading, setPlayerLoading] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
@@ -487,13 +497,13 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const openDetail = (item: MovieItem) => {
     setSelected(item);
     setDetail(null);
-    setPlayerUrl(null);
     setStreamInfo(null);
     setSelectedEpisode(null);
     setTrailerOpen(false);
     setActiveTrailer(0);
     setSelectedSeason(null);
     setSeasonLoading(false);
+    setStreamError(null);
     setDetailLoading(true);
     void fetchMovieDetail(item.id, item.slug).then((d) => {
       setSelectedSeason(d?.loadedSeason?.number ?? null);
@@ -519,7 +529,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setSelectedSeason(seasonNum);
     setSelectedEpisode(null);
     setStreamInfo(null);
-    setPlayerUrl(null);
+    setStreamError(null);
     setSeasonLoading(true);
     void fetchMovieDetail(selected.id, selected.slug, seasonNum).then((d) => {
       if (d) setDetail(d);
@@ -535,7 +545,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     if (!selected) return;
     setPlayerLoading(true);
     setStreamInfo(null);
-    setError(null);
+    setStreamError(null);
     void fetchMovieStreams(selected.id, episodeId).then((info) => {
       if (info?.playlistUrl) {
         setStreamInfo(info);
@@ -544,7 +554,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       }
       // No iframe fallback — surface a clear error so the user knows the
       // stream is unavailable (not stuck loading forever).
-      setError(
+      setStreamError(
         "This title's stream is blocked on your network or temporarily unreachable. " +
           "Tap an episode below, or Retry — streams rotate between servers.",
       );
@@ -914,26 +924,37 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   onClose={() => setStreamInfo(null)}
                 />
               ) : (
-                <button
-                  onClick={() =>
-                    play(
-                      selectedEpisode ??
-                        // TV series need an episode for the stream lookup —
-                        // default to the first episode of the loaded season.
-                        detail?.loadedSeason?.episodes?.[0]?.id ??
-                        undefined,
-                    )
-                  }
-                  disabled={playerLoading}
-                  className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 mb-4 transition-colors"
-                >
-                  {playerLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Play size={16} className="fill-white" />
+                <>
+                  {streamError && (
+                    <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+                      {streamError}
+                    </div>
                   )}
-                  {playerLoading ? "Loading player…" : "Watch Now"}
-                </button>
+                  <button
+                    onClick={() =>
+                      play(
+                        selectedEpisode ??
+                          // TV series need an episode for the stream lookup —
+                          // default to the first episode of the loaded season.
+                          detail?.loadedSeason?.episodes?.[0]?.id ??
+                          undefined,
+                      )
+                    }
+                    disabled={playerLoading}
+                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 mb-4 transition-colors"
+                  >
+                    {playerLoading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Play size={16} className="fill-white" />
+                    )}
+                    {playerLoading
+                      ? "Loading player…"
+                      : streamError
+                        ? "Retry"
+                        : "Watch Now"}
+                  </button>
+                </>
               )}
 
               {/* TV: season selector (all seasons, incl. latest) + episodes */}
