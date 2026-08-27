@@ -42,7 +42,6 @@ import {
   fetchMovieBrowse,
   searchMovies,
   fetchMovieDetail,
-  fetchMoviePlayerUrl,
   fetchMovieStreams,
   type MovieItem,
   type MovieDetail,
@@ -83,13 +82,11 @@ function MoviePlayer({
   title,
   poster,
   onClose,
-  onUseFallback,
 }: {
   streamInfo: MovieStreamInfo;
   title: string;
   poster: string | null;
   onClose: () => void;
-  onUseFallback?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -329,14 +326,6 @@ function MoviePlayer({
             >
               <RotateCcw size={13} /> Retry
             </button>
-            {onUseFallback && (
-              <button
-                onClick={onUseFallback}
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
-              >
-                Use fallback player
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -365,7 +354,6 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [selected, setSelected] = useState<MovieItem | null>(null);
   const [detail, setDetail] = useState<MovieDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [playerUrl, setPlayerUrl] = useState<string | null>(null);
   const [streamInfo, setStreamInfo] = useState<MovieStreamInfo | null>(null);
   const [playerLoading, setPlayerLoading] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
@@ -550,37 +538,26 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   };
 
   // ── Player ────────────────────────────────────────────────────────────────
-  // Native-first: fetch the raw HLS stream info (CORS-open playlist) and play
-  // with hls.js. The iframe embed is kept only as an explicit fallback.
+  // Native-only: fetch the raw HLS stream info (CORS-open playlist) and play
+  // with hls.js. The vixcloud iframe is frame-ancestors-locked to vixcloud.co
+  // so it can never be embedded here — the native player is the ONLY path.
   const play = (episodeId?: number) => {
     if (!selected) return;
     setPlayerLoading(true);
-    setPlayerUrl(null);
     setStreamInfo(null);
+    setError(null);
     void fetchMovieStreams(selected.id, episodeId).then((info) => {
       if (info?.playlistUrl) {
         setStreamInfo(info);
         setPlayerLoading(false);
         return;
       }
-      // Fallback: the iframe embed (works on platforms where the upstream
-      // allows framing, or when the streams extraction fails).
-      void fetchMoviePlayerUrl(selected.id, episodeId).then((url) => {
-        setPlayerUrl(url);
-        setPlayerLoading(false);
-      });
-    });
-  };
-
-  const useFallbackPlayer = () => {
-    if (!selected) return;
-    setStreamInfo(null);
-    setPlayerLoading(true);
-    void fetchMoviePlayerUrl(
-      selected.id,
-      selectedEpisode ?? detail?.loadedSeason?.episodes?.[0]?.id ?? undefined,
-    ).then((url) => {
-      setPlayerUrl(url);
+      // No iframe fallback — surface a clear error so the user knows the
+      // stream is unavailable (not stuck loading forever).
+      setError(
+        "This title's stream is blocked on your network or temporarily unreachable. " +
+          "Tap an episode below, or Retry — streams rotate between servers.",
+      );
       setPlayerLoading(false);
     });
   };
@@ -935,32 +912,16 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 </div>
               )}
 
-              {/* PLAYER — native hls.js first, iframe fallback */}
+              {/* PLAYER — native hls.js only (the vixcloud iframe is
+                  frame-ancestors-locked to vixcloud.co, so it can never be
+                  embedded here). */}
               {streamInfo ? (
                 <MoviePlayer
                   streamInfo={streamInfo}
                   title={selected.name}
                   poster={selected.cover ?? selected.poster}
                   onClose={() => setStreamInfo(null)}
-                  onUseFallback={useFallbackPlayer}
                 />
-              ) : playerUrl ? (
-                <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4">
-                  <iframe
-                    src={playerUrl}
-                    className="absolute inset-0 w-full h-full"
-                    allowFullScreen
-                    frameBorder="0"
-                    title={selected.name}
-                  />
-                  <button
-                    onClick={() => setPlayerUrl(null)}
-                    className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
-                    title="Close player"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
               ) : (
                 <button
                   onClick={() =>
