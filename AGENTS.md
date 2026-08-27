@@ -9509,3 +9509,25 @@ Realtime default-off is the single biggest egress reducer. The existing compress
 
 ### Conclusion / "in the future"
 The durable fixes (realtime default-OFF in `cloud-storage-service.ts`, gzip compression, 2s save debounce, 5-min cache + inflight dedup, `editor_audit` 5000-row RPC cap) are ALL live. Server-side, `app_kv` is out of the realtime publication, so even a future code regression that bombards app_kv cannot re-broadcast. If a future session needs cross-device realtime again, first re-add tables to `supabase_realtime` publication AND re-enable the client `fuelpro_realtime_enabled` key. Recommended NOT to re-enable until the org's grace-period usage resets (next billing period).
+
+
+## Session 2026-08-27 — Movies sub-tab: Watch Now ACTUAL VIDEO fix + Season selector (DEPLOYED LIVE)
+
+**Requirement**: (1) "Watch Now" must show ACTUAL video (it showed only the poster); (2) series/TV shows/limited series need a season/part selector.
+
+### Root cause of "no actual video" (verified via curl + browser)
+The vixcloud.co /playlist/{id} endpoint + the sc-u9-XX.vix-content.net segment CDN BOTH return **HTTP 403 for ALL datacenter IPs** — Cloudflare Workers, AWS/Vercel, this sandbox (verified directly). Only regular browser/residential IPs are served, and the 403 responses carry Access-Control-Allow-Origin: * (so cross-origin browser fetches work for end users — that is how the upstream streamingunity.vip site itself works). The OLD player routed the playlist through /api/hls-proxy (Cloudflare) FIRST → 403 for everyone → only the poster ever rendered.
+
+### Fixes (commits c32149c + b8db6f9 + 55d8619, all on main)
+1. **Direct-first HLS player** (MoviesEmbed.tsx MoviePlayer): hls.js loads streamInfo.playlistUrl DIRECTLY from the browser first (works for real users); only if the manifest fails does it fall back to the same-origin /api/hls-proxy. Same direct-first pattern as the Live TV fix (624598a). The dead iframe fallback (vixcloud embed page is frame-ancestors self https://vixcloud.co-locked — nobody can frame it) is now optional.
+2. **Season selector** (series/TV/limited): mode=title on BOTH api/movies.ts (Vercel) + functions/api/movies.ts (CF) now accepts &season=N → fetches /en/titles/{id}-{slug}/season-N (upstream default is season 1 only). MovieService.fetchMovieDetail(id, slug, season?). A Season dropdown lists ALL seasons with a "(Latest)" marker on the newest; switching refetches that season episodes; episode grid + Watch Now default to the selected season; player/episode reset on change.
+3. **Full-HD**: playlist URL appends h=1 when window.canPlayFHD (matches the upstream player behavior).
+4. **Trailer** (from prior commit 5fb0014): filterPlayableTrailers() validates upstream trailer YouTube ids via oEmbed (dead ids filtered), findYoutubeTrailerId() finds a working trailer via YouTube search when all upstream ids are dead. In-app trailer modal (autoplay, close, multi-trailer picker).
+
+### Verified LIVE (fuel-app-mobile.pages.dev, founder QA user)
+- **Series** (Outer Banks): Watch Now → native player shows the OUTER BANKS title card with REAL duration "0:00 / 54:56" + Auto quality selector + buffering spinner (manifest PARSED from the browser directly — the exact thing that was impossible via the proxy). Season dropdown lists Season 1–5 with "(Latest)" on 5. API: ?season=2/3/4/5 each return the correct season episodes (S5E1 "The Crossing").
+- **Movie** ("Do not Say Good Luck"): MOVIE badge + 95 min runtime + NO season selector (correct) → Watch Now → player + Auto quality selector.
+- Segments still 403 from THIS sandbox (datacenter IP) — expected; real users IPs are served. ?season propagation through CF takes ~2 min.
+
+### CF Pages Functions bundle cache (recurring issue)
+wrangler pages deploy sometimes serves a STALE Functions bundle for minutes after deploy (verified: new code in compiled output but old code served). Propagates on its own within ~2 min — always re-verify with a wait, do not chase phantom bugs.
