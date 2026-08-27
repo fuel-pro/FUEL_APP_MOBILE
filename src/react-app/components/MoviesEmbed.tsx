@@ -63,29 +63,23 @@ interface Props {
   accent?: "blue" | "purple" | "amber";
 }
 
-/** Build the CORS-proxy URL for an HLS resource (same-origin on both hosts).
- * vixcloud blocks direct browser cross-origin fetches (403 on Origin), so the
- * player routes the playlist/rendition/segment chain through the proxy. */
-function movieHlsProxyUrl(url: string): string {
-  const origin = window.location.origin;
-  return `${origin}/api/hls-proxy?url=${encodeURIComponent(url)}`;
-}
-
 // ─── MoviePlayer — native hls.js player for the reverse-engineered stream ─────
-// Plays the raw HLS playlist: no iframe, no ads, no analytics, no
-// frame-ancestors CSP block. vixcloud blocks direct browser cross-origin
-// fetches, so the chain is routed through the same-origin HLS CORS proxy
-// (the existing /api/hls-proxy used by Live TV). Falls back to the embed
-// iframe only when the native stream cannot be loaded.
+// Plays the raw HLS playlist DIRECTLY from the user's browser: vixcloud
+// serves residential/browser IPs with ACAO:* but blocks all datacenter IPs,
+// and segment tokens are IP-bound to whoever fetched the playlist — so the
+// browser is the only workable path. The upstream title page is offered as a
+// last-resort fallback when the stream is unreachable.
 function MoviePlayer({
   streamInfo,
   title,
   poster,
+  sourceUrl,
   onClose,
 }: {
   streamInfo: MovieStreamInfo;
   title: string;
   poster: string | null;
+  sourceUrl?: string;
   onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -111,18 +105,16 @@ function MoviePlayer({
           "Tap an episode below, or Retry — streams rotate between servers.",
       );
 
-    // Direct-first: the vixcloud playlist endpoint sends
-    // `Access-Control-Allow-Origin: *` and serves regular (browser) IPs, so
-    // hls.js can fetch it cross-origin with NO proxy. The proxy is only the
-    // fallback for networks where vixcloud blocks the user's IP/ASN (the
-    // proxy's own datacenter IP may itself be blocked — vixcloud 403s both
-    // Cloudflare and AWS IPs on the playlist endpoint — so direct-first is
-    // the ONLY reliable path for most users).
-    let triedProxy = false;
-    let manifestParsed = false;
+    // Direct-only, no proxy: vixcloud segment tokens are IP-bound to whoever
+    // fetched the playlist, and the segment CDN (sc-*.vix-content.net) blocks
+    // ALL datacenter IPs (Cloudflare/AWS) — so a proxy-fetched playlist can
+    // parse but every segment then 403s forever (the "stuck at 0:00" bug).
+    // The ONLY path that can ever play is the user's own browser fetching
+    // playlist + segments directly (vixcloud serves residential/browser IPs).
+    //
     // Server rotation: the upstream exposes multiple server URLs (Server1,
-    // Server2, …). When the active one fatally fails, rotate to the next —
-    // this is what rescues the episodes whose primary server is down.
+    // Server2, …). Rotating re-fetches a NEW manifest whose segment tokens
+    // match the next server — the only real rescue for a dead endpoint.
     const serverUrls = (streamInfo.servers || [])
       .filter((s) => s.url)
       .map((s) => {
@@ -136,12 +128,21 @@ function MoviePlayer({
         }
         return u.href;
       });
+    if (serverUrls.length === 0) serverUrls.push(streamInfo.playlistUrl);
     let serverIdx = 0;
-    // Hard timeout — if nothing plays within 20s, surface the error instead
-    // of spinning forever (the reported "keeps loading" bug).
+    const rotateServer = (): boolean => {
+      if (serverIdx >= serverUrls.length - 1) return false;
+      serverIdx += 1;
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+      attachHls(serverUrls[serverIdx]);
+      return true;
+    };
+    // Hard timeout — if nothing plays within 18s, surface the error instead
+    // of spinning forever.
     const playTimeout = window.setTimeout(() => {
       if (video.readyState === 0 && video.paused) onFatal();
-    }, 20000);
+    }, 18000);
     const clearPlayTimeout = () => window.clearTimeout(playTimeout);
     const onPlaying = () => clearPlayTimeout();
     video.addEventListener("playing", onPlaying);
@@ -149,24 +150,20 @@ function MoviePlayer({
     const attachHls = (src: string) => {
       const hls = new Hls({
         enableWorker: false,
-        manifestLoadingTimeOut: 15000,
-        levelLoadingTimeOut: 15000,
-        fragLoadingTimeOut: 30000,
-        // Retry manifest/level/frag errors a few times before going fatal —
-        // the segment CDN occasionally rate-limits, and a hard fatal on the
-        // first 403 is what made some episodes look permanently broken.
-        manifestLoadingMaxRetry: 3,
-        levelLoadingMaxRetry: 3,
-        fragLoadingMaxRetry: 3,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingRetryDelay: 1000,
+        manifestLoadingTimeOut: 12000,
+        levelLoadingTimeOut: 12000,
+        fragLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 2,
+        levelLoadingMaxRetry: 2,
+        fragLoadingMaxRetry: 2,
+        manifestLoadingRetryDelay: 800,
+        levelLoadingRetryDelay: 800,
+        fragLoadingRetryDelay: 800,
       });
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        manifestParsed = true;
         const lv = (hls.levels || [])
           .map((l, hlsIndex) => ({
             height: l.height,
@@ -180,29 +177,21 @@ function MoviePlayer({
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // Manifest load failed — rotate to the next server (fixes episodes
-          // whose primary server is down), then try the proxy as last resort.
-          if (
-            !triedProxy &&
-            !manifestParsed &&
-            serverIdx < serverUrls.length - 1
-          ) {
-            serverIdx += 1;
-            hls.destroy();
-            hlsRef.current = null;
-            attachHls(serverUrls[serverIdx]);
+          const d = data.details as string;
+          const isFrag =
+            d.includes("frag") || d.includes("key") || d.includes("audioTrack");
+          // Segment/key errors: retrying the SAME URL is pointless (token is
+          // dead or the CDN blocks us) — rotate to the next server's manifest
+          // (fresh token set), else surface the error.
+          if (isFrag) {
+            if (rotateServer()) return;
+            onFatal();
             return;
           }
-          if (!triedProxy && !manifestParsed) {
-            triedProxy = true;
-            hls.destroy();
-            hlsRef.current = null;
-            attachHls(
-              movieHlsProxyUrl(serverUrls[serverIdx] ?? streamInfo.playlistUrl),
-            );
-            return;
-          }
-          hls.startLoad();
+          // Manifest/level errors: rotate, else fatal. Never infinite
+          // startLoad (that was the eternal-spinner bug).
+          if (rotateServer()) return;
+          onFatal();
           return;
         }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -222,25 +211,16 @@ function MoviePlayer({
     };
 
     if (Hls.isSupported()) {
-      attachHls(serverUrls[0] ?? streamInfo.playlistUrl);
+      attachHls(serverUrls[0]);
       return cleanup;
     }
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS — direct first, server rotation, proxy last.
-      video.src = serverUrls[0] ?? streamInfo.playlistUrl;
+      // Safari native HLS — direct, rotate on error, then fatal.
+      video.src = serverUrls[0];
       video.play().catch(() => {});
       const onErr = () => {
-        if (serverIdx < serverUrls.length - 1) {
-          serverIdx += 1;
+        if (rotateServer()) {
           video.src = serverUrls[serverIdx];
-          video.play().catch(() => {});
-          return;
-        }
-        if (!triedProxy) {
-          triedProxy = true;
-          video.src = movieHlsProxyUrl(
-            serverUrls[serverIdx] ?? streamInfo.playlistUrl,
-          );
           video.play().catch(() => {});
           return;
         }
@@ -319,13 +299,23 @@ function MoviePlayer({
       {error && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
           <p className="text-xs text-gray-300 max-w-sm">{error}</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <button
               onClick={() => setRetryNonce((n) => n + 1)}
               className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium flex items-center gap-1.5"
             >
               <RotateCcw size={13} /> Retry
             </button>
+            {sourceUrl && (
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
+              >
+                Open on source site
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -920,6 +910,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   streamInfo={streamInfo}
                   title={selected.name}
                   poster={selected.cover ?? selected.poster}
+                  sourceUrl={`https://streamingunity.vip/en/titles/${selected.id}-${encodeURIComponent(selected.slug)}`}
                   onClose={() => setStreamInfo(null)}
                 />
               ) : (
