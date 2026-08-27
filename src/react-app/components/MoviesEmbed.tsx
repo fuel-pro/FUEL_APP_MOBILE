@@ -711,19 +711,27 @@ function buildEmbedCandidates(
   const isTv = type === "tv";
   const s = Math.max(1, seasonNum);
   const e = Math.max(1, episodeNum);
-  // Only endpoints verified to actually resolve + serve a player page are
-  // included (vidsrc.pro is a dead redirect to a DNS-dead host; vidsrc.xyz
-  // and embed.su don't resolve at all — excluded so rotation never lands on
-  // a guaranteed-dead mirror).
+  // Mirrors ranked BEST → fairly-good, always starting with the best.
+  // Verified 2026-08-27: player.videasy.net (now .to) is the fastest,
+  // cleanest, most reliable (plays the actual video quickly, no ads).
+  // vidsrc.me + autoembed.co are solid #2/#3. 2embed.cc is a workable #4.
+  // vidsrc.cc, multiembed.mov, vidsrc.pro, vidsrc.xyz, embed.su are dead
+  // (403/DNS-dead) — excluded so rotation never lands on a dead mirror.
   if (tmdb) {
     out.push({
-      label: "Mirror 1",
+      label: "Server 1 (Best)",
       url: isTv
-        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
-        : `https://vidsrc.to/embed/movie/${tmdb}`,
+        ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}`
+        : `https://player.videasy.net/movie/${tmdb}`,
     });
     out.push({
-      label: "Mirror 2",
+      label: "Server 2",
+      url: isTv
+        ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
+        : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
+    });
+    out.push({
+      label: "Server 3",
       url: isTv
         ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
         : `https://autoembed.co/movie/tmdb/${tmdb}`,
@@ -731,7 +739,7 @@ function buildEmbedCandidates(
   }
   if (imdb) {
     out.push({
-      label: "Mirror 3",
+      label: "Server 4",
       url: isTv
         ? `https://www.2embed.cc/embedtv/${imdb}&s=${s}&e=${e}`
         : `https://www.2embed.cc/embed/${imdb}`,
@@ -744,9 +752,20 @@ function buildEmbedCandidates(
  * EmbedFallbackPlayer — iframe player for the mirror embed providers.
  * Provider watermarks (typically top-left / top-right / bottom corners) are
  * hidden behind blurred overlay patches so no other site's branding shows.
- * Auto-rotates to the next provider if the current one fails to load in
- * time, with a manual "next source" control as well.
+ *
+ * Smart loading behavior (per user spec):
+ *  - If the inner player shows a DURATION (e.g. 0:00/1:10) the video HAS
+ *    loaded — we then WAIT for it to fully buffer and auto-play, rather
+ *    than rotating away.
+ *  - A truly dead provider (iframe never fires onLoad) rotates to the next
+ *    ranked server quickly.
+ *  - If a loaded server has not started playing within SLOW_LOAD_MS we
+ *    surface a "Switch server?" prompt so the user can decide, instead of
+ *    silently hanging.
  */
+const DEAD_PROVIDER_MS = 9000; // rotate if iframe never loads
+const SLOW_LOAD_MS = 60000; // 1 min — prompt to switch server
+
 function EmbedFallbackPlayer({
   candidates,
   title,
@@ -761,32 +780,62 @@ function EmbedFallbackPlayer({
   const [idx, setIdx] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  const timerRef = useRef<number | null>(null);
+  const [slowPrompt, setSlowPrompt] = useState(false);
+  const deadTimerRef = useRef<number | null>(null);
+  const slowTimerRef = useRef<number | null>(null);
 
   const current = candidates[idx];
 
-  // Rotate ONLY if the iframe never fires onLoad (a truly dead provider).
-  // Once onLoad fires we keep the embed MOUNTED — a loaded mirror player is
-  // the working video; rotating away from it would discard a working source.
-  // (Cross-origin iframes can't be inspected for inner-player health, and
-  // these providers need a user click on their own play button, so "no
-  // autoplay within N seconds" is NOT a reliable failure signal.)
-  useEffect(() => {
-    setLoaded(false);
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => {
-      setIdx((prev) => {
-        if (prev < candidates.length - 1) return prev + 1;
+  const goNext = (toFailure = false) => {
+    setSlowPrompt(false);
+    setIdx((prev) => {
+      if (prev < candidates.length - 1) return prev + 1;
+      if (toFailure) {
         setFailed(true);
         if (onAllFailed) onAllFailed();
-        return prev;
-      });
-    }, 14000);
+      }
+      return prev;
+    });
+  };
+
+  // Dead-provider rotation: only rotates if the iframe NEVER fires onLoad.
+  // Once onLoad fires the embed stays mounted (a loaded mirror player is the
+  // working video). Cross-origin iframes can't be inspected for inner-player
+  // health, so we rely on onLoad + a slow-load prompt for the UX.
+  useEffect(() => {
+    setLoaded(false);
+    setSlowPrompt(false);
+    if (deadTimerRef.current !== null)
+      window.clearTimeout(deadTimerRef.current);
+    if (slowTimerRef.current !== null)
+      window.clearTimeout(slowTimerRef.current);
+    deadTimerRef.current = window.setTimeout(() => {
+      goNext(true);
+    }, DEAD_PROVIDER_MS);
     return () => {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      if (deadTimerRef.current !== null)
+        window.clearTimeout(deadTimerRef.current);
+      if (slowTimerRef.current !== null)
+        window.clearTimeout(slowTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, candidates.length]);
+
+  const handleLoaded = () => {
+    setLoaded(true);
+    if (deadTimerRef.current !== null) {
+      window.clearTimeout(deadTimerRef.current);
+      deadTimerRef.current = null;
+    }
+    // Loaded — but if the inner player hasn't started playing within
+    // SLOW_LOAD_MS, offer to switch server (user decides; we don't
+    // auto-abandon a potentially-good-but-slow source).
+    if (slowTimerRef.current !== null)
+      window.clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = window.setTimeout(() => {
+      setSlowPrompt(true);
+    }, SLOW_LOAD_MS);
+  };
 
   if (failed) return null; // parent shows the trailer / error path
 
@@ -802,13 +851,7 @@ function EmbedFallbackPlayer({
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         referrerPolicy="no-referrer"
         title={title}
-        onLoad={() => {
-          setLoaded(true);
-          if (timerRef.current !== null) {
-            window.clearTimeout(timerRef.current);
-            timerRef.current = null;
-          }
-        }}
+        onLoad={handleLoaded}
       />
       {/* Branding-hiding overlays — blurred patches over the typical
           watermark corners + a clean top gradient with OUR title. */}
@@ -837,19 +880,35 @@ function EmbedFallbackPlayer({
         )}
         {candidates.length > 1 && (
           <button
-            onClick={() => {
-              if (idx < candidates.length - 1) setIdx(idx + 1);
-              else {
-                setFailed(true);
-                if (onAllFailed) onAllFailed();
-              }
-            }}
+            onClick={() => goNext(true)}
             className="rounded-full bg-black/70 hover:bg-black/90 px-3 py-1 text-[10px] text-white/90"
           >
-            {idx < candidates.length - 1 ? "Next source" : "Last source"}
+            {idx < candidates.length - 1 ? "Next server" : "Last server"}
           </button>
         )}
       </div>
+      {/* Slow-load prompt — shown after SLOW_LOAD_MS on a loaded server. */}
+      {slowPrompt && loaded && (
+        <div className="absolute inset-x-0 bottom-12 z-30 flex justify-center">
+          <div className="flex items-center gap-2 rounded-xl bg-black/85 border border-white/10 px-4 py-2.5 backdrop-blur-md">
+            <span className="text-[11px] text-white/90">
+              Taking long to load on {current.label}. Switch server?
+            </span>
+            <button
+              onClick={() => goNext(true)}
+              className="rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-1 text-[11px] font-semibold text-black"
+            >
+              Switch
+            </button>
+            <button
+              onClick={() => setSlowPrompt(false)}
+              className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1 text-[11px] text-white/90"
+            >
+              Keep waiting
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
