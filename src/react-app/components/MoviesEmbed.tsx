@@ -1239,9 +1239,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   };
 
   // ── Player ────────────────────────────────────────────────────────────────
-  // Native-only: fetch the raw HLS stream info (CORS-open playlist) and play
-  // with hls.js. The vixcloud iframe is frame-ancestors-locked to vixcloud.co
-  // so it can never be embedded here — the native player is the ONLY path.
+  // Go DIRECTLY to the reliable embed providers (videasy -> vidsrc.me ->
+  // autoembed -> 2embed). The native vixcloud HLS path is unreliable (cycles
+  // for up to 72s before falling back) and is skipped. If NO embed provider
+  // resolves, fall back to the native hls.js path as a last resort.
   const play = (episodeId?: number) => {
     if (!selected) return;
     setPlayerLoading(true);
@@ -1249,19 +1250,12 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setStreamError(null);
     setUseEmbedFallback(false);
     setActiveServerIdx(0); // Reset to first server on new play
-    void fetchMovieStreams(selected.id, episodeId).then(async (info) => {
-      if (info?.playlistUrl) {
-        setStreamInfo(info);
-        setPlayerLoading(false);
-        return;
-      }
-      // No direct HLS stream info at all — skip straight to the mirror
-      // embed fallback (branding hidden behind blur overlays), else show a
-      // retry prompt. Use detailRef (always the CURRENT title) so the embed
-      // keys by the correct TMDB/IMDb id, not a stale closure. If the detail
-      // hasn't finished loading yet (user clicked Watch Now very fast), wait
-      // for it so we still resolve the correct ids.
-      let d = detailRef.current;
+
+    // Resolve the detail so the embed candidates use the correct tmdb/imdb
+    // IDs. Use detailRef (always the CURRENT title), and wait if the detail
+    // fetch is still in flight (user clicked Watch Now very fast).
+    let d = detailRef.current;
+    const resolveAndEmbed = async (): Promise<void> => {
       if (!d && selected) {
         d = await fetchMovieDetail(selected.id, selected.slug).catch(
           () => null,
@@ -1274,14 +1268,26 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       }
       if (d && (d.tmdbId || d.imdbId)) {
         setUseEmbedFallback(true);
-      } else {
-        setStreamError(
-          "This title's stream is temporarily unreachable right now. " +
-            "Retry — it usually recovers quickly.",
-        );
+        setPlayerLoading(false);
+        return;
       }
+      // No embed provider possible (no tmdb/imdb id) — try the native HLS
+      // path as a last resort.
+      const info = await fetchMovieStreams(selected.id, episodeId).catch(
+        () => null,
+      );
+      if (info?.playlistUrl) {
+        setStreamInfo(info);
+        setPlayerLoading(false);
+        return;
+      }
+      setStreamError(
+        "This title's stream is temporarily unreachable right now. " +
+          "Retry — it usually recovers quickly.",
+      );
       setPlayerLoading(false);
-    });
+    };
+    void resolveAndEmbed();
   };
 
   /** Guaranteed-video chain when the native HLS path is exhausted. */
