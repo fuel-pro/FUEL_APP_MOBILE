@@ -355,3 +355,85 @@ export function playableOnly(titles: SuTitle[] | undefined): SuTitle[] {
     (t) => t && (t.type === "movie" || t.type === "tv"),
   );
 }
+
+/**
+ * Validate trailer YouTube ids and keep only playable ones.
+ *
+ * The upstream trailer ids are frequently stale — they point at private,
+ * deleted, or embedding-disabled YouTube videos (the player then shows
+ * "This video is private" / "Video unavailable"). YouTube's oEmbed endpoint
+ * returns HTTP 200 only for PUBLIC, embeddable videos (401/403/404
+ * otherwise), which is a reliable availability signal.
+ *
+ * Results are cached in-memory for 6h per serverless instance so the extra
+ * oEmbed round-trips only happen once per video id.
+ */
+const TRAILER_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
+const trailerCheckCache = new Map<string, { ok: boolean; at: number }>();
+
+export async function filterPlayableTrailers(
+  ids: (string | undefined | null)[],
+): Promise<string[]> {
+  const clean = [...new Set(ids.filter((x): x is string => Boolean(x)))];
+  if (clean.length === 0) return [];
+  const now = Date.now();
+  const checks = await Promise.all(
+    clean.map(async (id) => {
+      const cached = trailerCheckCache.get(id);
+      if (cached && now - cached.at < TRAILER_CHECK_TTL_MS) {
+        return { id, ok: cached.ok };
+      }
+      let ok = false;
+      try {
+        const res = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`,
+          {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; FuelPro/1.0)" },
+            signal: AbortSignal.timeout(6000),
+          },
+        );
+        ok = res.ok;
+      } catch {
+        ok = false;
+      }
+      trailerCheckCache.set(id, { ok, at: now });
+      return { id, ok };
+    }),
+  );
+  return checks.filter((c) => c.ok).map((c) => c.id);
+}
+
+/**
+ * Find a playable YouTube trailer id by scraping the YouTube search results
+ * page (no API key needed). Extracts candidate video ids from the embedded
+ * ytInitialData JSON, then validates them through the oEmbed check so the
+ * returned id is guaranteed public + embeddable. Returns null when nothing
+ * playable is found.
+ */
+export async function findYoutubeTrailerId(
+  query: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return null;
+    const html = await res.text();
+    const candidates = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)]
+      .map((m) => m[1])
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 5);
+    const playable = await filterPlayableTrailers(candidates);
+    return playable[0] ?? null;
+  } catch {
+    return null;
+  }
+}

@@ -916,7 +916,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   )}
                   {isWatchlisted(selected) ? "Watchlisted" : "Watchlist"}
                 </button>
-                {detail?.trailers && detail.trailers.length > 0 && (
+                {detail && detail.trailers.length > 0 && (
                   <button
                     onClick={() => {
                       setActiveTrailer(0);
@@ -934,66 +934,67 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 )}
               </div>
 
-              {/* In-app trailer preview modal (YouTube embed) */}
-              {trailerOpen &&
-                detail?.trailers &&
-                detail.trailers.length > 0 && (
+              {/* In-app trailer preview modal (YouTube embed). The API only
+                  returns validated-playable trailer ids (upstream ids that
+                  are private/deleted are filtered out, with a YouTube
+                  search fallback), so this always yields a working preview. */}
+              {trailerOpen && detail && detail.trailers.length > 0 && (
+                <div
+                  className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6"
+                  onClick={() => setTrailerOpen(false)}
+                  role="dialog"
+                  aria-label={`${selected.name} trailer`}
+                >
                   <div
-                    className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6"
-                    onClick={() => setTrailerOpen(false)}
-                    role="dialog"
-                    aria-label={`${selected.name} trailer`}
+                    className="relative w-full max-w-3xl"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <div
-                      className="relative w-full max-w-3xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-semibold text-white truncate">
-                          {selected.name}
-                          <span className="ml-2 text-[11px] font-normal text-red-400">
-                            Trailer{" "}
-                            {detail.trailers.length > 1
-                              ? `${activeTrailer + 1} of ${detail.trailers.length}`
-                              : ""}
-                          </span>
-                        </p>
-                        <button
-                          onClick={() => setTrailerOpen(false)}
-                          className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
-                          title="Close trailer"
-                          aria-label="Close trailer"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10">
-                        <iframe
-                          key={detail.trailers[activeTrailer]}
-                          src={`https://www.youtube-nocookie.com/embed/${detail.trailers[activeTrailer]}?autoplay=1&rel=0`}
-                          className="absolute inset-0 w-full h-full"
-                          allow="autoplay; encrypted-media; picture-in-picture"
-                          allowFullScreen
-                          frameBorder="0"
-                          title={`${selected.name} trailer`}
-                        />
-                      </div>
-                      {detail.trailers.length > 1 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {detail.trailers.map((t, i) => (
-                            <button
-                              key={t}
-                              onClick={() => setActiveTrailer(i)}
-                              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${activeTrailer === i ? "bg-red-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"}`}
-                            >
-                              Trailer {i + 1}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {selected.name}
+                        <span className="ml-2 text-[11px] font-normal text-red-400">
+                          Trailer{" "}
+                          {detail.trailers.length > 1
+                            ? `${activeTrailer + 1} of ${detail.trailers.length}`
+                            : ""}
+                        </span>
+                      </p>
+                      <button
+                        onClick={() => setTrailerOpen(false)}
+                        className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                        title="Close trailer"
+                        aria-label="Close trailer"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
+                    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10">
+                      <iframe
+                        key={detail.trailers[activeTrailer]}
+                        src={`https://www.youtube-nocookie.com/embed/${detail.trailers[activeTrailer]}?autoplay=1&rel=0`}
+                        className="absolute inset-0 w-full h-full"
+                        allow="autoplay; encrypted-media; picture-in-picture"
+                        allowFullScreen
+                        frameBorder="0"
+                        title={`${selected.name} trailer`}
+                      />
+                    </div>
+                    {detail.trailers.length > 1 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {detail.trailers.map((t, i) => (
+                          <button
+                            key={t}
+                            onClick={() => setActiveTrailer(i)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${activeTrailer === i ? "bg-red-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"}`}
+                          >
+                            Trailer {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+              )}
             </div>
           </div>
         </div>

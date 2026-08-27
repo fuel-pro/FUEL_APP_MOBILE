@@ -26,6 +26,8 @@ import {
   fetchSuPage,
   fetchSuPlayerUrl,
   fetchSuStreamInfo,
+  filterPlayableTrailers,
+  findYoutubeTrailerId,
   playableOnly,
   pickImage,
   suSliderPath,
@@ -192,6 +194,17 @@ export default async function handler(
         return;
       }
       const loadedSeason = page?.props?.loadedSeason;
+      let trailers = await filterPlayableTrailers(
+        (t.trailers || []).map((tr) => tr.youtube_id || tr.url),
+      );
+      if (trailers.length === 0) {
+        // Upstream trailer ids are stale (private/deleted) — find a real
+        // working trailer via YouTube search so the preview always plays.
+        const found = await findYoutubeTrailerId(
+          `${t.name} ${t.last_air_date?.slice(0, 4) ?? ""} official trailer`,
+        );
+        if (found) trailers = [found];
+      }
       r.status(200).json({
         title: {
           ...normalizeTitle(t),
@@ -205,9 +218,7 @@ export default async function handler(
           genres: (t.genres || []).map((g) => ({ id: g.id, name: g.name })),
           actors: (t.main_actors || []).map((a) => a.name),
           directors: (t.main_directors || []).map((d) => d.name),
-          trailers: (t.trailers || [])
-            .map((tr) => tr.youtube_id || tr.url)
-            .filter(Boolean),
+          trailers,
           seasons: (t.seasons || []).map((s) => ({
             id: s.id,
             number: s.number,

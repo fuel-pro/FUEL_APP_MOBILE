@@ -73,6 +73,77 @@ function decodeEntities(s: string): string {
     .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)));
 }
 
+/**
+ * Keep only playable trailer YouTube ids. Upstream trailer ids are often
+ * stale (private/deleted/embedding-disabled videos). YouTube's oEmbed
+ * endpoint returns 200 only for public embeddable videos — a reliable
+ * availability signal. Cached in-memory for 6h per isolate.
+ */
+const TRAILER_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
+const trailerCheckCache = new Map<string, { ok: boolean; at: number }>();
+
+async function filterPlayableTrailers(
+  ids: (string | undefined | null)[],
+): Promise<string[]> {
+  const clean = [...new Set(ids.filter((x): x is string => Boolean(x)))];
+  if (clean.length === 0) return [];
+  const now = Date.now();
+  const checks = await Promise.all(
+    clean.map(async (id) => {
+      const cached = trailerCheckCache.get(id);
+      if (cached && now - cached.at < TRAILER_CHECK_TTL_MS) {
+        return { id, ok: cached.ok };
+      }
+      let ok = false;
+      try {
+        const res = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`,
+          {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; FuelPro/1.0)" },
+            signal: AbortSignal.timeout(6000),
+          },
+        );
+        ok = res.ok;
+      } catch {
+        ok = false;
+      }
+      trailerCheckCache.set(id, { ok, at: now });
+      return { id, ok };
+    }),
+  );
+  return checks.filter((c) => c.ok).map((c) => c.id);
+}
+
+/**
+ * Find a playable YouTube trailer id by scraping the YouTube search results
+ * page (no API key needed). Validates candidates through the oEmbed check so
+ * the returned id is guaranteed public + embeddable.
+ */
+async function findYoutubeTrailerId(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          "User-Agent": UA,
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return null;
+    const html = await res.text();
+    const candidates = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)]
+      .map((m) => m[1])
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 5);
+    const playable = await filterPlayableTrailers(candidates);
+    return playable[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function parseDataPage(html: string): any {
   const m = html.match(/data-page="([\s\S]*?)"/);
   if (!m) return null;
@@ -313,9 +384,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           genres: (t.genres || []).map((g) => ({ id: g.id, name: g.name })),
           actors: (t.main_actors || []).map((a) => a.name),
           directors: (t.main_directors || []).map((d) => d.name),
-          trailers: (t.trailers || [])
-            .map((tr) => tr.youtube_id || tr.url)
-            .filter(Boolean),
+          trailers: await (async () => {
+            const valid = await filterPlayableTrailers(
+              (t.trailers || []).map((tr) => tr.youtube_id || tr.url),
+            );
+            if (valid.length > 0) return valid;
+            // Upstream trailer ids are stale — find a real working trailer
+            // via YouTube search so the preview always plays.
+            const found = await findYoutubeTrailerId(
+              `${t.name} ${t.last_air_date?.slice(0, 4) ?? ""} official trailer`,
+            );
+            return found ? [found] : [];
+          })(),
           seasons: (t.seasons || []).map((s) => ({
             id: s.id,
             number: s.number,
