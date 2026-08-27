@@ -83,6 +83,7 @@ function MoviePlayer({
   onRotateServer,
   activeServerIdx,
   serverNames,
+  onAllFailed,
 }: {
   streamInfo: MovieStreamInfo;
   title: string;
@@ -91,6 +92,8 @@ function MoviePlayer({
   onRotateServer?: (idx: number) => void;
   activeServerIdx?: number;
   serverNames?: string[];
+  /** Called once after the auto-rotation engine exhausts all candidates + cycles. */
+  onAllFailed?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -116,6 +119,14 @@ function MoviePlayer({
   // Escape hatch: skip the bare-URL reachability check and go straight to the
   // same-origin proxy (user-triggered when their IP is blocked).
   const [forceProxyNonce, setForceProxyNonce] = useState(0);
+  // Auto-rotation engine: cycle through candidates with progress, auto-retry
+  // the whole chain, and only surface the error after sustained failure.
+  const [rotating, setRotating] = useState(false);
+  const [candidateIdx, setCandidateIdx] = useState(0);
+  const [candidateTotal, setCandidateTotal] = useState(0);
+  const [cycle, setCycle] = useState(0);
+  const [autoRetryIn, setAutoRetryIn] = useState<number | null>(null);
+  const MAX_CYCLES = 3;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -125,12 +136,58 @@ function MoviePlayer({
     setCurrentLevel(-1);
     setSubtitleTracks([]);
     setAudioTracks([]);
+    setAutoRetryIn(null);
+    setCycle(0);
+    setRotating(true);
 
-    const onFatal = () =>
+    // onFatal: either advance to the next candidate (show progress), restart
+    // a new cycle, or — after MAX_CYCLES — surface the error with an
+    // auto-retry countdown.
+    const onFatalRef = { current: null as null | (() => void) };
+    const failState = {
+      idx: 0,
+      len: 0,
+      cycle: 0,
+      exhausted: false,
+    };
+    const updateProgress = () => {
+      setCandidateIdx(failState.idx);
+      setCandidateTotal(failState.len);
+      setCycle(failState.cycle);
+    };
+    const finalize = () => {
+      if (failState.exhausted) return; // idempotent — only finalize once
+      failState.exhausted = true;
+      setRotating(false);
       setError(
         "This title's stream is temporarily unreachable right now. " +
-          "Retry, or switch to another server below — we rotate between them automatically.",
+          "We already tried every available server automatically. " +
+          "It usually recovers quickly — auto-retrying below.",
       );
+      // keep auto-retrying in the background so the error is transient, and
+      // let the parent offer a guaranteed fallback (trailer / archive.org).
+      if (onAllFailed) onAllFailed();
+    };
+    const onFatal = () => {
+      if (failState.idx < failState.len - 1) {
+        failState.idx += 1;
+        updateProgress();
+        hlsRef.current?.destroy();
+        hlsRef.current = null;
+        void attach(candidates[failState.idx]);
+        return;
+      }
+      // Start a new cycle unless we've hit MAX_CYCLES.
+      if (failState.cycle < MAX_CYCLES - 1) {
+        failState.cycle += 1;
+        failState.idx = 0;
+        updateProgress();
+        void attach(candidates[0]);
+        return;
+      }
+      finalize();
+    };
+    onFatalRef.current = onFatal;
 
     // ── Candidate playlist URLs ────────────────────────────────────────────
     // CRITICAL IP-BOUND TOKEN FIX: the serverless proxy fetched the playlist
@@ -196,26 +253,34 @@ function MoviePlayer({
       forceProxyNonce > 0
         ? proxyCandidates // user forced proxy — skip the bare-URL checks
         : [...directCandidates, ...proxyCandidates];
-    let candIdx = 0;
     let destroyed = false;
+    failState.len = candidates.length;
+    updateProgress();
 
-    const rotate = (): boolean => {
-      if (candIdx >= candidates.length - 1) return false;
-      candIdx += 1;
-      hlsRef.current?.destroy();
-      hlsRef.current = null;
-      void attach(candidates[candIdx]);
-      return true;
+    // Initialize UI-side progress so the "Trying source N of M" overlay is
+    // accurate. failState is mutated by onFatal; updateProgress mirrors it.
+    // (declared above so onFatal can call it before assignment in closure).
+
+    // Watchdog — if the video hasn't started within the timeout, advance to
+    // the next candidate via onFatal (progress) instead of a hard error.
+    const WATCHDOG_MS = 9000;
+    let watchdog: number | null = null;
+    const resetWatchdog = () => {
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        if (video.readyState === 0 && video.paused && !failState.exhausted) {
+          onFatalRef.current?.();
+        }
+      }, WATCHDOG_MS);
     };
-
-    // Hard timeout — rotate (or error) instead of spinning forever.
-    const playTimeout = window.setTimeout(() => {
-      if (video.readyState === 0 && video.paused) {
-        if (!rotate()) onFatal();
-      }
-    }, 15000);
-    const clearPlayTimeout = () => window.clearTimeout(playTimeout);
-    const onPlaying = () => clearPlayTimeout();
+    const clearPlayTimeout = () => {
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      watchdog = null;
+    };
+    const onPlaying = () => {
+      clearPlayTimeout();
+      setRotating(false);
+    };
     video.addEventListener("playing", onPlaying);
 
     const attachHls = (src: string) => {
@@ -275,15 +340,19 @@ function MoviePlayer({
           hls.recoverMediaError();
           return;
         }
-        // Any fatal network error: rotate to the next candidate (next bare
-        // server URL, then the proxy fallbacks), else surface the error.
-        if (!rotate()) onFatal();
+        // Any fatal network error: advance to the next candidate via
+        // onFatal (progress bar advances; cycles and auto-retries kick in
+        // automatically).
+        onFatal();
       });
       return hls;
     };
 
     const attach = async (src: string): Promise<void> => {
       if (destroyed) return;
+      // (Re)arm the stall watchdog on every attempt so a hung candidate is
+      // advanced automatically instead of spinning forever.
+      resetWatchdog();
       const isProxy = src.startsWith("/api/");
       if (!isProxy) {
         // Verify the bare URL is reachable from THIS browser first —
@@ -298,7 +367,7 @@ function MoviePlayer({
           const text = await res.text();
           if (!text.includes("#EXTM3U")) throw new Error("not-m3u8");
         } catch {
-          if (!rotate()) onFatal();
+          onFatal();
           return;
         }
       }
@@ -309,18 +378,13 @@ function MoviePlayer({
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = src;
         video.play().catch(() => {});
-        video.addEventListener(
-          "error",
-          () => {
-            if (!rotate()) onFatal();
-          },
-          { once: true },
-        );
+        video.addEventListener("error", () => onFatal(), { once: true });
         return;
       }
       onFatal();
     };
 
+    // Kick off the rotation — the first candidate attaches immediately.
     void attach(candidates[0]);
 
     return () => {
@@ -330,7 +394,8 @@ function MoviePlayer({
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-  }, [streamInfo, retryNonce, forceProxyNonce]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamInfo, retryNonce, forceProxyNonce, onAllFailed]);
 
   const setQuality = (hlsIndex: number) => {
     setCurrentLevel(hlsIndex);
@@ -495,44 +560,111 @@ function MoviePlayer({
           )}
         </div>
       )}
-      {/* Error overlay */}
-      {error && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
-          <p className="text-xs text-gray-300 max-w-sm">{error}</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <button
-              onClick={() => setRetryNonce((n) => n + 1)}
-              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium flex items-center gap-1.5"
-            >
-              <RotateCcw size={13} /> Retry
-            </button>
-            {onRotateServer &&
-              serverNames &&
-              serverNames.length > 1 &&
-              serverNames.map((name, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    onRotateServer(idx);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${idx === activeServerIdx ? "bg-amber-500 text-white" : "bg-white/10 hover:bg-white/20 text-white"}`}
-                >
-                  {name}
-                </button>
-              ))}
-            {/* Force-proxy escape hatch: skip the bare-URL reachability check
-                and go straight to the same-origin proxy (the Cloudflare edge
-                fetches playlist+segments server-side, so it works even when
-                the user's IP is blocked). */}
-            <button
-              onClick={() => setForceProxyNonce((n) => n + 1)}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
-            >
-              Try proxy
-            </button>
-          </div>
+      {/* Auto-rotation progress overlay (replaces the old premature error —
+          shows the player is ACTUALLY rotating through the servers, not just
+          threatening to). */}
+      {rotating && !error && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/45 px-4 text-center pointer-events-none">
+          <Loader2 size={22} className="animate-spin text-amber-400" />
+          <p className="text-[11px] font-medium text-white/90">
+            {cycle === 0
+              ? `Trying source ${candidateIdx + 1} of ${candidateTotal}…`
+              : `Still rotating — cycle ${cycle + 1} of ${MAX_CYCLES} (source ${candidateIdx + 1}/${candidateTotal})…`}
+          </p>
         </div>
       )}
+      {/* Error overlay (only after MAX_CYCLES automatic attempts, with an
+          automatic background retry so the error itself is transient). */}
+      {error && (
+        <AutoRetryOverlay
+          error={error}
+          autoRetryIn={autoRetryIn}
+          setAutoRetryIn={setAutoRetryIn}
+          onRetry={() => setRetryNonce((n) => n + 1)}
+          onRotateServer={onRotateServer}
+          serverNames={serverNames}
+          activeServerIdx={activeServerIdx}
+          onForceProxy={() => setForceProxyNonce((n) => n + 1)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Error overlay with an automatic background retry countdown + all the
+ * escape hatches (manual retry, server switch, force-proxy).
+ */
+function AutoRetryOverlay({
+  error,
+  autoRetryIn,
+  setAutoRetryIn,
+  onRetry,
+  onRotateServer,
+  serverNames,
+  activeServerIdx,
+  onForceProxy,
+}: {
+  error: string;
+  autoRetryIn: number | null;
+  setAutoRetryIn: (n: number | null) => void;
+  onRetry: () => void;
+  onRotateServer?: (idx: number) => void;
+  serverNames?: string[];
+  activeServerIdx?: number;
+  onForceProxy: () => void;
+}) {
+  const AUTO_RETRY_SECONDS = 15;
+  useEffect(() => {
+    if (autoRetryIn === null) setAutoRetryIn(AUTO_RETRY_SECONDS);
+    if (autoRetryIn === null) return;
+    if (autoRetryIn <= 0) {
+      onRetry();
+      return;
+    }
+    const t = window.setTimeout(() => setAutoRetryIn(autoRetryIn - 1), 1000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRetryIn]);
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
+      <p className="text-xs text-gray-300 max-w-sm">{error}</p>
+      {autoRetryIn !== null && autoRetryIn > 0 && (
+        <p className="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
+          <Loader2 size={12} className="animate-spin" /> Auto-retrying in{" "}
+          {autoRetryIn}s…
+        </p>
+      )}
+      <div className="flex flex-wrap justify-center gap-2">
+        <button
+          onClick={onRetry}
+          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium flex items-center gap-1.5"
+        >
+          <RotateCcw size={13} /> Retry now
+        </button>
+        {onRotateServer &&
+          serverNames &&
+          serverNames.length > 1 &&
+          serverNames.map((name, idx) => (
+            <button
+              key={idx}
+              onClick={() => onRotateServer(idx)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${idx === activeServerIdx ? "bg-amber-500 text-white" : "bg-white/10 hover:bg-white/20 text-white"}`}
+            >
+              {name}
+            </button>
+          ))}
+        {/* Force-proxy escape hatch: skip the bare-URL reachability check
+            and go straight to the same-origin proxy (the Cloudflare edge
+            fetches playlist+segments server-side). */}
+        <button
+          onClick={onForceProxy}
+          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
+        >
+          Try proxy
+        </button>
+      </div>
     </div>
   );
 }
@@ -1288,6 +1420,15 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   onRotateServer={rotateServer}
                   activeServerIdx={activeServerIdx}
                   serverNames={streamInfo.servers?.map((s) => s.name) ?? []}
+                  onAllFailed={() => {
+                    // Guaranteed video fallback: when every vixcloud server
+                    // is exhausted, automatically open the trailer so the
+                    // user always sees moving video instead of a dead error.
+                    if (detail && detail.trailers.length > 0) {
+                      setActiveTrailer(0);
+                      setTrailerOpen(true);
+                    }
+                  }}
                 />
               ) : (
                 <>
