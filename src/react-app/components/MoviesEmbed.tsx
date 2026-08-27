@@ -59,6 +59,7 @@ import {
 const FAVORITES_KEY = "movie_favorites";
 const WATCHLIST_KEY = "movie_watchlist";
 const HISTORY_KEY = "movie_history";
+const AUTO_NEXT_KEY = "movie_auto_next";
 const HISTORY_MAX = 24;
 const FAVORITES_MAX = 100;
 
@@ -711,14 +712,13 @@ function buildEmbedCandidates(
   const isTv = type === "tv";
   const s = Math.max(1, seasonNum);
   const e = Math.max(1, episodeNum);
-  // Mirrors ranked BEST → fairly-good, always starting with the best.
-  // Verified 2026-08-27 live test: autoembed.co (Server 3) is the FIRST to
-  // actually auto-play content (videasy/vidsrc.me were loading black boxes
-  // that needed a manual click inside the iframe). Ranked #1 now.
-  // vidsrc.me + videasy.net are #2/#3 fallbacks. 2embed.cc is the #4 imdb
-  // fallback. vidsrc.cc, multiembed.mov, vidsrc.pro, vidsrc.xyz, embed.su
-  // are dead (403/DNS-dead) — excluded so rotation never lands on a dead
-  // mirror.
+  // Mirrors ranked BEST → fallback-for-similar-servers. Once a server
+  // (e.g. autoembed.co) LOADS it works — rotation STOPS so a working
+  // provider is never abandoned. autoembed.co is the verified-primary.
+  // vidsrc.me + videasy.net are the "similar-to-the-primary" fallbacks
+  // tried in order if the primary truly fails to load (not just slow).
+  // 2embed.cc is the imdb fallback. vidsrc.cc, multiembed.mov,
+  // vidsrc.pro, vidsrc.xyz, embed.su are dead (403/DNS-dead) — excluded.
   if (tmdb) {
     out.push({
       label: "Server 1 (Best)",
@@ -774,12 +774,20 @@ function EmbedFallbackPlayer({
   poster,
   onClose,
   onAllFailed,
+  onPrevEpisode,
+  onNextEpisode,
+  autoNext,
+  onToggleAutoNext,
 }: {
   candidates: EmbedCandidate[];
   title: string;
   poster?: string | null;
   onClose: () => void;
   onAllFailed?: () => void;
+  onPrevEpisode?: () => void;
+  onNextEpisode?: () => void;
+  autoNext?: boolean;
+  onToggleAutoNext?: () => void;
 }) {
   const [idx, setIdx] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -809,9 +817,11 @@ function EmbedFallbackPlayer({
   };
 
   // Dead-provider rotation: only rotates if the iframe NEVER fires onLoad,
-  // and only once the user clicked play (`started`). A loaded mirror player
-  // is the working video. Cross-origin iframes can't be inspected for
-  // inner-player health, so we rely on onLoad + a slow-load prompt.
+  // and only once the user clicked play (`started`). Once a server LOADS,
+  // it's the working server — rotation STOPS (the user asked for
+  // "stop auto-rotating once a working server is found"). Cross-origin
+  // iframes can't be inspected for inner-player health, so we rely on
+  // onLoad + a slow-load prompt.
   useEffect(() => {
     if (!started) return;
     setLoaded(false);
@@ -834,6 +844,8 @@ function EmbedFallbackPlayer({
 
   const handleLoaded = () => {
     setLoaded(true);
+    // A server loaded — stop auto-rotating. This is the user-requested
+    // "stop auto-rotating once a working server is found" behavior.
     if (deadTimerRef.current !== null) {
       window.clearTimeout(deadTimerRef.current);
       deadTimerRef.current = null;
@@ -918,7 +930,7 @@ function EmbedFallbackPlayer({
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent z-10" />
           <div className="pointer-events-none absolute bottom-1.5 right-2 z-20 w-24 h-7 rounded-lg bg-black/40 backdrop-blur-md" />
           <div className="pointer-events-none absolute bottom-1.5 left-2 z-20 w-20 h-7 rounded-lg bg-black/30 backdrop-blur-md" />
-          {/* Controls */}
+          {/* Controls: prev / AUTO NEXT toggle / next episode / close */}
           <button
             onClick={onClose}
             className="absolute top-2 right-28 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
@@ -926,12 +938,39 @@ function EmbedFallbackPlayer({
           >
             <X size={14} />
           </button>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5">
             {!loaded && (
               <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/90">
                 <Loader2 size={11} className="animate-spin" /> Loading{" "}
                 {current.label}…
               </span>
+            )}
+            {onPrevEpisode && (
+              <button
+                onClick={onPrevEpisode}
+                className="rounded-full bg-black/70 hover:bg-black/90 px-2.5 py-1 text-[10px] text-white/90"
+                title="Previous episode"
+              >
+                ← Prev
+              </button>
+            )}
+            {onToggleAutoNext && (
+              <button
+                onClick={onToggleAutoNext}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${autoNext ? "bg-amber-500 text-black" : "bg-black/70 hover:bg-black/90 text-white/90"}`}
+                title="Toggle auto-next episode"
+              >
+                AUTO {autoNext ? "ON" : "OFF"}
+              </button>
+            )}
+            {onNextEpisode && (
+              <button
+                onClick={onNextEpisode}
+                className="rounded-full bg-black/70 hover:bg-black/90 px-2.5 py-1 text-[10px] text-white/90"
+                title="Next episode"
+              >
+                Next →
+              </button>
             )}
             {candidates.length > 1 && (
               <button
@@ -1001,6 +1040,11 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   // ── Season selector (series / TV shows / limited series) ─────────────────
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [seasonLoading, setSeasonLoading] = useState(false);
+
+  // ── AUTO NEXT episode (persisted in cloud) ────────────────────────────────
+  const [autoNext, setAutoNext] = useState(true);
+  // Current playing episode NUMBER (for prev/next + AUTO NEXT logic).
+  const [curEpNum, setCurEpNum] = useState(1);
 
   // ── Embed fallback (mirror providers, after native chain exhausts) ──────
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
@@ -1092,15 +1136,17 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     cloudLoadCompleteRef.current = false;
     (async () => {
       try {
-        const [fav, wl, hist] = await Promise.all([
+        const [fav, wl, hist, autoNextVal] = await Promise.all([
           cloudStorageService.get<MovieItem[]>(FAVORITES_KEY),
           cloudStorageService.get<MovieItem[]>(WATCHLIST_KEY),
           cloudStorageService.get<MovieItem[]>(HISTORY_KEY),
+          cloudStorageService.get<boolean>(AUTO_NEXT_KEY),
         ]);
         if (cancelled) return;
         if (Array.isArray(fav)) setFavorites(fav);
         if (Array.isArray(wl)) setWatchlist(wl);
         if (Array.isArray(hist)) setHistory(hist);
+        if (typeof autoNextVal === "boolean") setAutoNext(autoNextVal);
       } catch {
         // ignore
       } finally {
@@ -1290,6 +1336,75 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       setPlayerLoading(false);
     };
     void resolveAndEmbed();
+  };
+
+  const toggleAutoNext = () => {
+    setAutoNext((prev) => {
+      const next = !prev;
+      if (cloudLoadCompleteRef.current && user?.id) {
+        localModifiedRef.current = true;
+        cloudStorageService.set<boolean>(AUTO_NEXT_KEY, next).catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  // Play an episode by its NUMBER. Returns true when a matching episode
+  // exists in the loaded season.
+  const playEpisodeByNumber = (epNum: number): boolean => {
+    if (!selected || !detail?.loadedSeason) return false;
+    const ep = (detail.loadedSeason.episodes ?? []).find(
+      (e) => e.number === epNum,
+    );
+    if (!ep) return false;
+    setSelectedEpisode(ep.id);
+    setCurEpNum(ep.number);
+    play(ep.id);
+    return true;
+  };
+
+  // Hierarchy of episodes: go to the NEXT episode (in current season, else
+  // first episode of the next season). Called by the Next button.
+  const goToNextEpisode = (): boolean => {
+    if (!detail) return false;
+    const season = detail.loadedSeason;
+    if (!season || season.episodes.length === 0) return false;
+    const maxNum = season.episodes[season.episodes.length - 1]?.number ?? 0;
+    if (curEpNum < maxNum) {
+      return playEpisodeByNumber(curEpNum + 1);
+    }
+    // End of season — find the season AFTER the loaded one and play its
+    // first episode.
+    const seasons = detail.seasons ?? [];
+    const nextSeason = seasons
+      .map((s) => s.number)
+      .filter((n) => n > (season.number ?? 0))
+      .sort((a, b) => a - b)[0];
+    if (!nextSeason) return false;
+    changeSeason(nextSeason);
+    return true;
+  };
+
+  // Go to the PREVIOUS episode (in current season, else last episode of the
+  // previous season).
+  const goToPrevEpisode = (): boolean => {
+    if (!detail) return false;
+    const season = detail.loadedSeason;
+    if (!season || season.episodes.length === 0) return false;
+    const minNum = season.episodes[0]?.number ?? 1;
+    if (curEpNum > minNum) {
+      return playEpisodeByNumber(curEpNum - 1);
+    }
+    // At the first episode of a season — go to the LAST episode of the
+    // previous season.
+    const seasons = detail.seasons ?? [];
+    const prevSeason = seasons
+      .map((s) => s.number)
+      .filter((n) => n < (season.number ?? 0))
+      .sort((a, b) => b - a)[0];
+    if (!prevSeason) return false;
+    changeSeason(prevSeason);
+    return true;
   };
 
   /** Guaranteed-video chain when the native HLS path is exhausted. */
@@ -1795,6 +1910,26 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                       );
                     }
                   }}
+                  onPrevEpisode={
+                    selected.type === "tv" && detail
+                      ? () => {
+                          goToPrevEpisode();
+                        }
+                      : undefined
+                  }
+                  onNextEpisode={
+                    selected.type === "tv" && detail
+                      ? () => {
+                          goToNextEpisode();
+                        }
+                      : undefined
+                  }
+                  autoNext={autoNext}
+                  onToggleAutoNext={
+                    selected.type === "tv" && detail
+                      ? toggleAutoNext
+                      : undefined
+                  }
                 />
               ) : streamInfo ? (
                 <MoviePlayer
