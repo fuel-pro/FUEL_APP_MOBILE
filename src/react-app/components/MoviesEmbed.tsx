@@ -274,6 +274,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
+  // ── Trailer (in-app YouTube preview modal) ────────────────────────────────
+  const [trailerOpen, setTrailerOpen] = useState(false);
+  const [activeTrailer, setActiveTrailer] = useState(0);
+
   // ── Cloud-synced favorites / watchlist / history ──────────────────────────
   const [favorites, setFavorites] = useState<MovieItem[]>([]);
   const [watchlist, setWatchlist] = useState<MovieItem[]>([]);
@@ -407,6 +411,8 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setPlayerUrl(null);
     setStreamInfo(null);
     setSelectedEpisode(null);
+    setTrailerOpen(false);
+    setActiveTrailer(0);
     setDetailLoading(true);
     void fetchMovieDetail(item.id, item.slug).then((d) => {
       // track in continue-watching history
@@ -911,16 +917,83 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                   {isWatchlisted(selected) ? "Watchlisted" : "Watchlist"}
                 </button>
                 {detail?.trailers && detail.trailers.length > 0 && (
-                  <a
-                    href={`https://www.youtube-nocookie.com/embed/${detail.trailers[0]}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => {
+                      setActiveTrailer(0);
+                      setTrailerOpen(true);
+                    }}
                     className="flex-1 min-w-[120px] py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/25"
                   >
                     <MonitorPlay size={13} /> Trailer
-                  </a>
+                    {detail.trailers.length > 1 && (
+                      <span className="text-[10px] opacity-70">
+                        ({detail.trailers.length})
+                      </span>
+                    )}
+                  </button>
                 )}
               </div>
+
+              {/* In-app trailer preview modal (YouTube embed) */}
+              {trailerOpen &&
+                detail?.trailers &&
+                detail.trailers.length > 0 && (
+                  <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3 sm:p-6"
+                    onClick={() => setTrailerOpen(false)}
+                    role="dialog"
+                    aria-label={`${selected.name} trailer`}
+                  >
+                    <div
+                      className="relative w-full max-w-3xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold text-white truncate">
+                          {selected.name}
+                          <span className="ml-2 text-[11px] font-normal text-red-400">
+                            Trailer{" "}
+                            {detail.trailers.length > 1
+                              ? `${activeTrailer + 1} of ${detail.trailers.length}`
+                              : ""}
+                          </span>
+                        </p>
+                        <button
+                          onClick={() => setTrailerOpen(false)}
+                          className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                          title="Close trailer"
+                          aria-label="Close trailer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10">
+                        <iframe
+                          key={detail.trailers[activeTrailer]}
+                          src={`https://www.youtube-nocookie.com/embed/${detail.trailers[activeTrailer]}?autoplay=1&rel=0`}
+                          className="absolute inset-0 w-full h-full"
+                          allow="autoplay; encrypted-media; picture-in-picture"
+                          allowFullScreen
+                          frameBorder="0"
+                          title={`${selected.name} trailer`}
+                        />
+                      </div>
+                      {detail.trailers.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {detail.trailers.map((t, i) => (
+                            <button
+                              key={t}
+                              onClick={() => setActiveTrailer(i)}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${activeTrailer === i ? "bg-red-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"}`}
+                            >
+                              Trailer {i + 1}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
             </div>
           </div>
         </div>
