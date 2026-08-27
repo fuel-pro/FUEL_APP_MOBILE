@@ -765,9 +765,12 @@ function EmbedFallbackPlayer({
 
   const current = candidates[idx];
 
-  // If the iframe doesn't fire onLoad in 14s, auto-rotate to the next
-  // provider. Once it loads, assume it's working (cross-origin iframes can't
-  // be inspected for inner player health).
+  // Rotate ONLY if the iframe never fires onLoad (a truly dead provider).
+  // Once onLoad fires we keep the embed MOUNTED — a loaded mirror player is
+  // the working video; rotating away from it would discard a working source.
+  // (Cross-origin iframes can't be inspected for inner-player health, and
+  // these providers need a user click on their own play button, so "no
+  // autoplay within N seconds" is NOT a reliable failure signal.)
   useEffect(() => {
     setLoaded(false);
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -885,6 +888,13 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
 
   // ── Embed fallback (mirror providers, after native chain exhausts) ──────
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
+
+  // Always-current ref for the loaded detail. `play()` + `handleNativeExhausted`
+  // read this instead of the `detail` state so the embed fallback keys by the
+  // CORRECT tmdbId/imdbId for the title actually being played (not a stale
+  // closure from a previously-viewed title — which would point the mirrors at
+  // the WRONG movie/series and produce a dead player).
+  const detailRef = useRef<MovieDetail | null>(null);
 
   // ── Trailer (in-app YouTube preview modal) ────────────────────────────────
   const [trailerOpen, setTrailerOpen] = useState(false);
@@ -1068,6 +1078,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const openDetail = (item: MovieItem) => {
     setSelected(item);
     setDetail(null);
+    detailRef.current = null;
     setStreamInfo(null);
     setSelectedEpisode(null);
     setTrailerOpen(false);
@@ -1091,6 +1102,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
         });
       }
       setDetail(d);
+      detailRef.current = d;
       setDetailLoading(false);
     });
   };
@@ -1104,7 +1116,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setStreamError(null);
     setSeasonLoading(true);
     void fetchMovieDetail(selected.id, selected.slug, seasonNum).then((d) => {
-      if (d) setDetail(d);
+      if (d) {
+        setDetail(d);
+        detailRef.current = d;
+      }
       setSeasonLoading(false);
     });
   };
@@ -1120,7 +1135,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setStreamError(null);
     setUseEmbedFallback(false);
     setActiveServerIdx(0); // Reset to first server on new play
-    void fetchMovieStreams(selected.id, episodeId).then((info) => {
+    void fetchMovieStreams(selected.id, episodeId).then(async (info) => {
       if (info?.playlistUrl) {
         setStreamInfo(info);
         setPlayerLoading(false);
@@ -1128,8 +1143,21 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       }
       // No direct HLS stream info at all — skip straight to the mirror
       // embed fallback (branding hidden behind blur overlays), else show a
-      // retry prompt.
-      const d = detail;
+      // retry prompt. Use detailRef (always the CURRENT title) so the embed
+      // keys by the correct TMDB/IMDb id, not a stale closure. If the detail
+      // hasn't finished loading yet (user clicked Watch Now very fast), wait
+      // for it so we still resolve the correct ids.
+      let d = detailRef.current;
+      if (!d && selected) {
+        d = await fetchMovieDetail(selected.id, selected.slug).catch(
+          () => null,
+        );
+        if (d) {
+          setDetail(d);
+          detailRef.current = d;
+          setSelectedSeason(d.loadedSeason?.number ?? null);
+        }
+      }
       if (d && (d.tmdbId || d.imdbId)) {
         setUseEmbedFallback(true);
       } else {
@@ -1144,7 +1172,7 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
 
   /** Guaranteed-video chain when the native HLS path is exhausted. */
   const handleNativeExhausted = () => {
-    const d = detail;
+    const d = detailRef.current;
     if (d && (d.tmdbId || d.imdbId)) {
       setUseEmbedFallback(true);
       setStreamInfo(null);
