@@ -296,10 +296,12 @@ async function fetchSuStreamInfoFromEmbed(
   const rawUrl = active?.url || baseUrl;
   if (!rawUrl || !token) return null;
   const sep = rawUrl.includes("?") ? "&" : "?";
+  // The upstream player appends h=1 when the embed allows Full HD.
   const playlistUrl =
     `${rawUrl}${sep}token=${encodeURIComponent(token)}` +
     `&expires=${encodeURIComponent(expires)}` +
-    (asn ? `&asn=${encodeURIComponent(asn)}` : "");
+    (asn ? `&asn=${encodeURIComponent(asn)}` : "") +
+    (fhdMatch?.[1] === "true" ? "&h=1" : "");
 
   return {
     playlistUrl,
