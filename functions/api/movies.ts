@@ -369,9 +369,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         `/${SU_LOCALE}/titles/${id}-${encodeURIComponent(slug)}`,
       );
       const t: SuTitle | undefined = page?.props?.title;
-      if (!t) return json({ title: null });
+      if (!t) return json({ __marker: "trailer-v3", title: null });
       const loadedSeason = page?.props?.loadedSeason;
       return json({
+        __marker: "trailer-v3",
         title: {
           ...normalizeTitle(t),
           plot: t.plot ?? null,
@@ -396,6 +397,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             );
             return found ? [found] : [];
           })(),
+          __debugRawTrailers: (t.trailers || []).map(
+            (tr) => tr.youtube_id || tr.url,
+          ),
           seasons: (t.seasons || []).map((s) => ({
             id: s.id,
             number: s.number,
