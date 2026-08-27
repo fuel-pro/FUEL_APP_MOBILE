@@ -712,17 +712,19 @@ function buildEmbedCandidates(
   const s = Math.max(1, seasonNum);
   const e = Math.max(1, episodeNum);
   // Mirrors ranked BEST → fairly-good, always starting with the best.
-  // Verified 2026-08-27: player.videasy.net (now .to) is the fastest,
-  // cleanest, most reliable (plays the actual video quickly, no ads).
-  // vidsrc.me + autoembed.co are solid #2/#3. 2embed.cc is a workable #4.
-  // vidsrc.cc, multiembed.mov, vidsrc.pro, vidsrc.xyz, embed.su are dead
-  // (403/DNS-dead) — excluded so rotation never lands on a dead mirror.
+  // Verified 2026-08-27 live test: autoembed.co (Server 3) is the FIRST to
+  // actually auto-play content (videasy/vidsrc.me were loading black boxes
+  // that needed a manual click inside the iframe). Ranked #1 now.
+  // vidsrc.me + videasy.net are #2/#3 fallbacks. 2embed.cc is the #4 imdb
+  // fallback. vidsrc.cc, multiembed.mov, vidsrc.pro, vidsrc.xyz, embed.su
+  // are dead (403/DNS-dead) — excluded so rotation never lands on a dead
+  // mirror.
   if (tmdb) {
     out.push({
       label: "Server 1 (Best)",
       url: isTv
-        ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}`
-        : `https://player.videasy.net/movie/${tmdb}`,
+        ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
+        : `https://autoembed.co/movie/tmdb/${tmdb}`,
     });
     out.push({
       label: "Server 2",
@@ -733,8 +735,8 @@ function buildEmbedCandidates(
     out.push({
       label: "Server 3",
       url: isTv
-        ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
-        : `https://autoembed.co/movie/tmdb/${tmdb}`,
+        ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}`
+        : `https://player.videasy.net/movie/${tmdb}`,
     });
   }
   if (imdb) {
