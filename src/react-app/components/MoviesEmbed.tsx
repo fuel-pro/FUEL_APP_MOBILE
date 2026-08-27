@@ -89,7 +89,7 @@ function MoviePlayer({
   title: string;
   poster: string | null;
   onClose: () => void;
-  onUseFallback: () => void;
+  onUseFallback?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -265,12 +265,14 @@ function MoviePlayer({
             >
               <RotateCcw size={13} /> Retry
             </button>
-            <button
-              onClick={onUseFallback}
-              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
-            >
-              Use fallback player
-            </button>
+            {onUseFallback && (
+              <button
+                onClick={onUseFallback}
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium"
+              >
+                Use fallback player
+              </button>
+            )}
           </div>
         </div>
       )}
