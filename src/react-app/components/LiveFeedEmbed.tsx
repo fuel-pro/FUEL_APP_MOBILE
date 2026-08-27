@@ -204,6 +204,9 @@ function ChannelPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const hlsRef = useRef<import("hls.js").default | null>(null);
+  const ytPlayerRef = useRef<{
+    destroy: () => void;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [levels, setLevels] = useState<QualityLevel[]>([]);
@@ -562,6 +565,94 @@ function ChannelPlayer({
     onCaptionFallback?.();
   };
 
+  // ─── YOUTUBE IFRAME API — error detection + auto-advance ─────────────
+  // The plain <iframe> embed cannot report playback errors (cross-origin).
+  // Using the official IFrame API lets us detect "Video unavailable" /
+  // embedding-disabled / region-blocked errors and auto-advance to the next
+  // playable channel instead of dead-ending on a black screen.
+  useEffect(() => {
+    if (!ytId) return;
+    let destroyed = false;
+    let player: { destroy: () => void } | null = null;
+
+    const initPlayer = () => {
+      if (destroyed) return;
+      // Wait for the YouTube IFrame API to be ready.
+      const YT = (
+        window as unknown as {
+          YT?: {
+            Player: new (
+              el: HTMLElement,
+              opts: {
+                videoId: string;
+                playerVars?: Record<string, string | number>;
+                events?: {
+                  onReady?: (e: { target: { playVideo: () => void } }) => void;
+                  onError?: (e: { data: number }) => void;
+                };
+              },
+            ) => { destroy: () => void };
+            PlayerState?: { ENDED: number };
+          };
+        }
+      ).YT;
+      if (!YT?.Player) {
+        // API not loaded yet — retry shortly.
+        setTimeout(initPlayer, 300);
+        return;
+      }
+      const container = document.getElementById(`yt-player-${channel.nanoid}`);
+      if (!container) return;
+      player = new YT.Player(container, {
+        videoId: ytId,
+        playerVars: {
+          autoplay: 1,
+          mute: 1,
+          rel: 0,
+          cc_load_policy: 1,
+          cc_lang_pref: subtitleLangRef.current,
+          playsinline: 1,
+          enablejsapi: 1,
+        },
+        events: {
+          onReady: (e) => {
+            e.target.playVideo();
+          },
+          onError: (e) => {
+            // Error codes: 2=invalid param, 5=HTML5 error, 100=not found,
+            // 101/150=embedding disabled/region blocked.
+            if (!destroyed) {
+              setError(
+                "This station's stream is currently unavailable. Trying next channel…",
+              );
+              // Auto-advance to the next playable channel.
+              if (onCaptionFallback) {
+                onCaptionFallback();
+              } else {
+                onNext();
+              }
+            }
+          },
+        },
+      });
+      ytPlayerRef.current = player;
+    };
+
+    initPlayer();
+    return () => {
+      destroyed = true;
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch {
+          /* */
+        }
+        ytPlayerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytId, channel.nanoid, retryKey]);
+
   const kindBadge = ytId ? "YouTube" : isAudio ? "Radio" : "HLS";
   const maxHeight = levels[0]?.height || 0;
   const accentText =
@@ -766,13 +857,9 @@ function ChannelPlayer({
       {/* Player body */}
       <div className="flex-1 relative bg-black">
         {ytId ? (
-          <iframe
-            key={`${channel.nanoid}-${retryKey}-${subtitleLang}`}
-            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&rel=0&cc_load_policy=1&cc_lang_pref=${encodeURIComponent(subtitleLang)}`}
-            title={channel.name}
-            className="absolute inset-0 w-full h-full border-0"
-            allow="accelerometer; autoplay; encrypted-media; fullscreen; picture-in-picture"
-            allowFullScreen
+          <div
+            id={`yt-player-${channel.nanoid}`}
+            className="absolute inset-0 w-full h-full"
           />
         ) : isAudio ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 bg-gradient-to-br from-gray-900 via-gray-950 to-black">
