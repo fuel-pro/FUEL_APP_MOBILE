@@ -9531,3 +9531,58 @@ The vixcloud.co /playlist/{id} endpoint + the sc-u9-XX.vix-content.net segment C
 
 ### CF Pages Functions bundle cache (recurring issue)
 wrangler pages deploy sometimes serves a STALE Functions bundle for minutes after deploy (verified: new code in compiled output but old code served). Propagates on its own within ~2 min — always re-verify with a wait, do not chase phantom bugs.
+
+## Session 2026-08-27 — Movies player: rotation-skip fix + mirror-player fallback (DEPLOYED LIVE, commit da1b016)
+
+**User report**: "it keeps rotating sources every second, thus unsure if it is
+skipping a working source, can include sources displaying branding of another
+site, but hide the branding with a blur or overlay."
+
+### Root cause of rapid rotation
+A single failing candidate could emit MULTIPLE fatal errors (hls.js manifest-
+retry fail + level fail + several frag fails), and EACH one advanced the
+rotation to the next candidate — so the rotation visibly skipped through
+sources every second, and a genuinely-working-but-slow source could be
+skipped before its watchdog window elapsed.
+
+### Fixes (src/react-app/components/MoviesEmbed.tsx)
+1. **busy-guard debounce**: `failState.busy` set on the first failure of a
+   candidate; additional errors for the SAME candidate are ignored; the flag
+   is cleared when the next candidate attaches. One candidate = one advance.
+2. **Watchdog 9s -> 12s** so a working-but-slow source gets a full window.
+3. **Progress overlay labels the source class** ("direct server" vs "secure
+   relay") + states "Each source gets a full 12s window — nothing playable
+   is skipped."
+4. **EmbedFallbackPlayer (NEW)**: when the native HLS chain (direct bare
+   URLs -> /api/hls-proxy relay) is fully exhausted, the player automatically
+   swaps to mirror embed providers keyed by TMDB/IMDb id. Verified-working
+   providers only: vidsrc.to, autoembed.co, 2embed.cc (vidsrc.pro is a dead
+   redirect to a DNS-dead host; vidsrc.xyz + embed.su don't resolve —
+   excluded). Provider watermarks/branding are hidden behind blurred overlay
+   patches (top/bottom gradients + corner blur patches) + a clean title
+   gradient. Auto-rotates to the next mirror if one fails to load in 14s;
+   manual "Next source" pill. Final fallback opens the in-app trailer, so
+   the user ALWAYS ends on moving video.
+5. **CSP frame-src** extended for the verified mirror hosts (index.html).
+
+### Recovery chain (guaranteed video, no dead ends)
+native HLS (direct servers -> secure relay proxy) -> mirror embed iframes
+(branding blurred) -> in-app YouTube trailer.
+
+### Verified LIVE (Cloudflare preview 50c88565 + main alias)
+- Movie "Mutiny": rotation now methodical (12s windows, no skip); landed on
+  the secure-relay proxy and PLAYED continuously (multiple distinct frames).
+- Mirror fallback vidsrc.to/embed/movie/155: rendered real player + PLAYED
+  actual movie video (Dark Knight) with subtitles + quality selector.
+- Live TV regression check: 1581 channels load, YouTube embeds render (CSP
+  change safe).
+
+### Deploy state 2026-08-27 (commit da1b016)
+- GitHub main: da1b016 pushed.
+- Cloudflare Pages: LIVE (preview 50c88565 + main alias
+  fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100 on ALL
+  FOUR tokens; resets ~24h). GitHub integration (prodBranch=main) auto-
+  deploys da1b016 when the quota resets.
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success (clean Vite cache).
