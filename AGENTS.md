@@ -9487,3 +9487,25 @@ Realtime default-off is the single biggest egress reducer. The existing compress
 ### Supabase access notes (for future work)
 - Supabase **Management API** `POST api.supabase.com/v1/projects/{ref}/database/query` works with a PAT (`sbp_...` from `/workspace/API KEYS.txt`) + `User-Agent: Mozilla/5.0` header (Cloudflare 1010 block otherwise). The REST hostname (`db.{ref}.supabase.co`) does NOT resolve from this environment.
 - **Storage REST API** (the fix that worked for blob dedup) uses the **service_role** key (`Authorization: Bearer <service_role>` + `apikey`) against `https://<ref>.supabase.co/storage/v1/`.
+## Session 2026-08-27 — Realtime + Egress FOLLOW-UP: publication removal + confirmed quiescence
+
+**User reported Realtime still at ~4.67M and Egress ~14.11GB** the next day (over Free-plan limits). Investigation confirmed these are **CUMULATIVE historical totals** for the billing period, NOT ongoing growth:
+
+- **`app_kv` update count = 2,951,117** (cumulative) but the write rate is now **~52 writes in 3 hours** (quiescent). The historical 2.95M app_kv writes were being broadcast to realtime BEFORE the fix.
+- `realtime.subscription` shows 17,517 connect/disconnect events (each = a realtime message while connected) — historical from before realtime default-off.
+- **Storage confirmed healthy**: 224 objs / 308MB (`documents/` 198 @306MB, `logos/` 23 @1.7MB, `station-snapshots/` 3 @2.4KB). DB `app_kv` = 457 rows / 265KB data (tiny).
+- Migration 020 RPCs (`upsert_app_kv_versioned`, `update_app_kv_version` trigger) verified PRESENT on live DB.
+
+### New server-side lever applied this session
+**Removed tables from the `supabase_realtime` publication** (Management API `ALTER PUBLICATION`):
+- Previous turn removed `app_kv` (the 2.95M-write broadcast driver) → confirmed only `stations` + `station_members` remained.
+- Attempted empty `SET TABLE` = **invalid Postgres syntax** (400). Left `stations`/`station_members` in publication — they are LOW-write and their subscribers (`StationContext`/`station-share`) are gated off-by-default, so removal is marginal and dropping/recreating the system-managed publication risks Supabase realtime health. NOT done.
+- Net: **no app table broadcasts to realtime for the writes that matter (app_kv)** → realtime message count stops growing on new writes, for ALL connected clients immediately (server-side, no client reload required).
+
+### Verified LIVE (both hosts)
+- Cloudflare `fuel-app-mobile.pages.dev` founder chunk `founder-LA5QhA7C.js` contains `fuelpro_realtime_enabled` (default-OFF gate). ✓
+- Vercel `fuel-app-mobile.vercel.app` founder chunk `founder-L2djHUud.js` contains the marker. ✓
+- (Bundle hashes differ from prior session because a PARALLEL session merged News/Movies commits dcbbcac→c6171e8 and redeployed — no conflict with the realtime work.)
+
+### Conclusion / "in the future"
+The durable fixes (realtime default-OFF in `cloud-storage-service.ts`, gzip compression, 2s save debounce, 5-min cache + inflight dedup, `editor_audit` 5000-row RPC cap) are ALL live. Server-side, `app_kv` is out of the realtime publication, so even a future code regression that bombards app_kv cannot re-broadcast. If a future session needs cross-device realtime again, first re-add tables to `supabase_realtime` publication AND re-enable the client `fuelpro_realtime_enabled` key. Recommended NOT to re-enable until the org's grace-period usage resets (next billing period).
