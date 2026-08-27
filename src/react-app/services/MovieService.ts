@@ -159,6 +159,127 @@ export interface MovieStreamInfo {
   canPlayFHD: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Classics source — public-domain full movies (no CORS / IP block, no ads).
+// Always-playable fallback + extra catalog. Items carry the full playable
+// URL so the player can use them directly.
+// ---------------------------------------------------------------------------
+export interface ClassicMovieItem {
+  id: string; // classic:<identifier>
+  identifier: string;
+  name: string;
+  type: "classic";
+  year: string | null;
+  poster: string; // always services/img/<id>
+  plot: string | null;
+  videoUrl: string | null;
+  durationSec: number | null;
+}
+
+const CLASSICS_CACHE_TTL = 60 * 60 * 1000; // public-domain data changes rarely
+const classicsCache = new Map<string, { data: unknown; ts: number }>();
+
+async function getClassicJson<T>(url: string): Promise<T | null> {
+  const c = classicsCache.get(url);
+  if (c && Date.now() - c.ts < CLASSICS_CACHE_TTL) return c.data as T;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as T;
+    classicsCache.set(url, { data, ts: Date.now() });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+const CLASSIC_COLLECTION = "public_domain_films";
+
+/** Fetch the top public-domain classic films (curated by view count). */
+export async function fetchClassicMovies(limit = 48): Promise<ClassicMovieItem[]> {
+  const url =
+    `https://archive.org/advancedsearch.php` +
+    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION}`)}` +
+    `&fl[]=identifier,title,year,description` +
+    `&rows=${limit}&page=1&output=json&sort[]=downloads desc`;
+  const data = await getClassicJson<{ response?: { docs?: any[] } }>(url);
+  const docs = data?.response?.docs ?? [];
+  return docs.map((d) => ({
+    id: `classic:${d.identifier}`,
+    identifier: d.identifier,
+    name: String(d.title ?? d.identifier),
+    type: "classic",
+    year: d.year ? String(d.year).slice(0, 4) : null,
+    poster: `https://archive.org/services/img/${d.identifier}`,
+    plot: typeof d.description === "string" ? d.description : null,
+    videoUrl: null,
+    durationSec: null,
+  }));
+}
+
+/** Search public-domain classic films. */
+export async function searchClassicMovies(q: string): Promise<ClassicMovieItem[]> {
+  if (!q.trim()) return [];
+  const url =
+    `https://archive.org/advancedsearch.php` +
+    `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION} AND title:(${q})`)}` +
+    `&fl[]=identifier,title,year,description&rows=48&output=json`;
+  const data = await getClassicJson<{ response?: { docs?: any[] } }>(url);
+  const docs = data?.response?.docs ?? [];
+  return docs.map((d) => ({
+    id: `classic:${d.identifier}`,
+    identifier: d.identifier,
+    name: String(d.title ?? d.identifier),
+    type: "classic",
+    year: d.year ? String(d.year).slice(0, 4) : null,
+    poster: `https://archive.org/services/img/${d.identifier}`,
+    plot: typeof d.description === "string" ? d.description : null,
+    videoUrl: null,
+    durationSec: null,
+  }));
+}
+
+/**
+ * Fetch a classic film's playable mp4 URL + duration from the metadata API.
+ * Prefers the 512kb progressive mp4 (small, reliable); falls back to any mp4.
+ */
+export async function fetchClassicDetail(
+  identifier: string,
+): Promise<ClassicMovieItem | null> {
+  const url = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
+  const data = await getClassicJson<{ files?: any[]; metadata?: any }>(url);
+  if (!data) return null;
+  const files = data.files ?? [];
+  const vids = files.filter((f) =>
+    String(f?.name ?? "").toLowerCase().endsWith(".mp4"),
+  );
+  const pick =
+    vids.find((f) => /512kb/i.test(f?.name ?? "")) ??
+    vids.find((f) => !/part|sample|trailer/i.test(f?.name ?? "")) ??
+    vids[0];
+  const videoUrl = pick
+    ? `https://archive.org/download/${identifier}/${encodeURIComponent(
+        pick.name,
+      )}`
+    : null;
+  return {
+    id: `classic:${identifier}`,
+    identifier,
+    name: String(data.metadata?.title ?? identifier),
+    type: "classic",
+    year: data.metadata?.year
+      ? String(data.metadata.year).slice(0, 4)
+      : null,
+    poster: `https://archive.org/services/img/${identifier}`,
+    plot:
+      typeof data.metadata?.description === "string"
+        ? data.metadata.description
+        : null,
+    videoUrl,
+    durationSec: null,
+  };
+}
+
 /**
  * Fetch the raw HLS playlist info for NATIVE (hls.js) playback.
  * The vixcloud iframe is frame-ancestors-locked to the upstream site, but
@@ -194,6 +315,7 @@ export function prefetchMoviesInBackground(): void {
       fetchMovieCatalog(),
       fetchMovieBrowse("trending"),
       fetchMovieBrowse("latest"),
+      fetchClassicMovies(),
     ]);
   }, 3000);
 }

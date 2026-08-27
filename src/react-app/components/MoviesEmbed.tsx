@@ -35,6 +35,8 @@ import {
   RotateCcw,
   Settings2,
   Server,
+  Captions,
+  Volume2,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -44,10 +46,13 @@ import {
   searchMovies,
   fetchMovieDetail,
   fetchMovieStreams,
+  fetchClassicMovies,
+  fetchClassicDetail,
   type MovieItem,
   type MovieDetail,
   type MovieGenre,
   type MovieStreamInfo,
+  type ClassicMovieItem,
 } from "@/react-app/services/MovieService";
 
 // ─── Cloud keys ----------------------------------------------------------------
@@ -57,7 +62,7 @@ const HISTORY_KEY = "movie_history";
 const HISTORY_MAX = 24;
 const FAVORITES_MAX = 100;
 
-type ViewMode = "catalog" | "search" | "genre";
+type ViewMode = "catalog" | "search" | "genre" | "classics";
 type TypeFilter = "all" | "movie" | "tv";
 
 interface Props {
@@ -97,6 +102,20 @@ function MoviePlayer({
   const [showQuality, setShowQuality] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [showServers, setShowServers] = useState(false);
+  // Subtitle (CC) + audio-language tracks from the HLS master playlist.
+  const [subtitleTracks, setSubtitleTracks] = useState<
+    { id: number; name: string; lang: string }[]
+  >([]);
+  const [audioTracks, setAudioTracks] = useState<
+    { id: number; name: string; lang: string }[]
+  >([]);
+  const [activeSubtitle, setActiveSubtitle] = useState(-1); // -1 = off
+  const [activeAudio, setActiveAudio] = useState(-1); // -1 = default
+  const [showSubs, setShowSubs] = useState(false);
+  const [showAudio, setShowAudio] = useState(false);
+  // Escape hatch: skip the bare-URL reachability check and go straight to the
+  // same-origin proxy (user-triggered when their IP is blocked).
+  const [forceProxyNonce, setForceProxyNonce] = useState(0);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -104,6 +123,8 @@ function MoviePlayer({
     setError(null);
     setLevels([]);
     setCurrentLevel(-1);
+    setSubtitleTracks([]);
+    setAudioTracks([]);
 
     const onFatal = () =>
       setError(
@@ -111,21 +132,46 @@ function MoviePlayer({
           "Retry, or switch to another server below — we rotate between them automatically.",
       );
 
-    // Direct-only, no proxy: vixcloud segment tokens are IP-bound to whoever
-    // fetched the playlist, and the segment CDN (sc-*.vix-content.net) blocks
-    // ALL datacenter IPs (Cloudflare/AWS) — so a proxy-fetched playlist can
-    // parse but every segment then 403s forever (the "stuck at 0:00" bug).
-    // The ONLY path that can ever play is the user's own browser fetching
-    // playlist + segments directly (vixcloud serves residential/browser IPs).
-    //
-    // Server rotation: the upstream exposes multiple server URLs (Server1,
-    // Server2, …). Rotating re-fetches a NEW manifest whose segment tokens
-    // match the next server — the only real rescue for a dead endpoint.
-    const serverUrls = (streamInfo.servers || [])
+    // ── Candidate playlist URLs ────────────────────────────────────────────
+    // CRITICAL IP-BOUND TOKEN FIX: the serverless proxy fetched the playlist
+    // so its token/expires params are bound to the datacenter IP. Reattaching
+    // them to the bare server URLs made every segment 403 in the browser
+    // (the "stuck at 0:00" bug). The BARE server URLs (…?ub=1 / ?ab=1) are
+    // PUBLIC — the user's browser fetches them and vixcloud mints a playlist
+    // whose tokens are bound to the USER'S IP → playable. We verify the bare
+    // URL is reachable (and contains #EXTM3U) before handing it to hls.js,
+    // and fall back to the same-origin /api/hls-proxy if even that fails.
+    const bareFromPlaylist = (() => {
+      try {
+        const u = new URL(streamInfo.playlistUrl);
+        const variant = u.searchParams.get("ub")
+          ? "ub=1"
+          : u.searchParams.get("ab")
+            ? "ab=1"
+            : null;
+        return variant ? `${u.origin}${u.pathname}?${variant}` : null;
+      } catch {
+        return null;
+      }
+    })();
+    const bareServerUrls = (streamInfo.servers || [])
       .filter((s) => s.url)
-      .map((s) => {
-        // Reattach the auth params (token/expires/asn/h) that the playlist
-        // URL carries but the bare server URLs may be missing.
+      .map((s) => s.url);
+    const directCandidates = [
+      ...bareServerUrls,
+      ...(bareFromPlaylist && !bareServerUrls.includes(bareFromPlaylist)
+        ? [bareFromPlaylist]
+        : []),
+    ];
+    if (directCandidates.length === 0) {
+      directCandidates.push(streamInfo.playlistUrl);
+    }
+
+    // Proxy candidates — the Cloudflare edge can fetch playlist+segments
+    // server-side (vixcloud allows it), so this works even when the user's
+    // IP is blocked. Kept as fallback, tried only if direct fails.
+    const tokened = [streamInfo.playlistUrl, ...(streamInfo.servers || []).filter((s) => s.url).map((s) => {
+      try {
         const pl = new URL(streamInfo.playlistUrl);
         const u = new URL(s.url, pl.origin);
         for (const key of ["token", "expires", "asn", "h"]) {
@@ -133,22 +179,36 @@ function MoviePlayer({
           if (v && !u.searchParams.get(key)) u.searchParams.set(key, v);
         }
         return u.href;
-      });
-    if (serverUrls.length === 0) serverUrls.push(streamInfo.playlistUrl);
-    let serverIdx = 0;
-    const rotateServer = (): boolean => {
-      if (serverIdx >= serverUrls.length - 1) return false;
-      serverIdx += 1;
+      } catch {
+        return s.url;
+      }
+    })];
+    const proxyCandidates = tokened.map(
+      (u) => `/api/hls-proxy?url=${encodeURIComponent(u)}`,
+    );
+
+    const candidates =
+      forceProxyNonce > 0
+        ? proxyCandidates // user forced proxy — skip the bare-URL checks
+        : [...directCandidates, ...proxyCandidates];
+    let candIdx = 0;
+    let destroyed = false;
+
+    const rotate = (): boolean => {
+      if (candIdx >= candidates.length - 1) return false;
+      candIdx += 1;
       hlsRef.current?.destroy();
       hlsRef.current = null;
-      attachHls(serverUrls[serverIdx]);
+      void attach(candidates[candIdx]);
       return true;
     };
-    // Hard timeout — if nothing plays within 18s, surface the error instead
-    // of spinning forever.
+
+    // Hard timeout — rotate (or error) instead of spinning forever.
     const playTimeout = window.setTimeout(() => {
-      if (video.readyState === 0 && video.paused) onFatal();
-    }, 18000);
+      if (video.readyState === 0 && video.paused) {
+        if (!rotate()) onFatal();
+      }
+    }, 15000);
     const clearPlayTimeout = () => window.clearTimeout(playTimeout);
     const onPlaying = () => clearPlayTimeout();
     video.addEventListener("playing", onPlaying);
@@ -159,15 +219,12 @@ function MoviePlayer({
         manifestLoadingTimeOut: 12000,
         levelLoadingTimeOut: 12000,
         fragLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 2,
-        levelLoadingMaxRetry: 2,
+        manifestLoadingMaxRetry: 1,
+        levelLoadingMaxRetry: 1,
         fragLoadingMaxRetry: 2,
-        manifestLoadingRetryDelay: 800,
-        levelLoadingRetryDelay: 800,
+        manifestLoadingRetryDelay: 600,
+        levelLoadingRetryDelay: 600,
         fragLoadingRetryDelay: 800,
-        // Some CDN edges 403 requests that carry a foreign Referer header.
-        // fetchSetup strips the Referer entirely + omits credentials so the
-        // segment requests look like anonymous cross-origin fetches.
         fetchSetup: (context, initParams) =>
           new Request(context.url, {
             ...initParams,
@@ -189,73 +246,106 @@ function MoviePlayer({
         setLevels(lv);
         video.play().catch(() => {});
       });
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_e, data) => {
+        setSubtitleTracks(
+          (data.subtitleTracks || []).map((t, i) => ({
+            id: i,
+            name: t.name || t.lang || `Track ${i + 1}`,
+            lang: t.lang || "",
+          })),
+        );
+      });
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_e, data) => {
+        setAudioTracks(
+          (data.audioTracks || []).map((t, i) => ({
+            id: i,
+            name: t.name || t.lang || `Audio ${i + 1}`,
+            lang: t.lang || "",
+          })),
+        );
+      });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          const d = data.details as string;
-          const isFrag =
-            d.includes("frag") || d.includes("key") || d.includes("audioTrack");
-          // Segment/key errors: retrying the SAME URL is pointless (token is
-          // dead or the CDN blocks us) — rotate to the next server's manifest
-          // (fresh token set), else surface the error.
-          if (isFrag) {
-            if (rotateServer()) return;
-            onFatal();
-            return;
-          }
-          // Manifest/level errors: rotate, else fatal. Never infinite
-          // startLoad (that was the eternal-spinner bug).
-          if (rotateServer()) return;
-          onFatal();
-          return;
-        }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls.recoverMediaError();
           return;
         }
-        onFatal();
+        // Any fatal network error: rotate to the next candidate (next bare
+        // server URL, then the proxy fallbacks), else surface the error.
+        if (!rotate()) onFatal();
       });
       return hls;
     };
 
-    const cleanup = () => {
+    const attach = async (src: string): Promise<void> => {
+      if (destroyed) return;
+      const isProxy = src.startsWith("/api/");
+      if (!isProxy) {
+        // Verify the bare URL is reachable from THIS browser first —
+        // otherwise hls.js would loop on a 403 forever.
+        try {
+          const res = await fetch(src, {
+            referrerPolicy: "no-referrer",
+            credentials: "omit",
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          const text = await res.text();
+          if (!text.includes("#EXTM3U")) throw new Error("not-m3u8");
+        } catch {
+          if (!rotate()) onFatal();
+          return;
+        }
+      }
+      if (Hls.isSupported()) {
+        attachHls(src);
+        return;
+      }
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        video.play().catch(() => {});
+        video.addEventListener(
+          "error",
+          () => {
+            if (!rotate()) onFatal();
+          },
+          { once: true },
+        );
+        return;
+      }
+      onFatal();
+    };
+
+    void attach(candidates[0]);
+
+    return () => {
+      destroyed = true;
       clearPlayTimeout();
       video.removeEventListener("playing", onPlaying);
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-
-    if (Hls.isSupported()) {
-      attachHls(serverUrls[0]);
-      return cleanup;
-    }
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS — direct, rotate on error, then fatal.
-      video.src = serverUrls[0];
-      video.play().catch(() => {});
-      const onErr = () => {
-        if (rotateServer()) {
-          video.src = serverUrls[serverIdx];
-          video.play().catch(() => {});
-          return;
-        }
-        onFatal();
-      };
-      video.addEventListener("error", onErr);
-      return () => {
-        clearPlayTimeout();
-        video.removeEventListener("playing", onPlaying);
-        video.removeEventListener("error", onErr);
-      };
-    }
-    onFatal();
-    return cleanup;
-  }, [streamInfo, retryNonce]);
+  }, [streamInfo, retryNonce, forceProxyNonce]);
 
   const setQuality = (hlsIndex: number) => {
     setCurrentLevel(hlsIndex);
     if (hlsRef.current) hlsRef.current.currentLevel = hlsIndex;
     setShowQuality(false);
+  };
+
+  const setSub = (trackId: number) => {
+    setActiveSubtitle(trackId);
+    if (hlsRef.current) {
+      hlsRef.current.subtitleTrack = trackId;
+      hlsRef.current.subtitleDisplay = trackId >= 0;
+    }
+    setShowSubs(false);
+  };
+
+  const setAudio = (trackId: number) => {
+    setActiveAudio(trackId);
+    if (hlsRef.current && trackId >= 0) hlsRef.current.audioTrack = trackId;
+    setShowAudio(false);
   };
 
   return (
@@ -340,6 +430,66 @@ function MoviePlayer({
           )}
         </div>
       )}
+      {/* Subtitle (CC) selector */}
+      {subtitleTracks.length > 0 && (
+        <div className="absolute bottom-2 left-2 z-10">
+          <button
+            onClick={() => setShowSubs((v) => !v)}
+            className={`p-1.5 rounded-lg bg-black/60 hover:bg-black/80 flex items-center gap-1 text-[10px] ${activeSubtitle >= 0 ? "text-amber-400" : "text-white"}`}
+            title="Subtitles"
+          >
+            <Captions size={13} />
+            CC {activeSubtitle >= 0 ? "on" : "off"}
+          </button>
+          {showSubs && (
+            <div className="absolute bottom-9 left-0 rounded-lg bg-black/90 border border-white/10 py-1 min-w-[130px]">
+              <button
+                onClick={() => setSub(-1)}
+                className={`block w-full text-left px-3 py-1.5 text-[11px] ${activeSubtitle === -1 ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+              >
+                Off
+              </button>
+              {subtitleTracks.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSub(t.id)}
+                  className={`block w-full text-left px-3 py-1.5 text-[11px] ${activeSubtitle === t.id ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Audio-language selector */}
+      {audioTracks.length > 1 && (
+        <div className="absolute bottom-2 left-[86px] z-10">
+          <button
+            onClick={() => setShowAudio((v) => !v)}
+            className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80 flex items-center gap-1 text-[10px]"
+            title="Audio language"
+          >
+            <Volume2 size={13} />
+            {audioTracks.find((t) => t.id === activeAudio)?.name ??
+              audioTracks[0]?.name ??
+              "Audio"}
+          </button>
+          {showAudio && (
+            <div className="absolute bottom-9 left-0 rounded-lg bg-black/90 border border-white/10 py-1 min-w-[130px]">
+              {audioTracks.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setAudio(t.id)}
+                  className={`block w-full text-left px-3 py-1.5 text-[11px] ${activeAudio === t.id ? "text-amber-400" : "text-white/80 hover:bg-white/10"}`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {/* Error overlay */}
       {error && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
@@ -365,6 +515,16 @@ function MoviePlayer({
                   {name}
                 </button>
               ))}
+            {/* Force-proxy escape hatch: skip the bare-URL reachability check
+                and go straight to the same-origin proxy (the Cloudflare edge
+                fetches playlist+segments server-side, so it works even when
+                the user's IP is blocked). */}
+            <button
+              onClick={() => setForceProxyNonce((n) => n + 1)}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
+            >
+              Try proxy
+            </button>
           </div>
         </div>
       )}
@@ -414,6 +574,16 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [history, setHistory] = useState<MovieItem[]>([]);
   const [showLibrary, setShowLibrary] = useState(false);
 
+  // ── Classics (public-domain, always playable) ────────────────────────────
+  const [classics, setClassics] = useState<ClassicMovieItem[]>([]);
+  const [classicsLoading, setClassicsLoading] = useState(false);
+  const [selectedClassic, setSelectedClassic] =
+    useState<ClassicMovieItem | null>(null);
+  const [classicDetail, setClassicDetail] = useState<ClassicMovieItem | null>(
+    null,
+  );
+  const [classicDetailLoading, setClassicDetailLoading] = useState(false);
+
   // 3-ref guard (anti flash-then-blank cloud-sync bug)
   const cloudLoadCompleteRef = useRef(false);
   const localModifiedRef = useRef(false);
@@ -440,6 +610,32 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       cancelled = true;
     };
   }, []);
+
+  // ── Load classics on mount (guaranteed-playable public-domain catalog) ────
+  useEffect(() => {
+    let cancelled = false;
+    setClassicsLoading(true);
+    void fetchClassicMovies().then((items) => {
+      if (!cancelled) {
+        setClassics(items);
+        setClassicsLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ── Open a classic film's detail (fetches the playable mp4 lazily) ────────
+  const openClassic = (item: ClassicMovieItem) => {
+    setSelectedClassic(item);
+    setClassicDetail(null);
+    setClassicDetailLoading(true);
+    void fetchClassicDetail(item.identifier).then((d) => {
+      setClassicDetail(d);
+      setClassicDetailLoading(false);
+    });
+  };
 
   // ── Cloud load: favorites + watchlist + history ───────────────────────────
   useEffect(() => {
@@ -514,6 +710,14 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setSearchResults(results);
   }, []);
 
+  // In classics view, filter the already-loaded classics list client-side.
+  const filteredClassics =
+    view === "classics" && searchQuery.trim()
+      ? classics.filter((c) =>
+          c.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+        )
+      : classics;
+
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchInput = (v: string) => {
     setSearchQuery(v);
@@ -523,6 +727,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
 
   // ── Surprise me ───────────────────────────────────────────────────────────
   const surprise = () => {
+    if (view === "classics" && classics.length > 0) {
+      openClassic(classics[Math.floor(Math.random() * classics.length)]);
+      return;
+    }
     const pool =
       view === "search"
         ? searchResults
@@ -604,23 +812,11 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     });
   };
 
-  // Manual server rotation — the user can pick a different server variant
-  // (the upstream exposes Server1/Server2, which are different CDN paths).
+  // Manual server rotation — MoviePlayer's internal rotation handles this
+  // (its candidates already cover all bare server URLs + proxy fallbacks),
+  // so we just track the active index for the UI.
   const rotateServer = (idx: number) => {
-    if (!selected || !streamInfo?.servers || idx === activeServerIdx) return;
     setActiveServerIdx(idx);
-    // Re-fetch streams for the selected server (the playlist URL is the
-    // active server's URL, so we just re-fetch with the same episode).
-    void fetchMovieStreams(
-      selected.id,
-      selectedEpisode ?? detail?.loadedSeason?.episodes?.[0]?.id ?? undefined,
-    ).then((info) => {
-      if (info?.playlistUrl) {
-        // The API returns the active server by default; we can't pick a
-        // specific one via the API, so we just refresh the stream info.
-        setStreamInfo(info);
-      }
-    });
   };
 
   // ── Favorites / watchlist toggles ─────────────────────────────────────────
@@ -669,9 +865,11 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
         ? browseTitles
         : catalogSliders.flatMap((s) => s.titles);
   const listToRender: MovieItem[] =
-    typeFilter === "all"
-      ? unfilteredList
-      : unfilteredList.filter((t) => t.type === typeFilter);
+    view === "classics"
+      ? [] // classics render from the `classics` array directly
+      : typeFilter === "all"
+        ? unfilteredList
+        : unfilteredList.filter((t) => t.type === typeFilter);
 
   const accentBorder =
     accent === "amber"
@@ -758,6 +956,16 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
           </button>
         ))}
         <span className="mx-1 w-px h-4 bg-gray-300 dark:bg-gray-600" />
+        {/* Classics pill — guaranteed-playable public-domain catalog */}
+        <button
+          onClick={() => {
+            setView("classics");
+            setActiveGenre(null);
+          }}
+          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${view === "classics" ? "bg-emerald-500 text-white" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25"}`}
+        >
+          Classics
+        </button>
         {["trending", "latest", "top10"].map((s) => (
           <button
             key={s}
@@ -807,7 +1015,37 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       )}
 
       {/* Movie grid */}
-      {loading ? (
+      {view === "classics" ? (
+        classicsLoading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500">
+            <Loader2 size={24} className="animate-spin" />
+            <span className="ml-2 text-sm">Loading classics…</span>
+          </div>
+        ) : filteredClassics.length === 0 ? (
+          <div className="text-center py-12">
+            <Film
+              size={40}
+              className="mx-auto text-gray-300 dark:text-gray-600 mb-3"
+            />
+            <p className="text-gray-500 text-sm">
+              {searchQuery.trim()
+                ? `No classics matching "${searchQuery}"`
+                : "No classics found"}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+            {filteredClassics.map((c) => (
+              <ClassicCard
+                key={c.id}
+                movie={c}
+                onOpen={() => openClassic(c)}
+                accent={accentBorder}
+              />
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500">
           <Loader2 size={24} className="animate-spin" />
           <span className="ml-2 text-sm">Loading movies…</span>
@@ -846,6 +1084,66 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
               accent={accentBorder}
             />
           ))}
+        </div>
+      )}
+
+      {/* ─────────────── CLASSIC DETAIL MODAL ─────────────── */}
+      {selectedClassic && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-3 sm:p-6"
+          onClick={() => setSelectedClassic(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto border border-gray-200 dark:border-gray-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    {selectedClassic.name}
+                    {selectedClassic.year && (
+                      <span className="text-xs font-normal text-gray-500">
+                        ({selectedClassic.year})
+                      </span>
+                    )}
+                  </h3>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1 w-fit mt-1">
+                    <Clapperboard size={10} /> Classic
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedClassic(null)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              {classicDetailLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-500">
+                  <Loader2 size={22} className="animate-spin" />
+                </div>
+              ) : classicDetail?.videoUrl ? (
+                <video
+                  src={classicDetail.videoUrl}
+                  poster={selectedClassic.poster}
+                  controls
+                  autoPlay
+                  className="w-full rounded-xl bg-black aspect-video"
+                  aria-label={selectedClassic.name}
+                />
+              ) : (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  {classicDetail ? "No playable video found." : "Loading…"}
+                </p>
+              )}
+              {classicDetail?.plot && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 line-clamp-5">
+                  {classicDetail.plot}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1361,6 +1659,52 @@ function MovieCard({
         {movie.name}
       </p>
       {movie.year && <p className="text-[10px] text-gray-400">{movie.year}</p>}
+    </div>
+  );
+}
+
+// ─── ClassicCard — public-domain classic film card ──────────────────────────
+function ClassicCard({
+  movie,
+  onOpen,
+  accent,
+}: {
+  movie: ClassicMovieItem;
+  onOpen: () => void;
+  accent: string;
+}) {
+  return (
+    <div className="group relative">
+      <div
+        onClick={onOpen}
+        className={`relative aspect-[2/3] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 ${accent} cursor-pointer transition-transform group-hover:scale-[1.02]`}
+      >
+        <img
+          src={movie.poster}
+          alt={movie.name}
+          loading="lazy"
+          className="w-full h-full object-cover"
+        />
+        {/* hover overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+          <div className="flex items-center gap-1">
+            <Play size={12} className="text-white fill-white" />
+            <span className="text-white text-[10px] font-semibold">
+              Watch free
+            </span>
+          </div>
+        </div>
+        {/* Classic badge */}
+        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] bg-black/70 text-white/90 font-medium flex items-center gap-1 uppercase">
+          <Clapperboard size={9} /> Classic
+        </span>
+      </div>
+      <p className="mt-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+        {movie.name}
+      </p>
+      {movie.year && (
+        <p className="text-[10px] text-gray-400">{movie.year}</p>
+      )}
     </div>
   );
 }
