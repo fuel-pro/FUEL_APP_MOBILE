@@ -123,9 +123,11 @@ export async function searchMovies(q: string): Promise<MovieItem[]> {
 export async function fetchMovieDetail(
   id: number,
   slug: string,
+  season?: number,
 ): Promise<MovieDetail | null> {
+  const s = season && season >= 1 ? `&season=${season}` : "";
   const data = await getJson<{ title: MovieDetail | null }>(
-    `/api/movies?mode=title&id=${id}&slug=${encodeURIComponent(slug)}`,
+    `/api/movies?mode=title&id=${id}&slug=${encodeURIComponent(slug)}${s}`,
   );
   return data?.title ?? null;
 }

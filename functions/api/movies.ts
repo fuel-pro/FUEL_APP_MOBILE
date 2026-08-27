@@ -361,12 +361,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return await viaVercelProxy(url.search);
     }
 
+    // ?season=N loads that season's episodes into loadedSeason (the default
+    // title page loads season 1). Used by the season selector in the UI.
     if (mode === "title") {
       const id = url.searchParams.get("id");
       const slug = url.searchParams.get("slug") || "";
       if (!id) return json({ error: "Missing id", title: null }, 400);
+      const seasonNum = Number(url.searchParams.get("season"));
       const page = await fetchSuPage(
-        `/${SU_LOCALE}/titles/${id}-${encodeURIComponent(slug)}`,
+        Number.isInteger(seasonNum) && seasonNum >= 1
+          ? `/${SU_LOCALE}/titles/${id}-${encodeURIComponent(slug)}/season-${seasonNum}`
+          : `/${SU_LOCALE}/titles/${id}-${encodeURIComponent(slug)}`,
       );
       const t: SuTitle | undefined = page?.props?.title;
       if (!t) return json({ title: null });

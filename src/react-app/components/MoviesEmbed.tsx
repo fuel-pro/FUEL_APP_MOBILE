@@ -113,7 +113,17 @@ function MoviePlayer({
         "This title's stream could not be loaded. Retry or use the fallback player.",
       );
 
-    if (Hls.isSupported()) {
+    // Direct-first: the vixcloud playlist endpoint sends
+    // `Access-Control-Allow-Origin: *` and serves regular (browser) IPs, so
+    // hls.js can fetch it cross-origin with NO proxy. The proxy is only the
+    // fallback for networks where vixcloud blocks the user's IP/ASN (the
+    // proxy's own datacenter IP may itself be blocked — vixcloud 403s both
+    // Cloudflare and AWS IPs on the playlist endpoint — so direct-first is
+    // the ONLY reliable path for most users).
+    let triedProxy = false;
+    let manifestParsed = false;
+
+    const attachHls = (src: string) => {
       const hls = new Hls({
         enableWorker: false,
         manifestLoadingTimeOut: 15000,
@@ -121,11 +131,10 @@ function MoviePlayer({
         fragLoadingTimeOut: 30000,
       });
       hlsRef.current = hls;
-      // Route through the same-origin HLS CORS proxy — vixcloud 403s direct
-      // browser cross-origin fetches of the playlist/rendition/segment chain.
-      hls.loadSource(movieHlsProxyUrl(streamInfo.playlistUrl));
+      hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        manifestParsed = true;
         const lv = (hls.levels || [])
           .map((l, hlsIndex) => ({
             height: l.height,
@@ -139,6 +148,15 @@ function MoviePlayer({
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // Manifest load failed (CORS/IP block) — retry once through the
+          // proxy. Segment errors during playback just retry the load.
+          if (!triedProxy && !manifestParsed) {
+            triedProxy = true;
+            hls.destroy();
+            hlsRef.current = null;
+            attachHls(movieHlsProxyUrl(streamInfo.playlistUrl));
+            return;
+          }
           hls.startLoad();
           return;
         }
@@ -148,16 +166,29 @@ function MoviePlayer({
         }
         onFatal();
       });
+      return hls;
+    };
+
+    if (Hls.isSupported()) {
+      attachHls(streamInfo.playlistUrl);
       return () => {
-        hls.destroy();
+        hlsRef.current?.destroy();
         hlsRef.current = null;
       };
     }
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS — still needs the proxy (vixcloud blocks cross-origin).
-      video.src = movieHlsProxyUrl(streamInfo.playlistUrl);
+      // Safari native HLS — direct first, proxy fallback on error.
+      video.src = streamInfo.playlistUrl;
       video.play().catch(() => {});
-      const onErr = () => onFatal();
+      const onErr = () => {
+        if (!triedProxy) {
+          triedProxy = true;
+          video.src = movieHlsProxyUrl(streamInfo.playlistUrl);
+          video.play().catch(() => {});
+          return;
+        }
+        onFatal();
+      };
       video.addEventListener("error", onErr);
       return () => video.removeEventListener("error", onErr);
     }
@@ -273,6 +304,10 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [playerLoading, setPlayerLoading] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+
+  // ── Season selector (series / TV shows / limited series) ─────────────────
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [seasonLoading, setSeasonLoading] = useState(false);
 
   // ── Trailer (in-app YouTube preview modal) ────────────────────────────────
   const [trailerOpen, setTrailerOpen] = useState(false);
@@ -413,8 +448,11 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
     setSelectedEpisode(null);
     setTrailerOpen(false);
     setActiveTrailer(0);
+    setSelectedSeason(null);
+    setSeasonLoading(false);
     setDetailLoading(true);
     void fetchMovieDetail(item.id, item.slug).then((d) => {
+      setSelectedSeason(d?.loadedSeason?.number ?? null);
       // track in continue-watching history
       if (cloudLoadCompleteRef.current && user?.id) {
         setHistory((prev) => {
@@ -428,6 +466,20 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
       }
       setDetail(d);
       setDetailLoading(false);
+    });
+  };
+
+  // ── Season switch — fetch that season's episodes (series/TV/limited) ─────
+  const changeSeason = (seasonNum: number) => {
+    if (!selected || seasonNum === selectedSeason) return;
+    setSelectedSeason(seasonNum);
+    setSelectedEpisode(null);
+    setStreamInfo(null);
+    setPlayerUrl(null);
+    setSeasonLoading(true);
+    void fetchMovieDetail(selected.id, selected.slug, seasonNum).then((d) => {
+      if (d) setDetail(d);
+      setSeasonLoading(false);
     });
   };
 
@@ -866,30 +918,73 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
                 </button>
               )}
 
-              {/* TV: season/episode picker */}
-              {detail?.loadedSeason &&
-                detail.loadedSeason.episodes.length > 0 && (
+              {/* TV: season selector (all seasons, incl. latest) + episodes */}
+              {selected.type === "tv" &&
+                detail &&
+                detail.seasons.length > 0 && (
                   <div className="mb-4">
-                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Season {detail.loadedSeason.number} Episodes
-                    </p>
-                    <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-auto">
-                      {detail.loadedSeason.episodes.map((ep) => (
-                        <button
-                          key={ep.id}
-                          onClick={() => {
-                            setSelectedEpisode(ep.id);
-                            play(ep.id);
-                          }}
-                          className={`px-2 py-1.5 rounded-lg text-left text-[11px] transition-colors ${selectedEpisode === ep.id ? "bg-amber-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-                        >
-                          <span className="font-medium">E{ep.number}</span>{" "}
-                          {ep.name && (
-                            <span className="opacity-80">· {ep.name}</span>
-                          )}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-2 mb-2">
+                      <label
+                        htmlFor="fp-season-select"
+                        className="text-xs font-semibold text-gray-700 dark:text-gray-300"
+                      >
+                        Season
+                      </label>
+                      <select
+                        id="fp-season-select"
+                        value={detail.loadedSeason?.number ?? ""}
+                        onChange={(e) => changeSeason(Number(e.target.value))}
+                        disabled={seasonLoading}
+                        className="flex-1 min-w-0 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1.5 disabled:opacity-60"
+                      >
+                        {detail.seasons.map((s) => (
+                          <option key={s.id} value={s.number}>
+                            {s.name || `Season ${s.number}`}
+                            {s.number ===
+                            Math.max(...detail.seasons.map((x) => x.number))
+                              ? " (Latest)"
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {seasonLoading && (
+                        <Loader2
+                          size={14}
+                          className="animate-spin text-amber-500"
+                        />
+                      )}
                     </div>
+                    {detail.loadedSeason &&
+                      detail.loadedSeason.episodes.length > 0 && (
+                        <>
+                          <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            {detail.seasons.length === 1
+                              ? "Episodes"
+                              : `Season ${detail.loadedSeason.number} Episodes`}
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-auto">
+                            {detail.loadedSeason.episodes.map((ep) => (
+                              <button
+                                key={ep.id}
+                                onClick={() => {
+                                  setSelectedEpisode(ep.id);
+                                  play(ep.id);
+                                }}
+                                className={`px-2 py-1.5 rounded-lg text-left text-[11px] transition-colors ${selectedEpisode === ep.id ? "bg-amber-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+                              >
+                                <span className="font-medium">
+                                  E{ep.number}
+                                </span>{" "}
+                                {ep.name && (
+                                  <span className="opacity-80">
+                                    · {ep.name}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                   </div>
                 )}
 

@@ -33,6 +33,7 @@ import {
   suSliderPath,
   suSearchPath,
   suTitlePath,
+  suSeasonPath,
   SU_MOVIE_GENRES,
   type SuTitle,
 } from "./_lib/streamingunity.js";
@@ -180,6 +181,8 @@ export default async function handler(
     }
 
     // ---- TITLE: full detail (scws_id for movie / seasons for tv) ----
+    // ?season=N loads that season's episodes into loadedSeason (the default
+    // title page loads season 1). Used by the season selector in the UI.
     if (mode === "title") {
       const id = q.id;
       const slug = q.slug || "";
@@ -187,7 +190,12 @@ export default async function handler(
         r.status(400).json({ error: "Missing id", title: null });
         return;
       }
-      const page = await fetchSuPage(suTitlePath(id, slug));
+      const seasonNum = Number(q.season);
+      const page = await fetchSuPage(
+        Number.isInteger(seasonNum) && seasonNum >= 1
+          ? suSeasonPath(id, slug, seasonNum)
+          : suTitlePath(id, slug),
+      );
       const t: SuTitle | undefined = page?.props?.title;
       if (!t) {
         r.status(200).json({ title: null });
