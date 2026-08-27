@@ -196,7 +196,9 @@ async function getClassicJson<T>(url: string): Promise<T | null> {
 const CLASSIC_COLLECTION = "public_domain_films";
 
 /** Fetch the top public-domain classic films (curated by view count). */
-export async function fetchClassicMovies(limit = 48): Promise<ClassicMovieItem[]> {
+export async function fetchClassicMovies(
+  limit = 48,
+): Promise<ClassicMovieItem[]> {
   const url =
     `https://archive.org/advancedsearch.php` +
     `?q=${encodeURIComponent(`mediatype:movies AND collection:${CLASSIC_COLLECTION}`)}` +
@@ -218,7 +220,9 @@ export async function fetchClassicMovies(limit = 48): Promise<ClassicMovieItem[]
 }
 
 /** Search public-domain classic films. */
-export async function searchClassicMovies(q: string): Promise<ClassicMovieItem[]> {
+export async function searchClassicMovies(
+  q: string,
+): Promise<ClassicMovieItem[]> {
   if (!q.trim()) return [];
   const url =
     `https://archive.org/advancedsearch.php` +
@@ -251,7 +255,9 @@ export async function fetchClassicDetail(
   if (!data) return null;
   const files = data.files ?? [];
   const vids = files.filter((f) =>
-    String(f?.name ?? "").toLowerCase().endsWith(".mp4"),
+    String(f?.name ?? "")
+      .toLowerCase()
+      .endsWith(".mp4"),
   );
   const pick =
     vids.find((f) => /512kb/i.test(f?.name ?? "")) ??
@@ -267,9 +273,7 @@ export async function fetchClassicDetail(
     identifier,
     name: String(data.metadata?.title ?? identifier),
     type: "classic",
-    year: data.metadata?.year
-      ? String(data.metadata.year).slice(0, 4)
-      : null,
+    year: data.metadata?.year ? String(data.metadata.year).slice(0, 4) : null,
     poster: `https://archive.org/services/img/${identifier}`,
     plot:
       typeof data.metadata?.description === "string"

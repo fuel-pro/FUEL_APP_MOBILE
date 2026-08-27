@@ -170,19 +170,24 @@ function MoviePlayer({
     // Proxy candidates — the Cloudflare edge can fetch playlist+segments
     // server-side (vixcloud allows it), so this works even when the user's
     // IP is blocked. Kept as fallback, tried only if direct fails.
-    const tokened = [streamInfo.playlistUrl, ...(streamInfo.servers || []).filter((s) => s.url).map((s) => {
-      try {
-        const pl = new URL(streamInfo.playlistUrl);
-        const u = new URL(s.url, pl.origin);
-        for (const key of ["token", "expires", "asn", "h"]) {
-          const v = pl.searchParams.get(key);
-          if (v && !u.searchParams.get(key)) u.searchParams.set(key, v);
-        }
-        return u.href;
-      } catch {
-        return s.url;
-      }
-    })];
+    const tokened = [
+      streamInfo.playlistUrl,
+      ...(streamInfo.servers || [])
+        .filter((s) => s.url)
+        .map((s) => {
+          try {
+            const pl = new URL(streamInfo.playlistUrl);
+            const u = new URL(s.url, pl.origin);
+            for (const key of ["token", "expires", "asn", "h"]) {
+              const v = pl.searchParams.get(key);
+              if (v && !u.searchParams.get(key)) u.searchParams.set(key, v);
+            }
+            return u.href;
+          } catch {
+            return s.url;
+          }
+        }),
+    ];
     const proxyCandidates = tokened.map(
       (u) => `/api/hls-proxy?url=${encodeURIComponent(u)}`,
     );
@@ -1702,9 +1707,7 @@ function ClassicCard({
       <p className="mt-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
         {movie.name}
       </p>
-      {movie.year && (
-        <p className="text-[10px] text-gray-400">{movie.year}</p>
-      )}
+      {movie.year && <p className="text-[10px] text-gray-400">{movie.year}</p>}
     </div>
   );
 }
