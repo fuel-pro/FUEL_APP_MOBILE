@@ -110,7 +110,8 @@ function MoviePlayer({
 
     const onFatal = () =>
       setError(
-        "This title's stream could not be loaded. Retry or use the fallback player.",
+        "This title's stream is blocked on your network or temporarily unreachable. " +
+          "Tap an episode below, or Retry — streams rotate between servers.",
       );
 
     // Direct-first: the vixcloud playlist endpoint sends
@@ -122,6 +123,31 @@ function MoviePlayer({
     // the ONLY reliable path for most users).
     let triedProxy = false;
     let manifestParsed = false;
+    // Server rotation: the upstream exposes multiple server URLs (Server1,
+    // Server2, …). When the active one fatally fails, rotate to the next —
+    // this is what rescues the episodes whose primary server is down.
+    const serverUrls = (streamInfo.servers || [])
+      .filter((s) => s.url)
+      .map((s) => {
+        // Reattach the auth params (token/expires/asn/h) that the playlist
+        // URL carries but the bare server URLs may be missing.
+        const pl = new URL(streamInfo.playlistUrl);
+        const u = new URL(s.url, pl.origin);
+        for (const key of ["token", "expires", "asn", "h"]) {
+          const v = pl.searchParams.get(key);
+          if (v && !u.searchParams.get(key)) u.searchParams.set(key, v);
+        }
+        return u.href;
+      });
+    let serverIdx = 0;
+    // Hard timeout — if nothing plays within 20s, surface the error instead
+    // of spinning forever (the reported "keeps loading" bug).
+    const playTimeout = window.setTimeout(() => {
+      if (video.readyState === 0 && video.paused) onFatal();
+    }, 20000);
+    const clearPlayTimeout = () => window.clearTimeout(playTimeout);
+    const onPlaying = () => clearPlayTimeout();
+    video.addEventListener("playing", onPlaying);
 
     const attachHls = (src: string) => {
       const hls = new Hls({
@@ -129,6 +155,15 @@ function MoviePlayer({
         manifestLoadingTimeOut: 15000,
         levelLoadingTimeOut: 15000,
         fragLoadingTimeOut: 30000,
+        // Retry manifest/level/frag errors a few times before going fatal —
+        // the segment CDN occasionally rate-limits, and a hard fatal on the
+        // first 403 is what made some episodes look permanently broken.
+        manifestLoadingMaxRetry: 3,
+        levelLoadingMaxRetry: 3,
+        fragLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingRetryDelay: 1000,
       });
       hlsRef.current = hls;
       hls.loadSource(src);
@@ -148,13 +183,26 @@ function MoviePlayer({
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // Manifest load failed (CORS/IP block) — retry once through the
-          // proxy. Segment errors during playback just retry the load.
+          // Manifest load failed — rotate to the next server (fixes episodes
+          // whose primary server is down), then try the proxy as last resort.
+          if (
+            !triedProxy &&
+            !manifestParsed &&
+            serverIdx < serverUrls.length - 1
+          ) {
+            serverIdx += 1;
+            hls.destroy();
+            hlsRef.current = null;
+            attachHls(serverUrls[serverIdx]);
+            return;
+          }
           if (!triedProxy && !manifestParsed) {
             triedProxy = true;
             hls.destroy();
             hlsRef.current = null;
-            attachHls(movieHlsProxyUrl(streamInfo.playlistUrl));
+            attachHls(
+              movieHlsProxyUrl(serverUrls[serverIdx] ?? streamInfo.playlistUrl),
+            );
             return;
           }
           hls.startLoad();
@@ -169,31 +217,47 @@ function MoviePlayer({
       return hls;
     };
 
+    const cleanup = () => {
+      clearPlayTimeout();
+      video.removeEventListener("playing", onPlaying);
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+    };
+
     if (Hls.isSupported()) {
-      attachHls(streamInfo.playlistUrl);
-      return () => {
-        hlsRef.current?.destroy();
-        hlsRef.current = null;
-      };
+      attachHls(serverUrls[0] ?? streamInfo.playlistUrl);
+      return cleanup;
     }
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS — direct first, proxy fallback on error.
-      video.src = streamInfo.playlistUrl;
+      // Safari native HLS — direct first, server rotation, proxy last.
+      video.src = serverUrls[0] ?? streamInfo.playlistUrl;
       video.play().catch(() => {});
       const onErr = () => {
+        if (serverIdx < serverUrls.length - 1) {
+          serverIdx += 1;
+          video.src = serverUrls[serverIdx];
+          video.play().catch(() => {});
+          return;
+        }
         if (!triedProxy) {
           triedProxy = true;
-          video.src = movieHlsProxyUrl(streamInfo.playlistUrl);
+          video.src = movieHlsProxyUrl(
+            serverUrls[serverIdx] ?? streamInfo.playlistUrl,
+          );
           video.play().catch(() => {});
           return;
         }
         onFatal();
       };
       video.addEventListener("error", onErr);
-      return () => video.removeEventListener("error", onErr);
+      return () => {
+        clearPlayTimeout();
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("error", onErr);
+      };
     }
     onFatal();
-    return undefined;
+    return cleanup;
   }, [streamInfo, retryNonce]);
 
   const setQuality = (hlsIndex: number) => {
