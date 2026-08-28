@@ -29,6 +29,54 @@
     <!-- YouTube IFrame API — enables error detection on YouTube embeds so the
          player can auto-advance when a stream is unavailable. -->
     <script src="https://www.youtube.com/iframe_api" async></script>
+    <!-- AD/POPUP/REDIRECT BLOCKER — equivalent of uBlock Origin behaviour for
+         the in-app players (Movies, Live TV, Live Radio). Blocks popup
+         windows, new-tab opens, and top-level navigation hijacks triggered
+         by embedded third-party players. Iframe embeds are additionally
+         sandboxed (no allow-popups / allow-top-navigation). -->
+    <script>
+      (function () {
+        // 1. Neutralize popup ads while preserving legitimate share/open
+        //    flows. A popup is allowed when it is triggered by a genuine user
+        //    activation (navigator.userActivation.isActive — true for ~5s
+        //    after a click/keypress) OR when it is same-origin. Programmatic
+        //    window.open calls from ad scripts (no user gesture) are blocked.
+        var origOpen = window.open;
+        window.open = function (url) {
+          var ua = navigator.userActivation;
+          var userInitiated = !!(ua && ua.isActive);
+          var sameOrigin =
+            typeof url === "string" &&
+            (url.charAt(0) === "/" || url.indexOf(location.origin) === 0);
+          if (userInitiated || sameOrigin || !url) {
+            return origOpen.apply(window, arguments);
+          }
+          console.warn("[ad-blocker] Blocked popup (no user gesture):", url);
+          return null;
+        };
+        // 2. Block target=_blank clicks that originate from known ad/tracking
+        //    domains inside our own DOM (defense-in-depth; embed iframes are
+        //    already sandboxed against top-navigation).
+        document.addEventListener(
+          "click",
+          function (e) {
+            var el = e.target && e.target.closest ? e.target.closest("a") : null;
+            if (!el) return;
+            var href = el.getAttribute("href") || "";
+            if (/(\/ads\/|adserver|doubleclick|popads|popcash|propeller|adnxs|adsystem|trackclick|clickadu|exoclick|trafficjunky|juicyads)/i.test(href)) {
+              e.preventDefault();
+              e.stopPropagation();
+              console.warn("[ad-blocker] Blocked ad link:", href);
+            }
+          },
+          true
+        );
+        // NOTE: top-navigation hijack protection is handled by the iframe
+        // sandbox attribute (no allow-top-navigation) on the embed players.
+        // A beforeunload blocker was deliberately NOT added — it would show
+        // "Leave site?" dialogs whenever a media element exists on the page.
+      })();
+    </script>
     <!-- Force color scheme for older browsers -->
     <meta name="color-scheme" content="light dark" />
     <meta property="og:title" content="FuelPro - Fuel Management System" />

@@ -749,15 +749,17 @@ function ChannelPlayer({
               </span>
             </button>
           )}
-          {/* Subtitles / CC — HLS only (radio + YouTube have their own). */}
-          {!ytId && !isAudio && (
+          {/* Subtitles / CC — HLS video AND live radio. On radio the menu
+              shows the preferred-language picker + AI caption toggle (no
+              embedded tracks on audio streams). */}
+          {!ytId && (
             <div className="relative">
               <button
                 onClick={() => setShowCcMenu((v) => !v)}
                 title="Subtitles / Closed captions"
                 aria-label="Subtitles"
                 className={`p-1.5 rounded-lg transition-colors font-bold text-[10px] ${
-                  activeSubtitleIdx >= 0
+                  activeSubtitleIdx >= 0 || liveCaptionsOn
                     ? "bg-blue-500 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
                 }`}
@@ -766,47 +768,55 @@ function ChannelPlayer({
               </button>
               {showCcMenu && (
                 <div className="absolute right-0 top-full mt-1 w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-30 max-h-72 overflow-y-auto">
-                  {/* Stream tracks (from the HLS manifest) */}
-                  <p className="px-3 pt-2 text-[9px] uppercase tracking-wide text-gray-500">
-                    This stream
-                  </p>
-                  <button
-                    onClick={() => {
-                      applySubtitleTrack(-1);
-                      setShowCcMenu(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
-                      activeSubtitleIdx < 0
-                        ? "text-blue-400 font-semibold"
-                        : "text-gray-200"
-                    }`}
-                  >
-                    Off
-                  </button>
-                  {subtitleTracks.map((t) => (
-                    <button
-                      key={t.index}
-                      onClick={() => {
-                        applySubtitleTrack(t.index);
-                        setShowCcMenu(false);
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
-                        activeSubtitleIdx === t.index
-                          ? "text-blue-400 font-semibold"
-                          : "text-gray-200"
-                      }`}
-                    >
-                      {t.label}
-                      {t.lang && (
-                        <span className="text-gray-500 ml-1">({t.lang})</span>
-                      )}
-                    </button>
-                  ))}
-                  {subtitleTracks.length === 0 && (
+                  {/* Stream tracks (from the HLS manifest) — video only */}
+                  {!isAudio && subtitleTracks.length > 0 && (
+                    <>
+                      <p className="px-3 pt-2 text-[9px] uppercase tracking-wide text-gray-500">
+                        This stream
+                      </p>
+                      <button
+                        onClick={() => {
+                          applySubtitleTrack(-1);
+                          setShowCcMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
+                          activeSubtitleIdx < 0
+                            ? "text-blue-400 font-semibold"
+                            : "text-gray-200"
+                        }`}
+                      >
+                        Off
+                      </button>
+                      {subtitleTracks.map((t) => (
+                        <button
+                          key={t.index}
+                          onClick={() => {
+                            applySubtitleTrack(t.index);
+                            setShowCcMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 ${
+                            activeSubtitleIdx === t.index
+                              ? "text-blue-400 font-semibold"
+                              : "text-gray-200"
+                          }`}
+                        >
+                          {t.label}
+                          {t.lang && (
+                            <span className="text-gray-500 ml-1">
+                              ({t.lang})
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {/* No-track hint — shown when there are no embedded tracks
+                      (always on radio, sometimes on video). */}
+                  {(isAudio || subtitleTracks.length === 0) && (
                     <p className="px-3 py-1.5 text-[10px] text-gray-500">
-                      This stream has no embedded subtitles. Pick a preferred
-                      language below — it will auto-activate on any stream or
-                      channel that carries captions (including YouTube).
+                      {isAudio
+                        ? "This station has no embedded subtitles. Pick a preferred language below — AI live captions will generate them on-device."
+                        : "This stream has no embedded subtitles. Pick a preferred language below — it will auto-activate on any stream or channel that carries captions (including YouTube)."}
                     </p>
                   )}
                   {/* Preferred language (auto-selects on streams that carry it) */}

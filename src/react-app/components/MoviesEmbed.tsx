@@ -919,6 +919,11 @@ function EmbedFallbackPlayer({
             referrerPolicy="no-referrer"
             title={title}
             onLoad={handleLoaded}
+            // AD/POPUP BLOCKER: sandbox WITHOUT allow-popups /
+            // allow-top-navigation — the embedded provider cannot open popup
+            // ads or redirect the top page. allow-scripts + same-origin keep
+            // the player functional.
+            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-pointer-lock"
           />
           {/* Branding-hiding overlays — blurred patches over the typical
               watermark corners + a clean top gradient with OUR title. */}
