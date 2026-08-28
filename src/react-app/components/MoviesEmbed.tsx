@@ -724,17 +724,21 @@ function buildEmbedCandidates(
   // 2embed.cc is the imdb fallback. vidsrc.cc, multiembed.mov,
   // vidsrc.pro, vidsrc.xyz, embed.su are dead (403/DNS-dead) — excluded.
   if (tmdb) {
+    // ORDER MATTERS — verified playable (2026-08-28, headless Chromium):
+    // vidlink.pro renders a full player (poster, seek, CC, PiP, fullscreen)
+    // and actually plays. autoembed.co renders its inner player iframes.
+    // vidsrc.me domain-blocks new referrers ("content is blocked").
     out.push({
       label: "Server 1 (Best)",
       url: isTv
-        ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
-        : `https://autoembed.co/movie/tmdb/${tmdb}`,
+        ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
+        : `https://vidlink.pro/movie/${tmdb}`,
     });
     out.push({
       label: "Server 2",
       url: isTv
-        ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
-        : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
+        ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
+        : `https://autoembed.co/movie/tmdb/${tmdb}`,
     });
     out.push({
       label: "Server 3",
@@ -745,14 +749,14 @@ function buildEmbedCandidates(
     out.push({
       label: "Server 4",
       url: isTv
-        ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
-        : `https://vidlink.pro/movie/${tmdb}`,
+        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
+        : `https://vidsrc.to/embed/movie/${tmdb}`,
     });
     out.push({
       label: "Server 5",
       url: isTv
-        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
-        : `https://vidsrc.to/embed/movie/${tmdb}`,
+        ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
+        : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
     });
   }
   if (imdb) {
