@@ -32,8 +32,10 @@
     <!-- AD/POPUP/REDIRECT BLOCKER — equivalent of uBlock Origin behaviour for
          the in-app players (Movies, Live TV, Live Radio). Blocks popup
          windows, new-tab opens, and top-level navigation hijacks triggered
-         by embedded third-party players. Iframe embeds are additionally
-         sandboxed (no allow-popups / allow-top-navigation). -->
+         by embedded third-party players. In-iframe popups/redirects are
+         covered by the ad-blocker engine (window.open + network filtering +
+         beforeunload redirect trap) and the MoviesEmbed hijack watchdog —
+         the providers refuse sandboxed iframes, so sandbox is NOT used. -->
     <script>
       (function () {
         // 1. Neutralize popup ads while preserving legitimate share/open
@@ -55,8 +57,8 @@
           return null;
         };
         // 2. Block target=_blank clicks that originate from known ad/tracking
-        //    domains inside our own DOM (defense-in-depth; embed iframes are
-        //    already sandboxed against top-navigation).
+        //    domains inside our own DOM (defense-in-depth; the beforeunload
+        //    redirect trap in ad-blocker.ts covers embed-iframe hijacks).
         document.addEventListener(
           "click",
           function (e) {

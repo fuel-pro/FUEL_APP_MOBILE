@@ -27,10 +27,15 @@
  *      players (Movies detail + trailer) never prematurely disengage.
  *
  * Cross-origin note: ads rendered INSIDE a third-party iframe cannot be
- * removed by DOM methods — that is handled by the iframe `sandbox`
- * attribute (no allow-popups / allow-top-navigation) in MoviesEmbed.tsx.
- * This engine covers everything OUR document does: network requests, DOM
- * injection, and window.open.
+ * removed by DOM methods, and the providers actively REFUSE to play in a
+ * sandboxed iframe (verified: vidsrc.to renders a "can't be embedded in a
+ * sandboxed frame" refusal page). Instead the in-iframe threats are covered
+ * by: (1) this engine's beforeunload redirect trap (blocks
+ * window.top.location hijacks while a player is open), (2) the MoviesEmbed
+ * iframe hijack watchdog (resets the iframe if it navigates itself to an ad
+ * page), and (3) Chrome's built-in blocking of gesture-less cross-origin
+ * top navigation. This engine covers everything OUR document does: network
+ * requests, DOM injection, window.open, and top-level redirects.
  */
 
 // ─── Filter list (EasyList/EasyPrivacy core + streaming-site ad networks) ──
@@ -136,6 +141,29 @@ let initialized = false;
 let strictScopes = 0; // ref-count of active player scopes
 let blockedCount = 0;
 let shieldEngaged = false;
+// Top-navigation (redirect) guard: armed for a short window after each user
+// gesture / iframe load. A cross-origin embed iframe that tries
+// `window.top.location = ad-page` while the shield is engaged AND armed gets
+// trapped by beforeunload (the browser shows "Leave site?" and the user
+// stays). Chrome already blocks gesture-less cross-origin top navigation —
+// this closes the remaining gesture-driven redirect hole.
+let navGuardArmedUntil = 0;
+let lastGestureAt = 0;
+
+/** Arm the redirect guard for `ms` (default 3s). */
+export function armNavGuard(ms = 3000): void {
+  navGuardArmedUntil = Date.now() + ms;
+}
+
+/** Timestamp (ms epoch) of the last user pointer gesture anywhere. */
+export function getLastGestureTime(): number {
+  return lastGestureAt;
+}
+
+/** Public counter for ad/redirect events detected outside this module. */
+export function noteBlockedEvent(kind: string, detail: string): void {
+  noteBlocked(kind, detail);
+}
 
 type ShieldListener = (state: { active: boolean; blocked: number }) => void;
 const listeners = new Set<ShieldListener>();
@@ -378,4 +406,45 @@ export function initAdBlocker(): void {
     } as typeof document.write;
     document.writeln = document.write;
   }
+
+  // ── 5. Top-navigation (redirect-to-another-tab/site) guard ────────────
+  // Track user gestures so the guard + the Movies iframe hijack watchdog
+  // know what was user-driven. Any pointerdown arms the guard for 3s.
+  window.addEventListener(
+    "pointerdown",
+    () => {
+      lastGestureAt = Date.now();
+      armNavGuard(3000);
+    },
+    true,
+  );
+  // Clicks INSIDE a cross-origin iframe never reach the parent's pointerdown
+  // listener. Detect them via the focus heuristic: when the top window
+  // blurs and document.activeElement is an IFRAME, the user just clicked
+  // inside that frame (the standard cross-origin iframe click tracker).
+  // This lets the redirect trap + hijack watchdog treat in-player clicks as
+  // user-driven.
+  window.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (
+        document.activeElement &&
+        document.activeElement.tagName === "IFRAME"
+      ) {
+        lastGestureAt = Date.now();
+        armNavGuard(3000);
+      }
+    }, 0);
+  });
+  // While a media player is open (shield engaged) and the guard is armed,
+  // trap any attempt to navigate THIS tab away (an ad redirect fired by a
+  // click inside the embed iframe). The browser shows its "Leave site?"
+  // dialog so the redirect only proceeds if the USER explicitly confirms —
+  // the default outcome is the user stays on the site.
+  window.addEventListener("beforeunload", (e) => {
+    if (!shieldEngaged) return;
+    if (Date.now() >= navGuardArmedUntil) return;
+    noteBlocked("top-redirect", "navigation blocked while player is active");
+    e.preventDefault();
+    e.returnValue = "";
+  });
 }

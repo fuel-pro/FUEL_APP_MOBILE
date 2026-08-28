@@ -45,6 +45,11 @@ import {
   PopupShieldBadge,
 } from "@/react-app/components/ui/PopupShieldBadge";
 import {
+  armNavGuard,
+  getLastGestureTime,
+  noteBlockedEvent,
+} from "@/react-app/lib/ad-blocker";
+import {
   fetchMovieCatalog,
   fetchMovieBrowse,
   searchMovies,
@@ -826,6 +831,12 @@ function EmbedFallbackPlayer({
   const [started, setStarted] = useState(false);
   const deadTimerRef = useRef<number | null>(null);
   const slowTimerRef = useRef<number | null>(null);
+  // Iframe hijack watchdog: the embed iframe may only load (a) within 8s of us
+  // setting its src (the provider's own redirect chain), or (b) within 1.5s of
+  // a user click (a legit in-player navigation). Any other load = the provider
+  // navigated itself to an ad page — reset the iframe back to the real embed.
+  const [iframeEpoch, setIframeEpoch] = useState(0);
+  const srcSetAtRef = useRef(0);
 
   // Popup Blocker Pro lifecycle: engage the strict popup shield the moment
   // the player mounts (BEFORE the user clicks play — the first click is the
@@ -856,6 +867,7 @@ function EmbedFallbackPlayer({
     if (!started) return;
     setLoaded(false);
     setSlowPrompt(false);
+    srcSetAtRef.current = Date.now();
     if (deadTimerRef.current !== null)
       window.clearTimeout(deadTimerRef.current);
     if (slowTimerRef.current !== null)
@@ -888,6 +900,22 @@ function EmbedFallbackPlayer({
     slowTimerRef.current = window.setTimeout(() => {
       setSlowPrompt(true);
     }, SLOW_LOAD_MS);
+  };
+
+  const handleIframeLoad = () => {
+    const now = Date.now();
+    const legitInitial = now - srcSetAtRef.current < 8000;
+    const userDriven = now - getLastGestureTime() < 1500;
+    if (!legitInitial && !userDriven) {
+      // The provider iframe navigated itself with no user gesture — an ad
+      // redirect / hijack. Snap it back to the real embed URL.
+      noteBlockedEvent("iframe-hijack", current?.url ?? "");
+      srcSetAtRef.current = now;
+      setIframeEpoch((e) => e + 1);
+      return;
+    }
+    armNavGuard(3000);
+    handleLoaded();
   };
 
   if (failed) return null; // parent shows the trailer / error path
@@ -962,20 +990,23 @@ function EmbedFallbackPlayer({
       ) : (
         <>
           <iframe
-            key={current.url}
+            key={`${current.url}:${iframeEpoch}`}
             src={current.url}
             className="absolute inset-0 w-full h-full"
             allowFullScreen
             allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
             referrerPolicy="no-referrer"
             title={title}
-            onLoad={handleLoaded}
-            // NO sandbox attribute: embed providers explicitly detect a
-            // sandboxed frame and refuse to play ("Playback blocked").
-            // Popup/ad blocking is done by the in-page ad-blocker engine
-            // (ad-blocker.ts) + the userActivation popup guard + the
-            // PopupShield engaged in this component — without breaking the
-            // provider's player.
+            onLoad={handleIframeLoad}
+            // NO sandbox attribute: embed providers explicitly DETECT a
+            // sandboxed frame and refuse to play (verified: vidsrc.to renders
+            // "This content can't be embedded in a sandboxed frame"). Ads and
+            // redirects from inside the frame are instead blocked by the
+            // ad-blocker engine (ad-blocker.ts: window.open override, network
+            // filtering, cosmetic removal, beforeunload top-redirect trap)
+            // + the iframe hijack watchdog above (handleIframeLoad resets the
+            // frame if it navigates itself to an ad page without a user
+            // gesture) + the PopupShield engaged in this component.
           />
           {/* Branding-hiding overlays — blurred patches over the typical
               watermark corners + a clean top gradient with OUR title. */}
