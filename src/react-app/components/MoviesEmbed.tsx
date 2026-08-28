@@ -724,15 +724,20 @@ function buildEmbedCandidates(
   // 2embed.cc is the imdb fallback. vidsrc.cc, multiembed.mov,
   // vidsrc.pro, vidsrc.xyz, embed.su are dead (403/DNS-dead) — excluded.
   if (tmdb) {
-    // ORDER MATTERS — verified playable (2026-08-28, headless Chromium):
-    // vidlink.pro renders a full player (poster, seek, CC, PiP, fullscreen)
-    // and actually plays. autoembed.co renders its inner player iframes.
-    // vidsrc.me domain-blocks new referrers ("content is blocked").
+    // ORDER MATTERS — verified in isolation (2026-08-28, headless Chromium
+    // with third-party storage BLOCKED, the most restrictive case):
+    // - vidsrc.to: ACTUAL PLAYBACK confirmed (poster, play, quality menu,
+    //   subtitle menu, timeline advancing) even with 3P storage blocked.
+    // - autoembed.co: inner player iframes mount (spinner-stuck headless,
+    //   expected to work in real browsers).
+    // - player.videasy.net + vidlink.pro: require third-party localStorage —
+    //   crash/error where 3P storage is blocked; kept as fallbacks only.
+    // - vidsrc.me: domain-blocks some referrers ("content is blocked").
     out.push({
       label: "Server 1 (Best)",
       url: isTv
-        ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
-        : `https://vidlink.pro/movie/${tmdb}`,
+        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
+        : `https://vidsrc.to/embed/movie/${tmdb}`,
     });
     out.push({
       label: "Server 2",
@@ -749,14 +754,14 @@ function buildEmbedCandidates(
     out.push({
       label: "Server 4",
       url: isTv
-        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
-        : `https://vidsrc.to/embed/movie/${tmdb}`,
+        ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
+        : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
     });
     out.push({
       label: "Server 5",
       url: isTv
-        ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
-        : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
+        ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
+        : `https://vidlink.pro/movie/${tmdb}`,
     });
   }
   if (imdb) {
