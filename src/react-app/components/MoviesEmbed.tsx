@@ -742,10 +742,22 @@ function buildEmbedCandidates(
         ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}`
         : `https://player.videasy.net/movie/${tmdb}`,
     });
+    out.push({
+      label: "Server 4",
+      url: isTv
+        ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
+        : `https://vidlink.pro/movie/${tmdb}`,
+    });
+    out.push({
+      label: "Server 5",
+      url: isTv
+        ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
+        : `https://vidsrc.to/embed/movie/${tmdb}`,
+    });
   }
   if (imdb) {
     out.push({
-      label: "Server 4",
+      label: `Server ${out.length + 1}`,
       url: isTv
         ? `https://www.2embed.cc/embedtv/${imdb}&s=${s}&e=${e}`
         : `https://www.2embed.cc/embed/${imdb}`,
@@ -937,11 +949,12 @@ function EmbedFallbackPlayer({
             referrerPolicy="no-referrer"
             title={title}
             onLoad={handleLoaded}
-            // AD/POPUP BLOCKER: sandbox WITHOUT allow-popups /
-            // allow-top-navigation — the embedded provider cannot open popup
-            // ads or redirect the top page. allow-scripts + same-origin keep
-            // the player functional.
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-pointer-lock"
+            // NO sandbox attribute: embed providers explicitly detect a
+            // sandboxed frame and refuse to play ("Playback blocked").
+            // Popup/ad blocking is done by the in-page ad-blocker engine
+            // (ad-blocker.ts) + the userActivation popup guard + the
+            // PopupShield engaged in this component — without breaking the
+            // provider's player.
           />
           {/* Branding-hiding overlays — blurred patches over the typical
               watermark corners + a clean top gradient with OUR title. */}
