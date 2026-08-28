@@ -41,6 +41,10 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import {
+  usePopupShield,
+  PopupShieldBadge,
+} from "@/react-app/components/ui/PopupShieldBadge";
+import {
   fetchMovieCatalog,
   fetchMovieBrowse,
   searchMovies,
@@ -802,6 +806,11 @@ function EmbedFallbackPlayer({
   const deadTimerRef = useRef<number | null>(null);
   const slowTimerRef = useRef<number | null>(null);
 
+  // Popup Blocker Pro lifecycle: engage the strict popup shield the moment
+  // the player mounts (BEFORE the user clicks play — the first click is the
+  // classic popup-ad trigger), release when the player closes/unmounts.
+  usePopupShield("movies", true);
+
   const current = candidates[idx];
 
   const goNext = (toFailure = false) => {
@@ -897,6 +906,15 @@ function EmbedFallbackPlayer({
           <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/60 rounded-full px-3 py-1">
             Click to play
           </div>
+          {/* Shield badge is visible BEFORE the play click — the shield
+              engages the moment the player opens, so popup ads fired by the
+              first click are already blocked. */}
+          <div
+            className="absolute top-2 left-2 z-30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PopupShieldBadge />
+          </div>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -935,14 +953,17 @@ function EmbedFallbackPlayer({
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent z-10" />
           <div className="pointer-events-none absolute bottom-1.5 right-2 z-20 w-24 h-7 rounded-lg bg-black/40 backdrop-blur-md" />
           <div className="pointer-events-none absolute bottom-1.5 left-2 z-20 w-20 h-7 rounded-lg bg-black/30 backdrop-blur-md" />
-          {/* Controls: prev / AUTO NEXT toggle / next episode / close */}
-          <button
-            onClick={onClose}
-            className="absolute top-2 right-28 z-30 p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
-            title="Close player"
-          >
-            <X size={14} />
-          </button>
+          {/* Controls: shield badge / close / prev / AUTO NEXT / next */}
+          <div className="absolute top-2 right-28 z-30 flex items-center gap-1.5">
+            <PopupShieldBadge />
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/80"
+              title="Close player"
+            >
+              <X size={14} />
+            </button>
+          </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5">
             {!loaded && (
               <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1 text-[10px] text-white/90">

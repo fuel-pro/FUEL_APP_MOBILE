@@ -28,6 +28,10 @@ import {
 } from "@/react-app/services/LiveStreamService";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import {
+  usePopupShield,
+  PopupShieldBadge,
+} from "@/react-app/components/ui/PopupShieldBadge";
 import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
 import {
   SUBTITLE_LANGUAGES,
@@ -213,6 +217,12 @@ function ChannelPlayer({
   const [currentLevel, setCurrentLevel] = useState<number>(-1);
   const [pipActive, setPipActive] = useState(false);
   const [buffering, setBuffering] = useState(true);
+
+  // Popup Blocker Pro lifecycle: the strict popup shield engages while a
+  // channel is playing (ads/popups can't fire) and releases the moment the
+  // player unmounts (user leaves the channel / switches tabs).
+  usePopupShield(isAudio ? "live-radio" : "live-tv", true);
+
   // ─── SUBTITLES / CC ──
   // Preferred subtitle language: persisted to cloud (cross-device), auto-detected
   // from the browser locale / station country on first run.
@@ -705,6 +715,9 @@ function ChannelPlayer({
               ))}
             </select>
           )}
+          {/* Ad & popup shield badge — visible while the player is open;
+              shows how many popups/ads were blocked. */}
+          <PopupShieldBadge />
           {/* PiP — native video only */}
           {!ytId && !isAudio && (
             <button

@@ -8,6 +8,7 @@ import { initErrorMonitoring } from "@/react-app/lib/errorMonitoring";
 import "@/react-app/services/enhanced/SyncService";
 import "@/react-app/lib/enhanced/performance";
 import { prefetchLiveChannelsInBackground } from "@/react-app/services/LiveStreamService";
+import { initAdBlocker } from "@/react-app/lib/ad-blocker";
 import { prefetchMoviesInBackground } from "@/react-app/services/MovieService";
 
 // Silently pre-fetch live channel data in the background so it's cached
@@ -23,6 +24,10 @@ prefetchMoviesInBackground();
 // the listeners below still surface uncaught errors to the console + a
 // best-effort localStorage ring buffer so crashes are diagnosable).
 initErrorMonitoring();
+// In-app ad & popup blocker (uBlock Origin + Popup Blocker Pro equivalents):
+// blocks ad-network network requests/DOM injection and manages the strict
+// popup shield that the media players auto-engage while open.
+initAdBlocker();
 
 // Global unhandled-promise-rejection + window-error capture. These catch
 // errors that escape React's render tree (async fetch failures, SW errors,
