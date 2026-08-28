@@ -889,12 +889,12 @@ function EmbedFallbackPlayer({
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden mb-4">
       {!started ? (
         /* Poster + big play button — like streamingunity/soap2day show the
-           artwork first. No iframe = no black box, no slow auto-loading. */
-        <button
-          type="button"
+           artwork first. No iframe = no black box, no slow auto-loading.
+           Flat structure (no nested buttons) so the play target is always
+           clickable — desktop, mobile, and assistive tech. */
+        <div
+          className="absolute inset-0 group cursor-pointer"
           onClick={() => setStarted(true)}
-          className="absolute inset-0 w-full h-full group"
-          title={`Play — ${current.label}`}
         >
           {poster ? (
             <img
@@ -906,18 +906,30 @@ function EmbedFallbackPlayer({
             <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
           )}
           <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="flex items-center justify-center w-20 h-20 rounded-full bg-amber-500 shadow-2xl shadow-amber-500/40 group-hover:scale-110 transition-transform">
-              <Play size={36} className="text-black fill-black ml-1.5" />
-            </span>
-          </div>
           <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/80 to-transparent" />
           <div className="pointer-events-none absolute top-2 left-3 text-[11px] font-semibold text-white/90 drop-shadow">
             {title}
           </div>
-          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/60 rounded-full px-3 py-1">
-            Click to play
+          {/* Single, dedicated play button — the only interactive element in
+              the center, so clicks/taps always start playback. */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setStarted(true)}
+              className="flex items-center justify-center w-20 h-20 rounded-full bg-amber-500 shadow-2xl shadow-amber-500/40 hover:scale-110 transition-transform"
+              title={`Play — ${current.label}`}
+              aria-label={`Play ${title}`}
+            >
+              <Play size={36} className="text-black fill-black ml-1.5" />
+            </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setStarted(true)}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/60 hover:bg-black/80 rounded-full px-3 py-1"
+          >
+            Click to play
+          </button>
           {/* Shield badge is visible BEFORE the play click — the shield
               engages the moment the player opens, so popup ads fired by the
               first click are already blocked. */}
@@ -937,7 +949,7 @@ function EmbedFallbackPlayer({
           >
             <X size={14} />
           </button>
-        </button>
+        </div>
       ) : (
         <>
           <iframe
