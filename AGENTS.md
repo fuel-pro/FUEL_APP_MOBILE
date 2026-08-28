@@ -9586,3 +9586,22 @@ native HLS (direct servers -> secure relay proxy) -> mirror embed iframes
   deploys da1b016 when the quota resets.
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, prettier clean, build success (clean Vite cache).
+
+## Session 2026-08-28 — Live TV dead-stream auto-advance + CC on Live Radio + ad blocker (DEPLOYED LIVE, commits 84f72ac + 226b9b9)
+
+### 1. YouTube dead-stream auto-advance (Live TV)
+Root cause of "Video unavailable" dead-ends: YouTube channels were rendered as a plain cross-origin iframe which CANNOT report playback errors. Fix: index.html loads the YouTube iframe_api (CSP script-src updated). LiveFeedEmbed.tsx ChannelPlayer renders YouTube channels via the official YT.Player API (yt-player-<nanoid> div container) instead of a static iframe. onError (codes 2/5/100/101/150) sets the error state AND auto-advances via onCaptionFallback ?? onNext. onReady force-plays. Verified live: auto-advanced past dead channels to a working HLS stream.
+
+### 2. CC (closed captions) now on Live Radio too
+The CC button was hidden for radio (!ytId && !isAudio). Removed the !isAudio gate — the CC menu now shows on BOTH Live TV and Live Radio. Video: embedded HLS subtitle tracks + 15-language preferred picker. Radio: no embedded tracks, so the menu shows a radio-specific hint + 15-language picker; picking a language auto-starts the on-device AI caption engine. Caption overlay already rendered for !ytId (both media types). Verified live: Live Radio .977 80s playing with CC menu.
+
+### 3. Ad/popup/redirect blocker for Movies + Live TV + Live Radio
+- MoviesEmbed.tsx EmbedFallbackPlayer iframe: sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-pointer-lock" — NO allow-popups / NO allow-top-navigation, so embed providers cannot open popup ads or redirect the top page. Fullscreen retained via API.
+- index.html global script: window.open guarded by navigator.userActivation.isActive (user gestures pass; programmatic ad popups blocked). Click interceptor blocks known ad-network hrefs (doubleclick, popads, popcash, propeller, adnxs, exoclick, trafficjunky, juicyads). A beforeunload trap was deliberately NOT added (would trap users).
+- uBlock Origin is a browser extension and cannot be bundled into a web app; the equivalent behavior is implemented in-app via the sandbox + guards.
+
+### Verified live
+Cloudflare Pages (main alias + preview fd4590ac) and Vercel production (fuel-app-mobile.vercel.app, prebuilt, HTTP 200) both serve the ad-blocker + iframe_api + sandbox + radio CC. Browser QA: Live TV plays HLS with CC menu; Live Radio plays with CC menu; dead YouTube channels auto-advance. tsc 0 errors, build success.
+
+### Lost-commit audit 2026-08-28
+All 69 remote branches audited — state matches prior audits: founder-username-login (+7) awaiting user authorization; identifying-security-vulnerabilities-8d289 (+3) needs /api/r2/* + /api/cache/* endpoints; qwen-code-6a328546 (+2) would DELETE LiveStreamService.ts (must NOT merge). No new lost work.
