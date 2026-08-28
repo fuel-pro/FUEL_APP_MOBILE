@@ -9605,3 +9605,58 @@ Cloudflare Pages (main alias + preview fd4590ac) and Vercel production (fuel-app
 
 ### Lost-commit audit 2026-08-28
 All 69 remote branches audited — state matches prior audits: founder-username-login (+7) awaiting user authorization; identifying-security-vulnerabilities-8d289 (+3) needs /api/r2/* + /api/cache/* endpoints; qwen-code-6a328546 (+2) would DELETE LiveStreamService.ts (must NOT merge). No new lost work.
+
+## Session 2026-08-28 (cont.) — Movies playback FULLY FIXED: vidsrc.to verified playing movies + series (DEPLOYED LIVE, commits c6fecd2 + b9e0896 + 9c039da + 3152711)
+
+**User report**: "i can't see video feed, fix it (always ensure the video feed works);
+'This title's stream is temporarily unreachable right now. Retry, or switch to
+another server below — we rotate between them automatically. Retry Server1 Server2'"
+
+### Root causes found (via isolated iframe tests on localhost:8899)
+1. **Nested-button clickability defect**: the poster overlay wrapped the whole
+   provider iframe AND had its own onClick, swallowing clicks meant for the
+   player's inner play button. Fixed in c6fecd2: flattened overlay with a
+   dedicated a11y "Click to play" button that mounts the iframe only on intent.
+2. **CSP frame-src missing vidlink.pro** (commit 9c039da): the iframe showed
+   Chrome's blocked-frame icon. Added `https://vidlink.pro https://*.vidlink.pro`
+   to index.html frame-src.
+3. **vidlink.pro crashes in ANY cross-origin iframe** ("Application error: a
+   client-side exception has occurred") — reproduced on a bare localhost page
+   with no CSP/sandbox. It requires third-party localStorage; headless/blocked-
+   storage contexts kill it. Same for player.videasy.net ("Failed to read the
+   'localStorage' property ... Access is denied"). Both kept as LAST fallbacks.
+4. **autoembed.co** mounts inner player iframes but spinner-stuck in headless.
+5. **vidsrc.me** domain-blocks some referrers ("This content is blocked").
+6. **vidsrc.to is the WINNER** (commit 3152711, promoted to Server 1): VERIFIED
+   ACTUAL PLAYBACK in the most restrictive environment (headless Chromium with
+   third-party storage BLOCKED) — poster, play, quality menu (360p/720p/1080p),
+   30+ subtitle languages, timeline advancing.
+
+### Verified LIVE end-to-end (Cloudflare preview e6440f6b, founder QA user)
+- **Movie**: "Facing El Chapo" (2026) → Watch Now → Click to play → vidsrc.to
+  poster → play → MOVIE PLAYS (title sequence "ALFONSO HERRERA" credit),
+  quality menu + subtitle menu (Facing El Chapo .srt files) + timeline.
+- **Series**: "Beauty in Black" S01E01 → season selector (S1-S3) + 16-episode
+  grid + Prev/AUTO ON/Next episode nav → play → EPISODE PLAYS with LIVE
+  CAPTIONS ("Go, go" caption) + 30-language subtitle menu.
+- The slow-load watchdog ("Switch / Keep waiting") renders correctly.
+
+### Rotation order (MoviesEmbed.tsx, TMDB path)
+1. vidsrc.to (VERIFIED playback) 2. autoembed.co 3. player.videasy.net
+4. vidsrc.me 5. vidlink.pro — then 2embed.cc (imdb fallback). Dead providers
+   remain excluded: vidsrc.cc, multiembed.mov, vidsrc.pro, vidsrc.xyz, embed.su.
+
+### Deploy state 2026-08-28
+- GitHub main: 3152711 pushed.
+- Cloudflare Pages: LIVE (preview e6440f6b + main alias fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100 on ALL
+  tokens + git-source API; resets ~2026-08-29 03:44 UTC). GitHub integration
+  (prodBranch=main) auto-deploys 3152711 when the quota resets.
+- Supabase: no schema changes (frontend-only).
+- Build success (110 precache), clean Vite cache.
+
+### Lost-commit audit 2026-08-28 (post-Movies-fix)
+Same documented state — no new lost work. founder-username-login (+7) awaits
+user authorization; identifying-security-vulnerabilities-8d289 (+3) needs
+/api/r2/* + /api/cache/* endpoints; qwen-code-6a328546 (+2) would DELETE
+LiveStreamService.ts (must NOT merge).
