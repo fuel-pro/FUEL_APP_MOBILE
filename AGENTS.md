@@ -9660,3 +9660,76 @@ Same documented state — no new lost work. founder-username-login (+7) awaits
 user authorization; identifying-security-vulnerabilities-8d289 (+3) needs
 /api/r2/* + /api/cache/* endpoints; qwen-code-6a328546 (+2) would DELETE
 LiveStreamService.ts (must NOT merge).
+
+## Session 2026-08-28 (cont.) — Movies/Live players: ads + popup + redirect blocking hardened (DEPLOYED LIVE, commit e2372a8)
+
+**User request**: "ensure no ads, use any method to auto block or auto remove
+them. also ensure no redirect to another tab/browser."
+
+### What was investigated
+- The existing ad-blocker engine (ad-blocker.ts, reverse-engineered from
+  uBlock Origin + Popup Blocker Pro) covered ONLY the TOP document: window.open
+  override, fetch/XHR/beacon network filtering (EasyList-derived 80+ ad
+  domains), cosmetic MutationObserver removal, document.write defusing, and a
+  ref-counted PopupShield lifecycle that engages while a player is open.
+- GAPS: (1) no top-navigation (redirect) trap — a cross-origin embed iframe
+  CAN call window.top.location when there is a user gesture (the classic
+  click-on-play redirect); (2) clicks INSIDE the cross-origin iframe were
+  invisible to the parent (no gesture tracking), so the PopupShield's
+  user-gesture heuristics mis-classified them; (3) an embed iframe could
+  navigate ITSELF to an ad page without touching the top window.
+- sandbox attribute is NOT usable: VERIFIED vidsrc.to (the winning provider)
+  renders a hard refusal page "This content can't be embedded in a sandboxed
+  frame" when sandboxed — sandbox would break ALL playback. (Stale comments
+  in MoviesEmbed.tsx/ad-blocker.ts/index.html claiming sandbox handled the
+  iframe were removed.)
+
+### Fixes (commit e2372a8)
+1. **beforeunload top-redirect trap** (ad-blocker.ts section 5): while the
+   PopupShield is engaged (player open) AND the guard is armed (3s window
+   after any gesture / iframe load), ANY attempt to navigate the tab away
+   fires beforeunload + preventDefault — the browser shows "Leave site?" and
+   the user STAYS on the site by default. Closes the gesture-driven
+   window.top.location redirect hole (Chrome already blocks gesture-less
+   cross-origin top nav natively).
+2. **In-iframe click tracking** (ad-blocker.ts): clicks inside a cross-origin
+   iframe never reach the parent's pointerdown listener — detected via the
+   standard blur/activeElement===IFRAME heuristic, so in-player clicks are
+   correctly treated as user gestures (play clicks never trigger false
+   protections, ad clicks get caught).
+3. **Iframe hijack watchdog** (MoviesEmbed.tsx handleIframeLoad): the embed
+   iframe may only load (a) within 8s of us setting its src (the provider's
+   own redirect chain) or (b) within 1.5s of a user click. Any OTHER load =
+   the provider navigated itself to an ad page — the iframe is force-reset
+   to the real embed URL (iframeEpoch remount) and counted as a blocked
+   "iframe-hijack" event on the shield badge.
+4. armNavGuard()/getLastGestureTime()/noteBlockedEvent() exported for
+   component use.
+
+### Verified LIVE (Cloudflare preview 55edbdb5, founder QA user)
+- "Facing El Chapo" (2026): Watch Now -> Click to play -> vidsrc.to poster
+  -> play -> MOVIE PLAYS (Héctor Kotsifakis title credit) WITH all
+  protections active — watchdog did NOT false-reset the initial load, the
+  in-iframe play click was tracked as a user gesture, NO popup/new tab/
+  redirect occurred, quality (360p/720p/1080p) + subtitle menus intact.
+- Markers confirmed in deployed chunks: top-redirect + beforeunload in
+  index-BxBfrfdm.js (main), iframe-hijack in News-fPBZw5SU.js (MoviesEmbed).
+
+### Deploy state 2026-08-28
+- GitHub main: e2372a8 pushed.
+- Cloudflare Pages: LIVE (preview 55edbdb5 + main alias).
+- Vercel production: LIVE — git-source API deploy succeeded (quota had been
+  exhausted earlier in the session but the gitSource path went through);
+  deployment READY + aliased to fuel-app-mobile.vercel.app at commit
+  e2372a89; top-redirect marker verified in the production chunk
+  (index-DDdk_wJF.js).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build success.
+
+### Lost-commit audit 2026-08-28 (post-ad-block-hardening)
+Re-audited all remote branches: same documented state — no new lost work.
+founder-username-login (+7, awaits user authorization),
+identifying-security-vulnerabilities-8d289 (+3, needs /api/r2/* +
+/api/cache/* endpoints), qwen-code-6a328546 (+2, would DELETE
+LiveStreamService.ts — must NOT merge). All other branches are old divergent
+snapshots (200+ commits behind) already superseded on main.
