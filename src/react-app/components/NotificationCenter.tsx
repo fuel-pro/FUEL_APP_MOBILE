@@ -24,6 +24,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { normalizeFuelType } from "@/react-app/config/pricing";
 
 interface NotificationItem {
   id: string;
@@ -61,7 +62,8 @@ export default function NotificationCenter() {
         const fuelTypes = state.fuelTypes || [];
         for (const ft of fuelTypes) {
           if (!ft.active) continue;
-          const canonical = ft.canonicalType || ft.localName || "";
+          const canonical =
+            normalizeFuelType(ft.localName || ft.name) || ft.code || "";
           const tank = tankValues[canonical];
           if (
             tank &&
@@ -86,7 +88,10 @@ export default function NotificationCenter() {
         }
 
         // 2. Unpaid invoices (from FuelContext state)
-        const invoices = state.invoices || [];
+        const invoicesRaw = state.invoices || {};
+        const invoices: any[] = Array.isArray(invoicesRaw)
+          ? invoicesRaw
+          : Object.values(invoicesRaw);
         for (const inv of invoices) {
           if (inv.status === "unpaid" || (!inv.status && inv.totalAmount)) {
             const invDate = inv.date ? new Date(inv.date).getTime() : now;

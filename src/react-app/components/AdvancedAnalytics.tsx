@@ -544,8 +544,8 @@ export default function AdvancedAnalytics() {
           { id: "analytics", label: "Analytics" },
           { id: "enhanced", label: "Enhanced Dashboard" },
         ]}
-        activeTab={activeSubTab}
-        onTabChange={(id) => setActiveSubTab(id as "analytics" | "enhanced")}
+        active={activeSubTab}
+        onChange={(id) => setActiveSubTab(id as "analytics" | "enhanced")}
       />
       {activeSubTab === "enhanced" ? (
         <Suspense

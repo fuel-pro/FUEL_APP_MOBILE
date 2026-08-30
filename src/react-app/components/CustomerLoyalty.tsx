@@ -258,19 +258,20 @@ export default function CustomerLoyalty() {
         // Customers tab appears empty even though customers exist.
         const compactClients = Object.values(state.clients || {});
         if (compactClients.length > 0 && !localModifiedRef.current) {
-          const mapped = compactClients.map((c: any) => ({
+          const mapped: Customer[] = compactClients.map((c: any) => ({
             id: c.id || c.phone || c.name || String(Math.random()),
             name: c.name || c.clientName || "Unknown",
             email: c.email || "",
             phone: c.phone || c.phoneNo || "",
-            address: c.address || "",
             vehicleReg: c.vehicleReg || c.vehicleNumber || "",
             preferredFuel: "Both",
-            points: 0,
+            loyaltyPoints: 0,
             totalSpent: 0,
             visits: 0,
-            tier: "Bronze",
-            createdAt: c.createdAt || new Date().toISOString(),
+            lastVisit: "",
+            tier: "Bronze" as const,
+            notes: "",
+            joinDate: c.createdAt || new Date().toISOString(),
           }));
           setCustomers(mapped);
         }

@@ -297,6 +297,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       try {
         unsub = cloudStorageService.subscribe<ColorTheme>(
           COLOR_THEME_CLOUD_KEY,
+          undefined,
           (val) => {
             if (isColorTheme(val) && val !== colorTheme) {
               skipRemoteColorRef.current = true;

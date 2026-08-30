@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatCurrency } from "@/react-app/lib/currency";
 import { dataCache } from "@/react-app/lib/enhanced/performance";
@@ -58,7 +59,9 @@ interface PaymentMethod {
 }
 
 const EnhancedPOS: React.FC = () => {
-  const { user, stationId } = useAuth();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id || "";
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");

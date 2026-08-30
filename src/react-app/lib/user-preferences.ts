@@ -77,6 +77,22 @@ export interface UserPreferences {
     autoRefreshDashboard: boolean;
     autoSyncPricesAcrossTabs: boolean;
     autoLogShiftTotals: boolean;
+    // Module Behavior (General Settings -> Module Behavior tab)
+    autoApplyLoyaltyDiscounts?: boolean;
+    autoOpenCashDrawer?: boolean;
+    autoPrintReceipt?: boolean;
+    showShiftReminderOnClose?: boolean;
+    autoCalculateDipDifferences?: boolean;
+    autoFlagShortDeliveries?: boolean;
+    showLiveTVTab?: boolean;
+    showLiveRadioTab?: boolean;
+    autoPlayLiveStreams?: boolean;
+    requireInviteCodeApproval?: boolean;
+    autoDeactivateExpiredMembers?: boolean;
+    autoCreateProductOnDelivery?: boolean;
+    showNegativeStockWarning?: boolean;
+    autoUpdateFuelPrices?: boolean;
+    showEpraReference?: boolean;
   };
 
   // UI

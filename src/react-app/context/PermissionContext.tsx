@@ -383,6 +383,7 @@ interface PermissionConfig {
   canUseAI: boolean;
   canViewCommunication: boolean;
   canViewNews: boolean;
+  canViewInvoices?: boolean;
   canViewPOS: boolean;
   canUsePOS: boolean;
   canViewLoyalty: boolean;

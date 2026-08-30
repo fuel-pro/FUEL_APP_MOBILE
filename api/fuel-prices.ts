@@ -289,7 +289,8 @@ export async function GET(request: Request): Promise<Response> {
     // No API keys configured — if the coords are in Kenya, serve the
     // embedded published EPRA reference; otherwise return a clean signal so
     // the client falls back to its own location-based static pricing.
-    const inKenya = lat >= -5 && lat <= 6 && lng >= 33.5 && lng <= 42.5;
+    const inKenya =
+      latNum >= -5 && latNum <= 6 && lngNum >= 33.5 && lngNum <= 42.5;
     if (inKenya) {
       return new Response(
         JSON.stringify({

@@ -15,6 +15,7 @@ import {
   QrCode,
   Star,
   Award,
+  Loader2,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import {
@@ -986,8 +987,8 @@ export default function PointOfSale() {
           { id: "standard", label: "Standard POS" },
           { id: "enhanced", label: "Enhanced POS" },
         ]}
-        activeTab={posView}
-        onTabChange={(id) => setPosView(id as "standard" | "enhanced")}
+        active={posView}
+        onChange={(id) => setPosView(id as "standard" | "enhanced")}
       />
       {posView === "enhanced" ? (
         <Suspense

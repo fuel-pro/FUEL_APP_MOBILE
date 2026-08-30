@@ -1356,7 +1356,7 @@ export default function LiveFeedEmbed({
         subCategoryLabel: subDef?.label,
         country,
         countryName,
-        playedAt: Date.now(),
+        viewedAt: Date.now(),
       };
       setHistory((prev) => {
         const filtered = prev.filter(

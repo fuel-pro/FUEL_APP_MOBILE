@@ -47,6 +47,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatCurrency } from "@/react-app/lib/currency";
 import {
@@ -77,7 +78,9 @@ interface Prediction {
 }
 
 const EnhancedAnalyticsDashboard: React.FC = () => {
-  const { user, stationId } = useAuth();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id || "";
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">(
     "30d",
   );
@@ -277,7 +280,8 @@ const EnhancedAnalyticsDashboard: React.FC = () => {
       const intercept = (sumY - slope * sumX) / n;
 
       const nextValue = slope * n + intercept;
-      const trend = slope > 0.05 ? "up" : slope < -0.05 ? "down" : "stable";
+      const trend: "up" | "down" | "stable" =
+        slope > 0.05 ? "up" : slope < -0.05 ? "down" : "stable";
 
       return { trend, value: Math.max(0, nextValue) };
     };

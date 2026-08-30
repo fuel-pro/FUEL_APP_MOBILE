@@ -1456,10 +1456,11 @@ export default function StationManager({ onClose }: StationManagerProps) {
   const stationHealth = useMemo(() => {
     return stations.map((s) => {
       const data = s.data || {};
+      const stationStatus: string = data.status || "active";
       let score = 50;
       const issues: string[] = [];
-      if (s.status === "active") score += 20;
-      else if (s.status === "maintenance") {
+      if (stationStatus === "active") score += 20;
+      else if (stationStatus === "maintenance") {
         score += 5;
         issues.push("Under maintenance");
       } else issues.push("Inactive");
@@ -1483,7 +1484,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
         name: s.name,
         score,
         issues,
-        status: s.status,
+        status: stationStatus,
         healthLabel:
           score >= 85 ? "Good" : score >= 60 ? "Warning" : "Critical",
       };

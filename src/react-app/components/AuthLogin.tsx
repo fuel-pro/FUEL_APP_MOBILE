@@ -371,8 +371,8 @@ export default function AuthLogin() {
     }
     // Resolve the station: either from the search selection or the manual
     // ownerId + stationId fallback entry.
-    let ownerId = selectedStation?.ownerId || manualOwnerId.trim();
-    let stationId = selectedStation?.stationId || manualStationId.trim();
+    const ownerId = selectedStation?.ownerId || manualOwnerId.trim();
+    const stationId = selectedStation?.stationId || manualStationId.trim();
     if (!ownerId || !stationId) {
       setLocalError(
         "Please search for and select your station, or enter the Station Owner ID and Station ID manually.",

@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useCallback, useMemo } from "react";
+import * as React from "react";
 
 // Performance monitoring constants
 const PERFORMANCE_THRESHOLDS = {
@@ -325,7 +326,11 @@ export function scheduleIdleTask(
 // Web Worker pool for heavy computations
 class WorkerPool {
   private workers: Worker[] = [];
-  private queue: Array<{ task: any; resolve: Function; reject: Function }> = [];
+  private queue: Array<{
+    task: any;
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
+  }> = [];
   private availableWorkers: number[] = [];
 
   constructor(workerFactory: () => Worker, poolSize: number = 4) {

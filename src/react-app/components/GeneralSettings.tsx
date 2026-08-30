@@ -688,10 +688,13 @@ export default function GeneralSettings() {
           <ApiBackendTab config={config} update={update} show={show} />
         )}
         {activeSubTab === "deployment" && (
-          <DeploymentTab config={config} show={show} />
+          <DeploymentTab config={config} update={update} show={show} />
         )}
         {activeSubTab === "features" && (
-          <FeaturesTab featureFlags={featureFlags} show={show} />
+          <FeaturesTab
+            featureFlags={featureFlags as unknown as Record<string, boolean>}
+            show={show}
+          />
         )}
         {activeSubTab === "appearance" && (
           <AppearanceTab
@@ -1161,7 +1164,13 @@ function GeneralTab({
 }) {
   const timezones = useMemo(() => {
     try {
-      return Intl.supportedValuesOf("timeZone");
+      const intlWithSupportedValues = Intl as unknown as {
+        supportedValuesOf?: (key: "timeZone") => string[];
+      };
+      if (typeof intlWithSupportedValues.supportedValuesOf === "function") {
+        return intlWithSupportedValues.supportedValuesOf("timeZone");
+      }
+      throw new Error("supportedValuesOf unavailable");
     } catch {
       return [
         "UTC",
@@ -3650,9 +3659,14 @@ function ApiBackendTab({
 // ═══════════════════════════════════════════════════════════════════════════
 function DeploymentTab({
   config,
+  update,
   show,
 }: {
   config: GeneralSettingsConfig;
+  update: <K extends keyof GeneralSettingsConfig>(
+    key: K,
+    value: GeneralSettingsConfig[K],
+  ) => void;
   show: (msg: string, type?: "success" | "error" | "info") => void;
 }) {
   const [deployStatus, setDeployStatus] = useState<

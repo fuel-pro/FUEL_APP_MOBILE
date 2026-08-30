@@ -1045,7 +1045,7 @@ export default function TeamManager() {
         const q = memberSearch.toLowerCase().trim();
         const haystack = [
           m.username || "",
-          m.memberName || m.username || "",
+          (m as { memberName?: string }).memberName || m.username || "",
           m.email || "",
           m.uniqueId || "",
           m.role || "",
@@ -1159,7 +1159,7 @@ export default function TeamManager() {
     ];
     for (const m of filteredMembers) {
       rows.push([
-        m.memberName || m.username || "",
+        (m as { memberName?: string }).memberName || m.username || "",
         m.username || "",
         m.role || "",
         m.accessMethod || "",

@@ -407,6 +407,11 @@ class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
   private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
 
+  /** Synchronous current-user id (in-memory cache / localStorage). */
+  currentUserIdSync(): string | null {
+    return currentUserIdSync();
+  }
+
   /**
    * EGRESS-SAVING KILL SWITCH for Supabase Realtime subscriptions.
    *

@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatCurrency } from "@/react-app/lib/currency";
 import { dataCache } from "@/react-app/lib/enhanced/performance";
@@ -82,7 +83,8 @@ interface AutomatedOrder {
 }
 
 const EnhancedInventoryManagement: React.FC = () => {
-  const { stationId } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id || "";
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [forecasts, setForecasts] = useState<DemandForecast[]>([]);
   const [automatedOrders, setAutomatedOrders] = useState<AutomatedOrder[]>([]);

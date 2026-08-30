@@ -365,7 +365,8 @@ export function initAdBlocker(): void {
       if (
         style.position === "fixed" &&
         (style.zIndex === "2147483647" || parseInt(style.zIndex) > 900000) &&
-        (style.inset === "0px" || (style.top === "0px" && style.left === "0px")) &&
+        (style.inset === "0px" ||
+          (style.top === "0px" && style.left === "0px")) &&
         !htmlEl.closest("[data-fuelpro-ui]")
       ) {
         // Only remove if it is a bare click-catcher (no meaningful content).

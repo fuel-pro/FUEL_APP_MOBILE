@@ -56,6 +56,8 @@ jobs:
     name: Deploy Production
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     environment:
       name: production
       url: https://fuel-app-mobile.vercel.app

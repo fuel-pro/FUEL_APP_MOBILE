@@ -28,7 +28,7 @@
 
 | Property       | Value                                 |
 | -------------- | ------------------------------------- |
-| **Repository** | `fuelpropay/FUEL_APP_MOBILE`            |
+| **Repository** | `fuelpropay/FUEL_APP_MOBILE`          |
 | **Type**       | Fuel Station Management System (SaaS) |
 | **Frontend**   | React 19 + TypeScript + Vite          |
 | **Cloud**      | Firebase (Auth + Firestore)           |
@@ -449,11 +449,11 @@ npm run cap:build
 
 ### GitHub
 
-| Property       | Value                      |
-| -------------- | -------------------------- |
+| Property       | Value                        |
+| -------------- | ---------------------------- |
 | Repository     | `fuelpropay/FUEL_APP_MOBILE` |
-| Owner          | `fuel-pro`                 |
-| Default Branch | `main`                     |
+| Owner          | `fuel-pro`                   |
+| Default Branch | `main`                       |
 
 ---
 
