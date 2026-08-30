@@ -14,16 +14,16 @@
     {
       "source": "/((?!assets/|sw\\.js|api/).*)",
       "destination": "/index.html"
+    },
+    {
+      "source": "/api/iptv-channels",
+      "destination": "/api/live-channels?source=iptv"
     }
   ],
   "headers": [
     {
       "source": "/api/movie-embed",
       "headers": [
-        {
-          "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
-        },
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/:path((?!api/movie-embed).*)",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",

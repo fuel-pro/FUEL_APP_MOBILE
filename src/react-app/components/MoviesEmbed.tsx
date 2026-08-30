@@ -719,6 +719,20 @@ interface EmbedCandidate {
   proxied?: boolean;
 }
 
+// The ad-free proxied player chain lives at /api/movie-embed. The upstream
+// session gate (vsembed.ru) is behind a Cloudflare bot challenge that blocks
+// Cloudflare Workers' fetch, so on Cloudflare Pages we must call the VERCEL
+// deployment (AWS network passes the gate — verified live 2026-08-30). On
+// Vercel the relative same-origin path is used. This mirrors the existing
+// fuelApiBase() pattern in FuelPriceLocator.tsx. The endpoint deliberately
+// omits X-Frame-Options so the cross-origin iframe is allowed.
+const MOVIE_EMBED_VERCEL_ORIGIN = "https://fuel-app-mobile.vercel.app";
+function movieEmbedBase(): string {
+  if (typeof window === "undefined") return MOVIE_EMBED_VERCEL_ORIGIN;
+  if (window.location.hostname.includes("vercel.app")) return "";
+  return MOVIE_EMBED_VERCEL_ORIGIN;
+}
+
 function buildEmbedCandidates(
   detail: MovieDetail,
   type: "movie" | "tv",
@@ -731,16 +745,17 @@ function buildEmbedCandidates(
   const isTv = type === "tv";
   const s = Math.max(1, seasonNum);
   const e = Math.max(1, episodeNum);
+  const embedBase = movieEmbedBase();
   if (tmdb) {
-    // Server 1 — the ad-free proxied chain (same-origin, fully sandboxed).
-    // Verified end-to-end 2026-08-30: gate -> landing -> player -> HLS
-    // segments all proxied; actual playback confirmed (currentTime advancing,
-    // readyState 4, 1080p) with ZERO popups / ZERO top-level redirects.
+    // Server 1 — the ad-free proxied chain (our own function, fully
+    // sandboxed). Verified end-to-end 2026-08-30: gate -> landing -> player
+    // -> HLS segments all proxied; actual playback confirmed (currentTime
+    // advancing, readyState 4, 1080p) with ZERO popups / ZERO redirects.
     out.push({
       label: "Server 1 (Ad-Free HD)",
       url: isTv
-        ? `/api/movie-embed?type=tv&id=${tmdb}&season=${s}&episode=${e}`
-        : `/api/movie-embed?type=movie&id=${tmdb}`,
+        ? `${embedBase}/api/movie-embed?type=tv&id=${tmdb}&season=${s}&episode=${e}`
+        : `${embedBase}/api/movie-embed?type=movie&id=${tmdb}`,
       proxied: true,
     });
     // Fallback mirrors (unsandboxed — they refuse sandboxed frames; the

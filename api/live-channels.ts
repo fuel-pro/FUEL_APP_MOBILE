@@ -60,6 +60,102 @@ function parseQuery(req: IncomingMessage): Record<string, string | string[]> {
 const cache = new Map<string, { data: TvgChannel[]; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 
+// ── iptv-org provider (merged from the former api/iptv-channels.ts to stay
+// under the Vercel Hobby 12-function limit; routed here via the
+// /api/iptv-channels -> /api/live-channels?source=iptv rewrite) ────────────
+const IPTV_BASE = "https://iptv-org.github.io/api";
+const iptvCache = new Map<string, { data: unknown[]; ts: number }>();
+const IPTV_CACHE_TTL = 10 * 60 * 1000;
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${IPTV_BASE}/${path}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function handleIptv(
+  r: ApiResponse,
+  query: Record<string, string | string[]>,
+) {
+  const country = ((query.country as string) || "").toLowerCase().trim();
+  const category = ((query.category as string) || "").toLowerCase().trim();
+  const limit = Math.min(
+    12000,
+    parseInt((query.limit as string) || "12000", 10) || 12000,
+  );
+  const cacheKey = `iptv/${country || "all"}/${category || "all"}/${limit}`;
+  const cached = iptvCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < IPTV_CACHE_TTL) {
+    r.status(200).json({
+      channels: cached.data,
+      count: cached.data.length,
+      source: "iptv-org",
+    });
+    return;
+  }
+  try {
+    const [channelsRaw, streamsRaw] = await Promise.all([
+      fetchJson<
+        {
+          id: string;
+          name: string;
+          country: string;
+          categories: string[];
+          is_nsfw: boolean;
+          closed?: string | null;
+          replaced_by?: string | null;
+          logo: string;
+        }[]
+      >("channels.json"),
+      fetchJson<{ channel: string; url: string }[]>("streams.json"),
+    ]);
+    const streamMap = new Map<string, string>();
+    for (const s of streamsRaw) {
+      if (s.channel && s.url && !streamMap.has(s.channel)) {
+        streamMap.set(s.channel, s.url);
+      }
+    }
+    let merged: unknown[] = [];
+    for (const ch of channelsRaw) {
+      if (ch.closed || ch.replaced_by || ch.is_nsfw) continue;
+      const url = streamMap.get(ch.id);
+      if (!url) continue;
+      if (country && ch.country.toLowerCase() !== country) continue;
+      if (category) {
+        const cats = (ch.categories || []).map((c) => c.toLowerCase());
+        if (!cats.includes(category)) continue;
+      }
+      merged.push({
+        id: ch.id,
+        name: ch.name || ch.id,
+        url,
+        logo: ch.logo || "",
+        country: ch.country || "",
+        language: "",
+        category: (ch.categories || []).join(", "),
+      });
+    }
+    merged.sort((a, b) => {
+      const x = a as { logo: string; name: string };
+      const y = b as { logo: string; name: string };
+      if (!!x.logo !== !!y.logo) return x.logo ? -1 : 1;
+      return x.name.localeCompare(y.name);
+    });
+    if (merged.length > limit) merged = merged.slice(0, limit);
+    iptvCache.set(cacheKey, { data: merged, ts: Date.now() });
+    r.status(200).json({
+      channels: merged,
+      count: merged.length,
+      source: "iptv-org",
+    });
+  } catch (err) {
+    console.error("[live-channels] iptv fetch error:", err);
+    r.status(200).json({ channels: [], count: 0, source: "iptv-org" });
+  }
+}
+
 export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
@@ -75,6 +171,11 @@ export default async function handler(
 
   if (req.method === "OPTIONS") {
     r.status(204).end();
+    return;
+  }
+
+  if ((query.source as string) === "iptv") {
+    await handleIptv(r, query);
     return;
   }
 

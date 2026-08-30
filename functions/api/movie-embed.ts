@@ -251,18 +251,32 @@ export async function onRequest(context: {
     }
     const gateReferer = `${GATE_REFERER_BASE}/${type}/${id}/`;
     const gateResp = await fetch(gateUrl, {
-      headers: { "User-Agent": UA, Referer: gateReferer },
+      headers: {
+        "User-Agent": UA,
+        Referer: gateReferer,
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
     });
-    const gateJson = (await gateResp.json()) as { src?: string };
+    const gateText = await gateResp.text();
+    let gateJson: { src?: string } | null = null;
+    try {
+      gateJson = JSON.parse(gateText) as { src?: string };
+    } catch {
+      gateJson = null;
+    }
     if (
       !gateJson ||
       typeof gateJson.src !== "string" ||
       !gateJson.src.startsWith("http")
     ) {
+      const debug = url.searchParams.get("debug") === "1";
       return new Response(
         errorPage(
           "Stream unavailable",
-          "The source gate did not return a playable session.",
+          debug
+            ? `gate HTTP ${gateResp.status}: ${gateText.slice(0, 180).replace(/</g, "&lt;")}`
+            : "The source gate did not return a playable session.",
         ),
         { status: 502, headers: { "content-type": "text/html" } },
       );

@@ -12,7 +12,7 @@
          checks, TVGarden live TV/radio embeds in News). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app https://www.youtube.com https://api.exchangerate-api.com https://vixcloud.co https://*.vixcloud.co https://*.vix-content.net; frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://vixcloud.co https://*.vixcloud.co https://tvgarden.world https://*.tvgarden.world https://vidsrc.to https://*.vidsrc.to https://vidsrc.me https://*.vidsrc.me https://player.videasy.net https://*.videasy.net https://player.videasy.to https://*.videasy.to https://autoembed.co https://*.autoembed.co https://vidlink.pro https://*.vidlink.pro https://www.2embed.cc https://*.2embed.cc; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app https://www.youtube.com https://api.exchangerate-api.com https://vixcloud.co https://*.vixcloud.co https://*.vix-content.net; frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://fuel-app-mobile.vercel.app https://vixcloud.co https://*.vixcloud.co https://tvgarden.world https://*.tvgarden.world https://vidsrc.to https://*.vidsrc.to https://vidsrc.me https://*.vidsrc.me https://player.videasy.net https://*.videasy.net https://player.videasy.to https://*.videasy.to https://autoembed.co https://*.autoembed.co https://vidlink.pro https://*.vidlink.pro https://www.2embed.cc https://*.2embed.cc; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="X-Frame-Options" content="DENY" />
@@ -62,16 +62,21 @@
         document.addEventListener(
           "click",
           function (e) {
-            var el = e.target && e.target.closest ? e.target.closest("a") : null;
+            var el =
+              e.target && e.target.closest ? e.target.closest("a") : null;
             if (!el) return;
             var href = el.getAttribute("href") || "";
-            if (/(\/ads\/|adserver|doubleclick|popads|popcash|propeller|adnxs|adsystem|trackclick|clickadu|exoclick|trafficjunky|juicyads)/i.test(href)) {
+            if (
+              /(\/ads\/|adserver|doubleclick|popads|popcash|propeller|adnxs|adsystem|trackclick|clickadu|exoclick|trafficjunky|juicyads)/i.test(
+                href,
+              )
+            ) {
               e.preventDefault();
               e.stopPropagation();
               console.warn("[ad-blocker] Blocked ad link:", href);
             }
           },
-          true
+          true,
         );
         // NOTE: top-navigation hijack protection is handled by the iframe
         // sandbox attribute (no allow-top-navigation) on the embed players.

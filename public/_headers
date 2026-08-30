@@ -9,7 +9,6 @@
   Service-Worker-Allowed: /
 
 /api/movie-embed
-  X-Frame-Options: SAMEORIGIN
   Cache-Control: no-cache, no-store, must-revalidate
 
 /index.html
