@@ -1,4 +1,37 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
+## Session 2026-08-30 — GitHub org transfer: fuel-pro → fuelpropay (DEPLOYED LIVE)
+
+**User transferred the repo** from `github.com/fuel-pro/FUEL_APP_MOBILE` to
+`github.com/fuelpropay/FUEL_APP_MOBILE`. Impact audit + fixes:
+
+- **GitHub repo ID is PRESERVED across transfer**: the new repo still has id
+  `1241380610` (verified via GitHub API). So the Vercel `gitSource.repoId:
+  1241380610` used by deploys remains valid — only the slug string changed.
+- **Updated all 16 repo references** (org slug `fuel-pro/FUEL_APP_MOBILE` →
+  `fuelpropay/FUEL_APP_MOBILE`) across: `.github/workflows/deploy.yml`
+  (git-source Vercel deploy), `DeveloperControlCenterSection.tsx` (Founder
+  Console → Deploy Manager GitHub link), README.md, AI_README.md, TASKS.md,
+  BRANCHES.md, OPEN_SOURCE_INTEGRATIONS.md, MISSING_FEATURES_ANALYSIS.md,
+  MISSING_FEATURES_COMPREHENSIVE.md, AGENTS.md.
+- **Vercel project git link is STALE**: the Vercel project
+  (`prj_hjVrMLO7CxLTI77kthGE020eI3oj`) still reports `link.org: fuel-pro`.
+  The Vercel REST API does NOT allow relinking a project's git connection
+  (`PATCH /v9/projects` rejects `link` as an additional property). The
+  git-source API deploy path (POST /v13/deployments with repoId) and the
+  prebuilt deploy path are unaffected. **MANUAL STEP for the user**: install
+  the Vercel GitHub App on the new `fuelpropay` org and re-connect the repo
+  in Vercel Dashboard → Project Settings → Git (or the GitHub-integration
+  auto-deploys on push will not fire until Vercel picks up the transfer).
+- **GitHub Actions secrets transfer with the repo** — `secrets.GITHUB_TOKEN`
+  (auto) + `secrets.VERCEL_TOKEN` are intact; `deploy.yml` continues to work.
+- **Firebase docs (`FIREBASE_SETUP*.md`, `FINAL_SUMMARY.md`) contain
+  `fuel-pro` / `fuel-pro-1`** — these are the Firebase project ID, NOT the
+  GitHub org. Intentionally left unchanged (the Firebase project still exists
+  under that ID).
+- **ai-readme branch re-verified**: 0 commits not on main (fully contained).
+  Earlier shallow-clone "59 ahead" reading was a graft artifact.
+- Deployed: GitHub main pushed; Cloudflare Pages + Vercel redeployed.
+
 
 ## Session 2026-08-25 — News tab: station preview + Live Channels/Live TV merge (DEPLOYED LIVE)
 
@@ -741,7 +774,7 @@ cross-device sync. Both `app_kv` and `stations` are in the
 
 - Vercel: fuel-app-mobile.vercel.app (prebuilt deploy, READY)
 - Cloudflare: fuel-app-mobile.pages.dev (preview 6b58195b)
-- PR #95: https://github.com/fuel-pro/FUEL_APP_MOBILE/pull/95
+- PR #95: https://github.com/fuelpropay/FUEL_APP_MOBILE/pull/95
 
 ### Fuel Price Finder Г”Г‡Г¶ GPS geolocation feature (ADDED 2026-08-09)
 

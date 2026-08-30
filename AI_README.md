@@ -28,7 +28,7 @@
 
 | Property       | Value                                 |
 | -------------- | ------------------------------------- |
-| **Repository** | `fuel-pro/FUEL_APP_MOBILE`            |
+| **Repository** | `fuelpropay/FUEL_APP_MOBILE`            |
 | **Type**       | Fuel Station Management System (SaaS) |
 | **Frontend**   | React 19 + TypeScript + Vite          |
 | **Cloud**      | Firebase (Auth + Firestore)           |
@@ -451,7 +451,7 @@ npm run cap:build
 
 | Property       | Value                      |
 | -------------- | -------------------------- |
-| Repository     | `fuel-pro/FUEL_APP_MOBILE` |
+| Repository     | `fuelpropay/FUEL_APP_MOBILE` |
 | Owner          | `fuel-pro`                 |
 | Default Branch | `main`                     |
 
@@ -565,9 +565,9 @@ vercel --prod  # Requires Vercel CLI
 
 ## 📞 Support
 
-- **Repository**: https://github.com/fuel-pro/FUEL_APP_MOBILE
-- **Issues**: https://github.com/fuel-pro/FUEL_APP_MOBILE/issues
-- **Discussions**: https://github.com/fuel-pro/FUEL_APP_MOBILE/discussions
+- **Repository**: https://github.com/fuelpropay/FUEL_APP_MOBILE
+- **Issues**: https://github.com/fuelpropay/FUEL_APP_MOBILE/issues
+- **Discussions**: https://github.com/fuelpropay/FUEL_APP_MOBILE/discussions
 
 ---
 
