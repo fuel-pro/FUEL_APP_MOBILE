@@ -707,6 +707,16 @@ function AutoRetryOverlay({
 interface EmbedCandidate {
   label: string;
   url: string;
+  /**
+   * True when the URL is served from OUR OWN origin via the /api/movie-embed
+   * proxy. The proxied chain serves ONLY the clean final player pages (the
+   * ad-laden wrapper layers are fetched server-side and never reach the
+   * browser), so a fully sandboxed iframe is safe — and because the upstream
+   * wrapper's sandbox-detection script is part of the ad wrapper (never
+   * served), nothing can detect or refuse the sandbox. The browser then
+   * natively blocks ALL popups + top-level redirects from the player.
+   */
+  proxied?: boolean;
 }
 
 function buildEmbedCandidates(
@@ -721,16 +731,20 @@ function buildEmbedCandidates(
   const isTv = type === "tv";
   const s = Math.max(1, seasonNum);
   const e = Math.max(1, episodeNum);
-  // Mirrors ranked BEST → fallback-for-similar-servers. Once a server
-  // (e.g. autoembed.co) LOADS it works — rotation STOPS so a working
-  // provider is never abandoned. autoembed.co is the verified-primary.
-  // vidsrc.me + videasy.net are the "similar-to-the-primary" fallbacks
-  // tried in order if the primary truly fails to load (not just slow).
-  // 2embed.cc is the imdb fallback. vidsrc.cc, multiembed.mov,
-  // vidsrc.pro, vidsrc.xyz, embed.su are dead (403/DNS-dead) — excluded.
   if (tmdb) {
-    // ORDER MATTERS — verified in isolation (2026-08-28, headless Chromium
-    // with third-party storage BLOCKED, the most restrictive case):
+    // Server 1 — the ad-free proxied chain (same-origin, fully sandboxed).
+    // Verified end-to-end 2026-08-30: gate -> landing -> player -> HLS
+    // segments all proxied; actual playback confirmed (currentTime advancing,
+    // readyState 4, 1080p) with ZERO popups / ZERO top-level redirects.
+    out.push({
+      label: "Server 1 (Ad-Free HD)",
+      url: isTv
+        ? `/api/movie-embed?type=tv&id=${tmdb}&season=${s}&episode=${e}`
+        : `/api/movie-embed?type=movie&id=${tmdb}`,
+      proxied: true,
+    });
+    // Fallback mirrors (unsandboxed — they refuse sandboxed frames; the
+    // ad-blocker engine + hijack watchdog protect these).
     // - vidsrc.to: ACTUAL PLAYBACK confirmed (poster, play, quality menu,
     //   subtitle menu, timeline advancing) even with 3P storage blocked.
     // - autoembed.co: inner player iframes mount (spinner-stuck headless,
@@ -739,31 +753,31 @@ function buildEmbedCandidates(
     //   crash/error where 3P storage is blocked; kept as fallbacks only.
     // - vidsrc.me: domain-blocks some referrers ("content is blocked").
     out.push({
-      label: "Server 1 (Best)",
+      label: "Server 2",
       url: isTv
         ? `https://vidsrc.to/embed/tv/${tmdb}/${s}/${e}`
         : `https://vidsrc.to/embed/movie/${tmdb}`,
     });
     out.push({
-      label: "Server 2",
+      label: "Server 3",
       url: isTv
         ? `https://autoembed.co/tv/tmdb/${tmdb}-${s}-${e}`
         : `https://autoembed.co/movie/tmdb/${tmdb}`,
     });
     out.push({
-      label: "Server 3",
+      label: "Server 4",
       url: isTv
         ? `https://player.videasy.net/tv/${tmdb}/${s}/${e}`
         : `https://player.videasy.net/movie/${tmdb}`,
     });
     out.push({
-      label: "Server 4",
+      label: "Server 5",
       url: isTv
         ? `https://vidsrc.me/embed/tv?tmdb=${tmdb}&season=${s}&episode=${e}`
         : `https://vidsrc.me/embed/movie?tmdb=${tmdb}`,
     });
     out.push({
-      label: "Server 5",
+      label: "Server 6",
       url: isTv
         ? `https://vidlink.pro/tv/${tmdb}/${s}/${e}`
         : `https://vidlink.pro/movie/${tmdb}`,
@@ -998,15 +1012,25 @@ function EmbedFallbackPlayer({
             referrerPolicy="no-referrer"
             title={title}
             onLoad={handleIframeLoad}
-            // NO sandbox attribute: embed providers explicitly DETECT a
-            // sandboxed frame and refuse to play (verified: vidsrc.to renders
-            // "This content can't be embedded in a sandboxed frame"). Ads and
-            // redirects from inside the frame are instead blocked by the
-            // ad-blocker engine (ad-blocker.ts: window.open override, network
-            // filtering, cosmetic removal, beforeunload top-redirect trap)
-            // + the iframe hijack watchdog above (handleIframeLoad resets the
-            // frame if it navigates itself to an ad page without a user
-            // gesture) + the PopupShield engaged in this component.
+            // Sandbox policy:
+            // - PROXIED candidates (our own origin via /api/movie-embed): fully
+            //   sandboxed — no popups, no top-navigation, browser-enforced.
+            //   The upstream sandbox-detection script lives in the ad wrapper
+            //   layers which this chain never serves, so nothing can detect or
+            //   refuse the sandbox.
+            // - Direct mirror providers (vidsrc.to etc.): NO sandbox — they
+            //   explicitly detect sandboxed frames and refuse to play
+            //   (verified: vidsrc.to renders "This content can't be embedded
+            //   in a sandboxed frame"). Those are instead guarded by the
+            //   ad-blocker engine (window.open override, network filtering,
+            //   cosmetic removal, beforeunload top-redirect trap) + the iframe
+            //   hijack watchdog above + the PopupShield engaged here.
+            {...(current.proxied
+              ? {
+                  sandbox:
+                    "allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-pointer-lock",
+                }
+              : {})}
           />
           {/* Branding-hiding overlays — blurred patches over the typical
               watermark corners + a clean top gradient with OUR title. */}
