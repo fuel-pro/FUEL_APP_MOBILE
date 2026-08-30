@@ -32,6 +32,32 @@
   Earlier shallow-clone "59 ahead" reading was a graft artifact.
 - Deployed: GitHub main pushed; Cloudflare Pages + Vercel redeployed.
 
+### Follow-up (same session, commit 9c426d8) — CI fixed + Vercel integration confirmed working
+
+- **All 54 TypeScript errors + 4 ESLint errors fixed** (23 files): SubTabBar
+  prop names (`active`/`onChange`), missing Loader2 import, CustomerLoyalty
+  compact-client mapping, LiveFeedEmbed `viewedAt`, NotificationCenter
+  `currentUserIdSync()` + invoices union guard, StationManager `data.status`
+  (not top-level), TeamManager union `memberName` access, PermissionContext
+  optional `canViewInvoices`, ThemeContext subscribe signature, features/*
+  derive `stationId` from `useStations` (AuthContext has no stationId),
+  `warning` variant added to ui/badge + ui/alert, api/fuel-prices lat/lng
+  null-safety, performance.ts React import + unsafe `Function` types,
+  AuthLogin prefer-const, GeneralSettings FeatureFlags/DeploymentTab/timezone
+  typing.
+- **Deploy workflow fix**: `deploy.yml` "Create GitHub Release" step lacked
+  `contents: write` permission → added `permissions: contents: write`.
+- **Vercel GitHub integration FOLLOWED the transfer** (contrary to the earlier
+  warning above): on push of 9c426d8, the integration auto-built + deployed
+  commit 9c426d81 to production READY — the manual relink step is apparently
+  unnecessary now (Vercel picked up the transferred repo automatically).
+- **All CI gates green on main**: Type Check, Lint (0 errors), Build, Unit
+  Tests (27/27), Deploy Production, Deploy via Vercel GitHub Integration.
+- Deploy state: GitHub main 9c426d8; Cloudflare Pages LIVE (preview
+  ef57f024 + main alias, index-BCwONgYV.js); Vercel production LIVE at
+  9c426d81 (dpl_4KarW7t8EVqpikKcoETHhuUBvEk1, READY, aliased to
+  fuel-app-mobile.vercel.app). Supabase: no schema changes.
+
 
 ## Session 2026-08-25 — News tab: station preview + Live Channels/Live TV merge (DEPLOYED LIVE)
 
