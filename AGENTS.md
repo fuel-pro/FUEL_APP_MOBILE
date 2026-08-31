@@ -1,4 +1,118 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
+
+## Session 2026-08-31 — Payroll Payslip auto/manual delivery (PDF via Email/WhatsApp) (DEPLOYED LIVE)
+
+**Task**: In "Payroll System", auto-send each employee's payslip (as PDF) on a
+specified date each month + manual toggle, sent via WhatsApp or email, using
+each employee's EXISTING payroll record (phone/email) — no manual keying of
+contact details per send. Real integrations only (no simulation).
+
+### What was built (commit 451cf70, on main)
+
+- **`src/react-app/lib/payslip-delivery.ts`** (NEW): the delivery engine.
+  - `normalizePhoneForSending(raw)` — E.164-ish normalization via a 40-country
+    DIALING_CODES map (handles leading-0 local format, e.g. Kenyan 0712... →
+    254712...).
+  - `maskRecipient(v)` — `jo***@test.com` / `254****78` for the log.
+  - `currentPeriodKey()/currentPeriodLabel()` — "2026-08" / "August 2026".
+  - `uploadPayslipPdf(blob, ownerId, filename)` — uploads the PDF to the
+    public `fuelpro-files` bucket (`payslips/<ownerId>/<ts>_<name>.pdf`) and
+    returns the public URL (used as the WhatsApp document link + email
+    fallback link). Reuses the existing public-bucket pattern.
+  - `deliverPayslip({channel, toEmail, toPhone, pdfBase64, publicUrl, ...})`
+    — sends via the REAL `callIntegration("email-send"|"whatsapp-send")`
+    dispatcher. Email gets the PDF as a base64 attachment; WhatsApp gets a
+    document message with the public URL + caption. Returns per-channel
+    success/error (never throws). Honest errors: "no employee email on file",
+    "email gateway not configured", "WhatsApp gateway not configured", etc.
+  - Types: `PayslipDeliveryConfig` (enabled/channel/sendDay/autoSend/
+    lastAutoSentPeriod), `PayslipSendLogEntry`, `CommGatewayConfig`.
+  - Cloud keys (station-scoped, cross-device): `payroll_payslip_config`,
+    `payroll_payslip_log`.
+
+- **`api/_lib/integrations-core.ts`**: `sendEmail` gains an optional
+  `attachment: {filename, contentBase64, mimeType}` — wired for ALL THREE
+  providers (SendGrid `attachments[]`, Resend `attachments[]`, Mailgun via a
+  multipart `FormData` path). `sendWhatsApp` gains optional
+  `documentUrl`/`documentFilename` — sends a WhatsApp Cloud API `document`
+  message (link + caption) instead of a plain text message. Fully backward-
+  compatible (optional fields).
+
+- **`PayrollSystem.tsx`**:
+  - `exportEmployeePayslip` was refactored into `buildEmployeePayslipPdf`
+    (returns the jsPDF doc) + a thin `exportEmployeePayslip` wrapper that
+    still downloads. This lets the SAME payslip PDF be downloaded OR sent.
+  - Payslip tab gains a **Payslip Delivery** panel: channel picker
+    (Email/WhatsApp/Both), send-day-of-month (1–28, clunky-input safe with
+    focus/edit state), "Enable delivery" toggle, "Auto-send on day N" toggle,
+    gateway status banner (green "Gateway ready (Email)" or amber
+    "Not configured: Email gateway / WhatsApp Business" + "Open
+    Communication → Settings" cross-link), "Send All Payslips Now" button,
+    and a "Recent sends" log (last 8, with ✓/✗ + masked recipient + date).
+  - Each employee card gets a **Send** button next to Export, and shows the
+    contact info (📧 email · 📱 phone) that will be used — straight from the
+    payroll record.
+  - **Auto-send**: a mount + hourly effect fires `sendAllPayslips(false)`
+    the first time the app is open on/after the configured day;
+    `lastAutoSentPeriod` (cloud-synced) prevents duplicate sends within a
+    period. Employees with NO email AND NO phone are logged as failed
+    ("no email or phone on file") so the owner knows the record is
+    incomplete.
+  - The gateway config is read from the SHARED `comm_integration_config`
+    cloud key (the SAME one Communication → Settings writes) — no double
+    entry. `stationName` comes from that config, falling back to
+    `settings.organizationName`.
+
+### Verified LIVE (Cloudflare preview b82df659 + main alias, Vercel production)
+
+- Payslip Delivery panel renders with all controls; channel dropdown has all
+  3 options; gateway banner shows the honest "Not configured: Email gateway"
+  + cross-link (gateway is genuinely unconfigured on the QA station).
+- Enabled delivery → clicked Send on John Mwangi → the PDF was built +
+  uploaded, the email-send integration was attempted with the attachment,
+  and it FAILED HONESTLY with "email gateway not configured" (no fake
+  success). The log row "John Mwangi → jo***@test.com (email) ✗ 8/31/2026"
+  appeared + the red "Some sends failed" note.
+- Cloud persistence confirmed via the `fuelpro_cloud_*` read-through cache:
+  `payroll_payslip_config` = `{enabled:true, channel:"email", sendDay:1,
+  autoSend:false}` and `payroll_payslip_log` = `[{...EMP-TEST-001, status:
+  "failed", error:"email gateway not configured"}]` — both written through
+  `cloudStorageService.set` → Supabase app_kv (cross-device).
+- Reset the QA account to a clean state (delivery disabled) after the test.
+
+### Deploy state 2026-08-31
+
+- GitHub main: 451cf70 pushed.
+- Cloudflare Pages: LIVE (preview b82df659 + main alias; chunk
+  `PayrollSystem-CmwuiNIZ.js` has "Payslip Delivery" + "Send All Payslips
+  Now" + `payroll_payslip_config`).
+- Vercel production: LIVE (prebuilt build + deploy, 11 serverless functions
+  within the 12-cap; chunk `PayrollSystem-EUZd76Ke.js` verified). Home 200,
+  `/api/integrations` 200.
+- Supabase: no schema changes (uses existing `app_kv` + public
+  `fuelpro-files` bucket).
+- tsc 0 errors, build success (clean Vite cache), prettier pass, eslint
+  0 errors (1 pre-existing exhaustive-deps warning on the companyData sync
+  effect, not from this change).
+
+### Lost-commit audit 2026-08-31 (post-payslip-delivery)
+
+68 remote branches audited via GitHub compare API. Same documented state —
+no new lost work: founder-username-login (+7, awaits user authorization),
+identifying-security-vulnerabilities-8d289 (+3, needs /api/r2/* +
+/api/cache/* endpoints), qwen-code-6a328546 (+2, would DELETE
+LiveStreamService.ts — must NOT merge). All other branches are old divergent
+snapshots (200+ commits behind) already superseded on main.
+
+### Known limitation (documented, not a bug)
+
+Auto-send is a client-side scheduler (the app must be open on/after the
+configured day — it fires on mount + hourly). There is no server-side cron
+that sends payslips while the app is closed (would require a Vercel cron +
+service-role storage access + a send-now endpoint; out of scope here). The
+`lastAutoSentPeriod` guard + cloud-synced config make the client-side
+schedule reliable and idempotent across devices.
+
 ## Session 2026-08-30 — REAL production integrations + Vercel 12-function cap fix (DEPLOYED LIVE)
 
 **Task**: replace simulated/faked integration paths (POS STK Push, MPESA statement
