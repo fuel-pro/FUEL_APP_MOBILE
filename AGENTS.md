@@ -71,6 +71,39 @@ queue modal, toggle, method logging) — production, not demo.
 
 Same documented state — no new lost work (founder-username-login, security
 branch, qwen-code branch — all as previously documented).
+
+## Session 2026-08-31 (cont.) — Send All auto-opens ALL web links at once (DEPLOYED LIVE)
+
+**Task**: when clicking "Send All Payslips Now", auto-send to each employee
+all at once (even via WhatsApp Web/mailto) — different employees
+simultaneously, not one-by-one queued clicks.
+
+### Change (commit 93ed07a, on main)
+
+The bulk send flow now auto-opens EVERY web-redirect link in the same user
+gesture (each goes to a different employee — John's wa.me/mailto, Sarah's
+wa.me/mailto, etc. all fire immediately in parallel). `window.open` return
+value is checked: links the popup blocker refuses stay in the queue with
+per-employee buttons as belt-and-suspenders; the queue heading now reads
+"N payslip(s) could not be opened automatically — click each button to
+finish". Toast copy: succeeded-open count + blocked-callout.
+
+### Verified LIVE (Cloudflare preview bd174e54)
+
+Clicked "Send All Payslips Now": links auto-opened at once, log gained a
+new ✓ "(email via web)" entry, no blocked queue rendered. Account reset to
+clean (delivery disabled).
+
+### Deploy state
+
+- GitHub main: 93ed07a pushed.
+- Cloudflare Pages: LIVE (preview bd174e54 + main alias; chunk
+  `PayrollSystem-fKTwLBtV.js` verified).
+- Vercel production: LIVE (prebuilt deploy; chunk
+  `PayrollSystem-DP6NO-C2.js` verified).
+- Supabase: no schema changes.
+- tsc 0 errors, build success, prettier pass.
+
 ## Session 2026-08-31 — Payroll Payslip auto/manual delivery (PDF via Email/WhatsApp) (DEPLOYED LIVE)
 
 **Task**: In "Payroll System", auto-send each employee's payslip (as PDF) on a
