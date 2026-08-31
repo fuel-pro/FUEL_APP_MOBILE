@@ -1,5 +1,76 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
 
+## Session 2026-08-31 — Payslip Delivery web-redirect fallback (wa.me / mailto) (DEPLOYED LIVE)
+
+**Task**: when the email/WhatsApp API gateway is not configured, redirect to
+the web app (WhatsApp Web via wa.me / mail client via mailto:) instead of a
+dead "not configured" failure, so files/data can still be sent. Reverse-
+engineered the fallback to be full-featured (single-send inline-open, bulk
+queue modal, toggle, method logging) — production, not demo.
+
+### What was built (commit 765b4cf, on main)
+
+- **`src/react-app/lib/payslip-delivery.ts`**:
+  - `buildWhatsAppWebUrl(phone, message)` — the official wa.me deep link
+    (WhatsApp Web on desktop, WhatsApp app on mobile) with the message +
+    public payslip PDF link pre-filled.
+  - `buildMailtoUrl({to, subject, body})` — opens the default mail client
+    with recipient/subject/body pre-filled (mailto cannot attach files, so
+    the public storage link is embedded in the body).
+  - `buildPayslipWebFallbacks(opts)` — returns fallback link(s) only for the
+    channel(s) lacking a configured gateway (per-channel filtered).
+  - `PayslipDeliveryConfig.webFallback` (default ON) — the toggle.
+  - `PayslipSendLogEntry.method: "api" | "web"` — records the path used.
+  - `deliverPayslip` now returns `webFallbacks` for failed/unconfigured
+    channels.
+- **`PayrollSystem.tsx`**:
+  - Payslip Delivery panel: third toggle "Web fallback (wa.me / mailto)"
+    (default ON); gateway banner explains the redirect.
+  - **Single Send** (per employee): if API gateway missing, opens the web
+    app immediately (user gesture → popup allowed), logs
+    `status:"sent", method:"web"`.
+  - **Send All Payslips Now**: gateway-less recipients are queued into a
+    "N payslip(s) ready for web send" section with one button per employee
+    ("WhatsApp Web" / "Email app") — clicking it opens the link, logs
+    `sent/via web`, and removes it from the queue (no popup-blocker issues
+    on bulk sends).
+  - Log rows show a "via web" badge for web-delivered sends.
+  - **Auto-send remains API-only** (unattended sends must never open web
+    tabs).
+- **8 new vitest cases** for the URL builders + fallback selection (35/35
+  total pass).
+
+### Verified LIVE (Cloudflare preview 434c1130, founder QA account)
+
+- Payslip Delivery panel shows all 3 toggles; banner says "API gateway not
+  configured: Email gateway — manual sends will redirect to WhatsApp Web
+  (wa.me) or the mail client (mailto:) instead".
+- Single Send (John, email channel): log entry "John Mwangi → jo***@test.com
+  (email via web)" with ✓ (mailto: opened the mail client path; in headless
+  Chromium it no-ops without a handler, which is fine).
+- Bulk "Send All Payslips Now": queued 2 employees into the web-send
+  section ("John → jo***@test.com [Email app]", "Sarah → sa***@test.com
+  [Email app]"); clicking John's Email-app button consumed the queue item
+  and logged a second ✓ "(email via web)" entry (Sarah's queued item is
+  in-memory by design — re-queue with Send All if the view unmounts).
+- QA account reset to clean (delivery disabled).
+
+### Deploy state 2026-08-31
+
+- GitHub main: 765b4cf pushed.
+- Cloudflare Pages: LIVE (preview 434c1130 + main alias; chunk
+  `PayrollSystem-DJ0i9JKa.js` contains wa.me/mailto/Web-fallback/
+  via-web markers).
+- Vercel production: LIVE (prebuilt deploy; chunk
+  `PayrollSystem-CAOXSZsX.js` verified, home 200).
+- Supabase: no schema changes (existing app_kv + public fuelpro-files).
+- tsc 0 errors, build success (clean Vite cache), prettier pass, eslint 0
+  errors (1 pre-existing warning).
+
+### Lost-commit audit 2026-08-31
+
+Same documented state — no new lost work (founder-username-login, security
+branch, qwen-code branch — all as previously documented).
 ## Session 2026-08-31 — Payroll Payslip auto/manual delivery (PDF via Email/WhatsApp) (DEPLOYED LIVE)
 
 **Task**: In "Payroll System", auto-send each employee's payslip (as PDF) on a
