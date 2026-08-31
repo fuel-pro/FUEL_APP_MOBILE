@@ -1888,17 +1888,50 @@ export default function PayrollSystem() {
         // Small yield so the UI stays responsive during a large batch.
         await new Promise((r) => setTimeout(r, 150));
       }
+      // Auto-open EVERY web-redirect link at once, in the same user gesture
+      // (each goes to a different employee). window.open returns null when
+      // the browser's popup blocker refuses — those stay in the queue with
+      // per-employee buttons so nothing is lost (belt + suspenders).
       if (queuedWeb.length > 0) {
-        setWebSendQueue(queuedWeb);
+        const blocked: typeof queuedWeb = [];
+        const openedEntries: PayslipSendLogEntry[] = [];
+        for (const queued of queuedWeb) {
+          let opened = true;
+          for (const fb of queued.fallbacks) {
+            const w = window.open(fb.url, "_blank", "noopener");
+            if (!w) opened = false;
+          }
+          if (opened) {
+            openedEntries.push({
+              ...queued.entry,
+              status: "sent",
+              method: "web",
+              error: undefined,
+            });
+          } else {
+            blocked.push(queued);
+          }
+        }
+        if (blocked.length > 0) setWebSendQueue(blocked);
+        if (openedEntries.length > 0) {
+          await appendPayslipLog(openedEntries);
+        }
+        const opened = openedEntries.length;
+        const needsClick = blocked.length;
+        if (needsClick > 0) {
+          toastError(
+            `${opened} web link(s) opened automatically; ${needsClick} were blocked by the popup blocker — click each button below to finish.`,
+          );
+        } else {
+          toastSuccess(
+            `Opened ${opened} web link(s) — hit Send in each one to deliver.`,
+          );
+        }
       }
       if (results.length > 0) await appendPayslipLog(results);
       const sent = results.filter((r) => r.status === "sent").length;
       const failed = results.length - sent;
-      if (queuedWeb.length > 0) {
-        toastError(
-          `${queuedWeb.length} payslip(s) queued for web send — open each link below (WhatsApp Web / email app) to complete delivery.`,
-        );
-      } else if (failed === 0) {
+      if (queuedWeb.length === 0 && failed === 0) {
         toastSuccess(`Payslips sent to ${sent} employee(s).`);
       } else if (sent > 0) {
         toastError(
@@ -3427,8 +3460,8 @@ export default function PayrollSystem() {
         {webSendQueue.length > 0 && (
           <div className="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800/40 dark:bg-blue-900/20">
             <h5 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-2">
-              {webSendQueue.length} payslip(s) ready for web send — open each
-              one:
+              {webSendQueue.length} payslip(s) could not be opened automatically
+              — click each button to finish:
             </h5>
             <div className="space-y-2">
               {webSendQueue.map((queued) => (
