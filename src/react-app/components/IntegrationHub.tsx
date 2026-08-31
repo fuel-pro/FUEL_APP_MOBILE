@@ -49,6 +49,7 @@ import {
 } from "@/react-app/lib/world-country-utils";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import IntegrationsSettings from "@/react-app/components/IntegrationsSettings";
+import ForecourtHardware from "@/react-app/components/ForecourtHardware";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -1851,7 +1852,12 @@ export default function IntegrationHub() {
     }
   });
   const [activeTab, setActiveTab] = useState<
-    "connectors" | "webhooks" | "apikeys" | "logs" | "payment-setup"
+    | "connectors"
+    | "webhooks"
+    | "apikeys"
+    | "logs"
+    | "payment-setup"
+    | "hardware"
   >("connectors");
   const [expandedConnector, setExpandedConnector] = useState<string | null>(
     null,
@@ -2320,6 +2326,7 @@ export default function IntegrationHub() {
           { id: "connectors" as const, label: "Connectors", icon: Plug },
           { id: "webhooks" as const, label: "Webhooks", icon: Globe },
           { id: "apikeys" as const, label: "API Keys", icon: Lock },
+          { id: "hardware" as const, label: "Hardware", icon: Cpu },
           { id: "logs" as const, label: "Logs", icon: FileText },
           {
             id: "payment-setup" as const,
@@ -2626,6 +2633,8 @@ export default function IntegrationHub() {
       )}
 
       {/* ===== WEBHOOKS TAB ===== */}
+      {activeTab === "hardware" && <ForecourtHardware />}
+
       {activeTab === "webhooks" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">

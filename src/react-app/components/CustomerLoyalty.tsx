@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { navigateToTab } from "@/react-app/lib/mpesa-integration-service";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import CustomerSegments from "@/react-app/components/CustomerSegments";
 
 interface Customer {
   id: string;
@@ -153,6 +155,9 @@ function normalizeLoyaltyCustomers(arr: unknown): Customer[] {
 }
 
 export default function CustomerLoyalty() {
+  const [innerView, setInnerView] = useState<"customers" | "segments">(
+    "customers",
+  );
   const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();
@@ -526,567 +531,592 @@ export default function CustomerLoyalty() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Total Members</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            {customers.length}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Points Issued</p>
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {formatNumber(totalPoints)}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Avg. Spend</p>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {currencySymbol} {formatNumber(avgSpend)}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Avg. Visits</p>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {customers.length > 0
-              ? (
-                  customers.reduce(
-                    (s, c) => s + (typeof c.visits === "number" ? c.visits : 0),
-                    0,
-                  ) / customers.length
-                ).toFixed(1)
-              : "0"}
-          </p>
-        </div>
-      </div>
+      {/* Inner sub-tabs: Customers list vs Segments & Events (Veira CRM) */}
+      <SubTabBar
+        tabs={[
+          { id: "customers", label: "Customers", icon: Users },
+          { id: "segments", label: "Segments & Events", icon: Star },
+        ]}
+        active={innerView}
+        onChange={(id) => setInnerView(id as "customers" | "segments")}
+      />
 
-      {/* Search */}
-      <div className="relative">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
-        />
-        <input
-          type="text"
-          placeholder="Search by name, phone, or vehicle..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
-        />
-      </div>
-
-      {/* Add Customer Modal */}
-      {showAdd && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
-            New Customer
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              placeholder="Full Name *"
-              value={newCustomer.name}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, name: e.target.value })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            />
-            <input
-              placeholder="Phone *"
-              value={newCustomer.phone}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, phone: e.target.value })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            />
-            <input
-              placeholder="Email"
-              value={newCustomer.email}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, email: e.target.value })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            />
-            <input
-              placeholder="Vehicle Registration"
-              value={newCustomer.vehicleReg}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, vehicleReg: e.target.value })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            />
-            <select
-              value={newCustomer.preferredFuel}
-              onChange={(e) =>
-                setNewCustomer({
-                  ...newCustomer,
-                  preferredFuel: e.target.value,
-                })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            >
-              {(fuelTypeApi.activeFuelTypes.length > 0
-                ? fuelTypeApi.activeFuelTypes
-                : [
-                    { name: "PMS", label: getFuelLabel("PMS") },
-                    { name: "AGO", label: getFuelLabel("AGO") },
-                  ]
-              ).map((ft) => (
-                <option key={ft.name} value={ft.name}>
-                  {fuelTypeApi.labelOf(ft.name) || getFuelLabel(ft.name)}
-                </option>
-              ))}
-              <option value="Both">All Fuels</option>
-            </select>
-            <input
-              placeholder="Notes"
-              value={newCustomer.notes}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, notes: e.target.value })
-              }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-            />
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={addCustomer}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
-            >
-              Add Customer
-            </button>
-            <button
-              onClick={() => setShowAdd(false)}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Customer Detail + Rewards */}
-      {selectedCustomer && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/10 dark:to-yellow-900/10 rounded-xl p-5 border border-amber-200 dark:border-amber-800">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center">
-                  <User
-                    size={24}
-                    className="text-amber-700 dark:text-amber-300"
-                  />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-                    {selectedCustomer.name || "Unnamed"}
-                  </h3>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full border ${tierColor(
-                      selectedCustomer.tier || "Bronze",
-                    )}`}
-                  >
-                    {selectedCustomer.tier || "Bronze"}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedCustomer(null)}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
-              >
-                Close
-              </button>
+      {innerView === "segments" ? (
+        <CustomerSegments customers={customers} />
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Total Members</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+                {customers.length}
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                <Phone size={14} />
-                {selectedCustomer.phone ? (
-                  <a
-                    href={`tel:${selectedCustomer.phone}`}
-                    className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline"
-                  >
-                    {selectedCustomer.phone}
-                  </a>
-                ) : (
-                  ""
-                )}
-              </div>
-              {selectedCustomer.email && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                  <Mail size={14} />
-                  <a
-                    href={`mailto:${selectedCustomer.email}`}
-                    className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline break-all"
-                  >
-                    {selectedCustomer.email}
-                  </a>
-                </div>
-              )}
-              {selectedCustomer.vehicleReg && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                  <MapPin size={14} />
-                  {selectedCustomer.vehicleReg}
-                </div>
-              )}
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                <Star size={14} className="text-amber-500" />
-                {formatNumber(selectedCustomer.loyaltyPoints || 0)} pts
-              </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Points Issued</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                {formatNumber(totalPoints)}
+              </p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => addPoints(selectedCustomer.id, 100)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
-              >
-                +100 pts
-              </button>
-              <button
-                onClick={() => addPoints(selectedCustomer.id, 500)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
-              >
-                +500 pts
-              </button>
-              <button
-                onClick={() => addPoints(selectedCustomer.id, 1000)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
-              >
-                +1000 pts
-              </button>
-              <button
-                onClick={() => setShowRewards(!showRewards)}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1"
-              >
-                <Gift size={12} /> Redeem
-              </button>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Avg. Spend</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {currencySymbol} {formatNumber(avgSpend)}
+              </p>
             </div>
-            {/* Custom points input */}
-            <div className="flex gap-2 mt-2">
-              <input
-                type="number"
-                placeholder="Custom pts (+/-)"
-                value={customPoints}
-                onChange={(e) => setCustomPoints(e.target.value)}
-                className="flex-1 px-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
-              />
-              <button
-                onClick={() => addCustomPoints(selectedCustomer.id)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
-              >
-                Apply
-              </button>
-            </div>
-            {/* Stats: Total Spent, Visits, Join Date */}
-            <div className="grid grid-cols-3 gap-2 mt-3 text-center">
-              <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
-                <p className="text-[10px] text-gray-500">Total Spent</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-                  {currencySymbol}
-                  {formatNumber(selectedCustomer.totalSpent || 0)}
-                </p>
-              </div>
-              <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
-                <p className="text-[10px] text-gray-500">Visits</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-                  {selectedCustomer.visits || 0}
-                </p>
-              </div>
-              <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
-                <p className="text-[10px] text-gray-500">Joined</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-                  {selectedCustomer.joinDate || "-"}
-                </p>
-              </div>
-            </div>
-            {/* Notes */}
-            {selectedCustomer.notes && (
-              <div className="mt-3 p-2 bg-white/60 dark:bg-gray-700/40 rounded-lg">
-                <p className="text-[10px] text-gray-500 mb-1">Notes</p>
-                <p className="text-xs text-gray-700 dark:text-gray-300">
-                  {selectedCustomer.notes}
-                </p>
-              </div>
-            )}
-            {/* Edit / Delete */}
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => setEditingCustomer(selectedCustomer)}
-                className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
-              >
-                <Edit2 size={12} /> Edit
-              </button>
-              <button
-                onClick={() => setDeleteId(selectedCustomer.id)}
-                className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
-              >
-                <Trash2 size={12} /> Delete
-              </button>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Avg. Visits</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {customers.length > 0
+                  ? (
+                      customers.reduce(
+                        (s, c) =>
+                          s + (typeof c.visits === "number" ? c.visits : 0),
+                        0,
+                      ) / customers.length
+                    ).toFixed(1)
+                  : "0"}
+              </p>
             </div>
           </div>
-          {showRewards && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+
+          {/* Search */}
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Search by name, phone, or vehicle..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Add Customer Modal */}
+          {showAdd && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
-                Available Rewards
+                New Customer
               </h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(REWARDS || []).map((r) => {
-                  const canRedeem =
-                    (selectedCustomer.loyaltyPoints || 0) >= r.points;
-                  return (
-                    <div
-                      key={r.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border ${canRedeem ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10" : "border-gray-200 dark:border-gray-700 opacity-50"}`}
-                    >
-                      <div>
-                        <p className="text-sm font-medium dark:text-gray-900 dark:text-white">
-                          {r.name}
-                        </p>
-                        <p className="text-[11px] text-gray-500">
-                          {r.description}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-semibold text-amber-600">
-                          {r.points} pts
-                        </p>
-                        {canRedeem && (
-                          <button
-                            onClick={() =>
-                              redeem(selectedCustomer.id, r.points)
-                            }
-                            className="text-[10px] px-2 py-1 bg-green-600 text-gray-900 dark:text-white rounded mt-1"
-                          >
-                            Redeem
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  placeholder="Full Name *"
+                  value={newCustomer.name}
+                  onChange={(e) =>
+                    setNewCustomer({ ...newCustomer, name: e.target.value })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                />
+                <input
+                  placeholder="Phone *"
+                  value={newCustomer.phone}
+                  onChange={(e) =>
+                    setNewCustomer({ ...newCustomer, phone: e.target.value })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                />
+                <input
+                  placeholder="Email"
+                  value={newCustomer.email}
+                  onChange={(e) =>
+                    setNewCustomer({ ...newCustomer, email: e.target.value })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                />
+                <input
+                  placeholder="Vehicle Registration"
+                  value={newCustomer.vehicleReg}
+                  onChange={(e) =>
+                    setNewCustomer({
+                      ...newCustomer,
+                      vehicleReg: e.target.value,
+                    })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                />
+                <select
+                  value={newCustomer.preferredFuel}
+                  onChange={(e) =>
+                    setNewCustomer({
+                      ...newCustomer,
+                      preferredFuel: e.target.value,
+                    })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                >
+                  {(fuelTypeApi.activeFuelTypes.length > 0
+                    ? fuelTypeApi.activeFuelTypes
+                    : [
+                        { name: "PMS", label: getFuelLabel("PMS") },
+                        { name: "AGO", label: getFuelLabel("AGO") },
+                      ]
+                  ).map((ft) => (
+                    <option key={ft.name} value={ft.name}>
+                      {fuelTypeApi.labelOf(ft.name) || getFuelLabel(ft.name)}
+                    </option>
+                  ))}
+                  <option value="Both">All Fuels</option>
+                </select>
+                <input
+                  placeholder="Notes"
+                  value={newCustomer.notes}
+                  onChange={(e) =>
+                    setNewCustomer({ ...newCustomer, notes: e.target.value })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={addCustomer}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
+                >
+                  Add Customer
+                </button>
+                <button
+                  onClick={() => setShowAdd(false)}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Customers Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
-              <Users size={28} className="text-amber-500 dark:text-amber-400" />
-            </div>
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              {customers.length === 0
-                ? "No customers yet"
-                : "No matching customers"}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1 mb-4">
-              {customers.length === 0
-                ? "Add your first customer to start tracking loyalty points and rewards."
-                : "Try adjusting your search terms."}
-            </p>
-            {customers.length === 0 && (
-              <button
-                onClick={() => setShowAdd(true)}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
-              >
-                <Plus size={16} /> Add Customer
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left px-4 py-3">Customer</th>
-                  <th className="text-left px-4 py-3">Contact</th>
-                  <th className="text-right px-4 py-3">Points</th>
-                  <th className="text-right px-4 py-3">Spent</th>
-                  <th className="text-center px-4 py-3">Tier</th>
-                  <th className="text-right px-4 py-3">Visits</th>
-                  <th className="text-center px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(filtered || []).map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => setSelectedCustomer(c)}
-                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium dark:text-gray-900 dark:text-white">
-                        {c.name || ""}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        {c.vehicleReg || ""}{" "}
-                        {c.preferredFuel === "Both"
-                          ? "All Fuels"
-                          : fuelTypeApi.labelOf(c.preferredFuel) ||
-                            getFuelLabel(c.preferredFuel)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                      {c.phone || ""}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
-                      {formatNumber(c.loyaltyPoints || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
-                      {currencySymbol}
-                      {formatNumber(c.totalSpent || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
+          {/* Customer Detail + Rewards */}
+          {selectedCustomer && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/10 dark:to-yellow-900/10 rounded-xl p-5 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center">
+                      <User
+                        size={24}
+                        className="text-amber-700 dark:text-amber-300"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+                        {selectedCustomer.name || "Unnamed"}
+                      </h3>
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(
-                          c.tier || "Bronze",
+                        className={`text-xs px-2 py-0.5 rounded-full border ${tierColor(
+                          selectedCustomer.tier || "Bronze",
                         )}`}
                       >
-                        {c.tier || "Bronze"}
+                        {selectedCustomer.tier || "Bronze"}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
-                      {c.visits || 0}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCustomer(c);
-                            setShowRewards(true);
-                          }}
-                          className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 rounded-lg text-amber-600"
-                          title="Rewards"
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedCustomer(null)}
+                    className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                    <Phone size={14} />
+                    {selectedCustomer.phone ? (
+                      <a
+                        href={`tel:${selectedCustomer.phone}`}
+                        className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline"
+                      >
+                        {selectedCustomer.phone}
+                      </a>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+                  {selectedCustomer.email && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                      <Mail size={14} />
+                      <a
+                        href={`mailto:${selectedCustomer.email}`}
+                        className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline break-all"
+                      >
+                        {selectedCustomer.email}
+                      </a>
+                    </div>
+                  )}
+                  {selectedCustomer.vehicleReg && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                      <MapPin size={14} />
+                      {selectedCustomer.vehicleReg}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                    <Star size={14} className="text-amber-500" />
+                    {formatNumber(selectedCustomer.loyaltyPoints || 0)} pts
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => addPoints(selectedCustomer.id, 100)}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
+                  >
+                    +100 pts
+                  </button>
+                  <button
+                    onClick={() => addPoints(selectedCustomer.id, 500)}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
+                  >
+                    +500 pts
+                  </button>
+                  <button
+                    onClick={() => addPoints(selectedCustomer.id, 1000)}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
+                  >
+                    +1000 pts
+                  </button>
+                  <button
+                    onClick={() => setShowRewards(!showRewards)}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1"
+                  >
+                    <Gift size={12} /> Redeem
+                  </button>
+                </div>
+                {/* Custom points input */}
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="number"
+                    placeholder="Custom pts (+/-)"
+                    value={customPoints}
+                    onChange={(e) => setCustomPoints(e.target.value)}
+                    className="flex-1 px-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
+                  />
+                  <button
+                    onClick={() => addCustomPoints(selectedCustomer.id)}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {/* Stats: Total Spent, Visits, Join Date */}
+                <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                  <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
+                    <p className="text-[10px] text-gray-500">Total Spent</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+                      {currencySymbol}
+                      {formatNumber(selectedCustomer.totalSpent || 0)}
+                    </p>
+                  </div>
+                  <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
+                    <p className="text-[10px] text-gray-500">Visits</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+                      {selectedCustomer.visits || 0}
+                    </p>
+                  </div>
+                  <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
+                    <p className="text-[10px] text-gray-500">Joined</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+                      {selectedCustomer.joinDate || "-"}
+                    </p>
+                  </div>
+                </div>
+                {/* Notes */}
+                {selectedCustomer.notes && (
+                  <div className="mt-3 p-2 bg-white/60 dark:bg-gray-700/40 rounded-lg">
+                    <p className="text-[10px] text-gray-500 mb-1">Notes</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300">
+                      {selectedCustomer.notes}
+                    </p>
+                  </div>
+                )}
+                {/* Edit / Delete */}
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => setEditingCustomer(selectedCustomer)}
+                    className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  >
+                    <Edit2 size={12} /> Edit
+                  </button>
+                  <button
+                    onClick={() => setDeleteId(selectedCustomer.id)}
+                    className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              </div>
+              {showRewards && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
+                    Available Rewards
+                  </h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {(REWARDS || []).map((r) => {
+                      const canRedeem =
+                        (selectedCustomer.loyaltyPoints || 0) >= r.points;
+                      return (
+                        <div
+                          key={r.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border ${canRedeem ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10" : "border-gray-200 dark:border-gray-700 opacity-50"}`}
                         >
-                          <Gift size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const prefillPayload = {
-                              customerName: c.name || "",
-                              description: c.preferredFuel
-                                ? `${c.preferredFuel} fuel`
-                                : "",
-                            };
-                            console.log(
-                              "[CustomerLoyalty] Create Invoice clicked, prefill:",
-                              JSON.stringify(prefillPayload),
-                            );
-                            navigateToTab("invoice", prefillPayload);
-                          }}
-                          className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 rounded-lg text-purple-600"
-                          title="Create Invoice"
-                        >
-                          <FileText size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigateToTab("livetransaction", {
-                              phone: c.phone || "",
-                              account_reference: c.vehicleReg || c.name || "",
-                              transaction_desc: `Loyalty: ${c.name || ""}`,
-                              openStkPush: true,
-                            });
-                          }}
-                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 rounded-lg text-emerald-600"
-                          title="Collect via M-PESA"
-                        >
-                          <CreditCard size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingCustomer(c);
-                          }}
-                          className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 rounded-lg text-blue-600"
-                          title="Edit"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteId(c.id);
-                          }}
-                          className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 rounded-lg text-red-600"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Edit Customer Modal */}
-      {editingCustomer && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
-                Edit Customer
-              </h3>
-              <button
-                onClick={() => setEditingCustomer(null)}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
-              >
-                Close
-              </button>
+                          <div>
+                            <p className="text-sm font-medium dark:text-gray-900 dark:text-white">
+                              {r.name}
+                            </p>
+                            <p className="text-[11px] text-gray-500">
+                              {r.description}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-semibold text-amber-600">
+                              {r.points} pts
+                            </p>
+                            {canRedeem && (
+                              <button
+                                onClick={() =>
+                                  redeem(selectedCustomer.id, r.points)
+                                }
+                                className="text-[10px] px-2 py-1 bg-green-600 text-gray-900 dark:text-white rounded mt-1"
+                              >
+                                Redeem
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            <EditCustomerForm
-              customer={editingCustomer}
-              onSave={editCustomer}
-              onCancel={() => setEditingCustomer(null)}
-            />
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-2">
-              Delete Customer?
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-4">
-              This will permanently remove{" "}
-              <strong className="text-gray-700 dark:text-gray-200">
-                {customers.find((c) => c.id === deleteId)?.name || "Unknown"}
-              </strong>{" "}
-              and all their loyalty data. This cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => deleteCustomer(deleteId)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
-              >
-                Cancel
-              </button>
+          {/* Customers Table */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                  <Users
+                    size={28}
+                    className="text-amber-500 dark:text-amber-400"
+                  />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  {customers.length === 0
+                    ? "No customers yet"
+                    : "No matching customers"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1 mb-4">
+                  {customers.length === 0
+                    ? "Add your first customer to start tracking loyalty points and rewards."
+                    : "Try adjusting your search terms."}
+                </p>
+                {customers.length === 0 && (
+                  <button
+                    onClick={() => setShowAdd(true)}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                  >
+                    <Plus size={16} /> Add Customer
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left px-4 py-3">Customer</th>
+                      <th className="text-left px-4 py-3">Contact</th>
+                      <th className="text-right px-4 py-3">Points</th>
+                      <th className="text-right px-4 py-3">Spent</th>
+                      <th className="text-center px-4 py-3">Tier</th>
+                      <th className="text-right px-4 py-3">Visits</th>
+                      <th className="text-center px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(filtered || []).map((c) => (
+                      <tr
+                        key={c.id}
+                        onClick={() => setSelectedCustomer(c)}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-medium dark:text-gray-900 dark:text-white">
+                            {c.name || ""}
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            {c.vehicleReg || ""}{" "}
+                            {c.preferredFuel === "Both"
+                              ? "All Fuels"
+                              : fuelTypeApi.labelOf(c.preferredFuel) ||
+                                getFuelLabel(c.preferredFuel)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                          {c.phone || ""}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
+                          {formatNumber(c.loyaltyPoints || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
+                          {currencySymbol}
+                          {formatNumber(c.totalSpent || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(
+                              c.tier || "Bronze",
+                            )}`}
+                          >
+                            {c.tier || "Bronze"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
+                          {c.visits || 0}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomer(c);
+                                setShowRewards(true);
+                              }}
+                              className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 rounded-lg text-amber-600"
+                              title="Rewards"
+                            >
+                              <Gift size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const prefillPayload = {
+                                  customerName: c.name || "",
+                                  description: c.preferredFuel
+                                    ? `${c.preferredFuel} fuel`
+                                    : "",
+                                };
+                                console.log(
+                                  "[CustomerLoyalty] Create Invoice clicked, prefill:",
+                                  JSON.stringify(prefillPayload),
+                                );
+                                navigateToTab("invoice", prefillPayload);
+                              }}
+                              className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 rounded-lg text-purple-600"
+                              title="Create Invoice"
+                            >
+                              <FileText size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateToTab("livetransaction", {
+                                  phone: c.phone || "",
+                                  account_reference:
+                                    c.vehicleReg || c.name || "",
+                                  transaction_desc: `Loyalty: ${c.name || ""}`,
+                                  openStkPush: true,
+                                });
+                              }}
+                              className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 rounded-lg text-emerald-600"
+                              title="Collect via M-PESA"
+                            >
+                              <CreditCard size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCustomer(c);
+                              }}
+                              className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 rounded-lg text-blue-600"
+                              title="Edit"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteId(c.id);
+                              }}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 rounded-lg text-red-600"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Edit Customer Modal */}
+          {editingCustomer && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
+                    Edit Customer
+                  </h3>
+                  <button
+                    onClick={() => setEditingCustomer(null)}
+                    className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
+                <EditCustomerForm
+                  customer={editingCustomer}
+                  onSave={editCustomer}
+                  onCancel={() => setEditingCustomer(null)}
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
+          {/* Delete Confirmation Modal */}
+          {deleteId && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-2">
+                  Delete Customer?
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-4">
+                  This will permanently remove{" "}
+                  <strong className="text-gray-700 dark:text-gray-200">
+                    {customers.find((c) => c.id === deleteId)?.name ||
+                      "Unknown"}
+                  </strong>{" "}
+                  and all their loyalty data. This cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deleteCustomer(deleteId)}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setDeleteId(null)}
+                    className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Toast Notification */}
+          {toast && (
+            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+              {toast}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

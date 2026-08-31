@@ -13,7 +13,9 @@ import {
   CheckCircle2,
   ShoppingCart,
   Package,
+  BookOpen,
 } from "lucide-react";
+import DayBook from "@/react-app/components/DayBook";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -39,6 +41,7 @@ import { saveAs } from "file-saver";
 
 type ReportType =
   | "overall"
+  | "daybook"
   | "profit-loss"
   | "expenses"
   | "vat-return"
@@ -1257,6 +1260,7 @@ export default function ReportsCenter() {
 
   const getReportTitle = () => {
     const titles: Record<ReportType, string> = {
+      daybook: "Day Book",
       overall: "Overall Financial Report",
       "profit-loss": "Profit & Loss Statement",
       expenses: "Expenses Report",
@@ -2431,6 +2435,7 @@ export default function ReportsCenter() {
         <div className="flex flex-wrap gap-2 mb-6">
           {[
             { id: "overall", label: "Overall Report", icon: BarChart3 },
+            { id: "daybook", label: "Day Book", icon: BookOpen },
             { id: "profit-loss", label: "Profit & Loss", icon: TrendingUp },
             { id: "expenses", label: "Expenses Report", icon: TrendingDown },
             { id: "vat-return", label: "VAT Return", icon: Receipt },
@@ -2519,12 +2524,18 @@ export default function ReportsCenter() {
 
         {/* Report Content */}
         <div className="report-content">
-          {activeReport === "expenses" && renderExpensesReport()}
-          {activeReport === "profit-loss" && renderProfitLossReport()}
-          {activeReport === "overall" && renderOverallReport()}
-          {activeReport === "vat-return" && renderVATReturnReport()}
-          {activeReport === "daily-sales" && renderDailySalesReport()}
-          {activeReport === "kra-summary" && renderKRASummaryReport()}
+          {activeReport === "daybook" ? (
+            <DayBook />
+          ) : (
+            <>
+              {activeReport === "expenses" && renderExpensesReport()}
+              {activeReport === "profit-loss" && renderProfitLossReport()}
+              {activeReport === "overall" && renderOverallReport()}
+              {activeReport === "vat-return" && renderVATReturnReport()}
+              {activeReport === "daily-sales" && renderDailySalesReport()}
+              {activeReport === "kra-summary" && renderKRASummaryReport()}
+            </>
+          )}
         </div>
       </div>
     </div>

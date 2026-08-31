@@ -14,7 +14,9 @@ import {
   Trash2,
   History,
   CheckCircle2,
+  Truck,
 } from "lucide-react";
+import FleetCards from "@/react-app/components/FleetCards";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DebtReminder from "@/react-app/components/DebtReminder";
@@ -135,11 +137,12 @@ export default function CreditManagement() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  // Inner sub-tab: Accounts (credit accounts) vs Reminders (debt payment
-  // reminders — formerly the standalone "Fuel Debt Payment Reminder" tab).
-  const [activeView, setActiveView] = useState<"accounts" | "reminders">(
-    "accounts",
-  );
+  // Inner sub-tab: Accounts (credit accounts) vs Fleet & Cards vs Reminders
+  // (debt payment reminders — formerly the standalone "Fuel Debt Payment
+  // Reminder" tab; fleet/corporate fuel cards from Shell Fleet / Pesapal).
+  const [activeView, setActiveView] = useState<
+    "accounts" | "fleet" | "reminders"
+  >("accounts");
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
       "credit_accounts",
@@ -458,17 +461,22 @@ export default function CreditManagement() {
         </div>
       </div>
 
-      {/* Sub-tab switcher: Credit Accounts vs Debt Payment Reminders */}
+      {/* Sub-tab switcher: Credit Accounts vs Fleet & Cards vs Debt Payment Reminders */}
       <SubTabBar
         tabs={[
           { id: "accounts", label: "Credit Accounts", icon: CreditCard },
+          { id: "fleet", label: "Fleet & Cards", icon: Truck },
           { id: "reminders", label: "Debt Payment Reminders", icon: BellRing },
         ]}
         active={activeView}
-        onChange={(id) => setActiveView(id as "accounts" | "reminders")}
+        onChange={(id) =>
+          setActiveView(id as "accounts" | "fleet" | "reminders")
+        }
       />
 
-      {activeView === "reminders" ? (
+      {activeView === "fleet" ? (
+        <FleetCards accounts={accounts} />
+      ) : activeView === "reminders" ? (
         <DebtReminder />
       ) : (
         <>

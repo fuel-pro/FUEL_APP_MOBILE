@@ -54,6 +54,7 @@ import {
   fulfillReorder,
 } from "@/react-app/lib/automation-engine";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import TankMonitor from "@/react-app/components/TankMonitor";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
 import { lazy, Suspense } from "react";
@@ -108,6 +109,7 @@ const INITIAL_PRODUCT = {
 // Tab types — "products" is the merged catalog sub-tab
 type InventoryTab =
   | "products"
+  | "tankmonitor"
   | "adjustments"
   | "transfers"
   | "counts"
@@ -118,6 +120,7 @@ type InventoryTab =
 
 const TABS = [
   { id: "products", label: "Products" },
+  { id: "tankmonitor", label: "Tank Monitor" },
   { id: "adjustments", label: "Adjustments" },
   { id: "transfers", label: "Transfers" },
   { id: "counts", label: "Counts" },
@@ -2131,7 +2134,14 @@ export default function InventoryManagement() {
           </button>
         ))}
       </div>
-      <div className={activeTab === "products" ? "" : "max-w-2xl"}>
+      <div
+        className={
+          activeTab === "products" || activeTab === "tankmonitor"
+            ? ""
+            : "max-w-2xl"
+        }
+      >
+        {activeTab === "tankmonitor" && <TankMonitor />}
         {activeTab === "products" && (
           <ProductsPanel
             products={products}

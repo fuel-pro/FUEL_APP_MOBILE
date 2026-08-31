@@ -17,6 +17,9 @@ import {
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import NozzleAnalysis from "@/react-app/components/NozzleAnalysis";
+import { TrendingUp } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -32,6 +35,7 @@ interface SalesEntry {
 export default function FuelSalesReport() {
   const { state } = useFuel();
   const fuelTypeApi = useStationFuelTypes();
+  const [innerView, setInnerView] = useState<"report" | "analysis">("report");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reportData, setReportData] = useState<SalesEntry[]>([]);
@@ -495,314 +499,338 @@ export default function FuelSalesReport() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-gray-900 dark:text-white min-h-screen">
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <FileText className="text-blue-400" />
-          Fuel Sales Report
-        </h2>
+      <SubTabBar
+        tabs={[
+          { id: "report", label: "Monthly Report", icon: FileText },
+          { id: "analysis", label: "Nozzle & Attendant", icon: TrendingUp },
+        ]}
+        active={innerView}
+        onChange={(id) => setInnerView(id as "report" | "analysis")}
+      />
+      {innerView === "analysis" ? (
+        <NozzleAnalysis />
+      ) : (
+        <>
+          {/* Controls */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <FileText className="text-blue-400" />
+              Fuel Sales Report
+            </h2>
 
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-          <div className="flex gap-2">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
-            >
-              {months.map((month, index) => (
-                <option key={month} value={index + 1}>
-                  {month}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+              <div className="flex gap-2">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
+                >
+                  {months.map((month, index) => (
+                    <option key={month} value={index + 1}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={handleSaveReport}
-              disabled={isSaving}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
-            >
-              <Download size={16} />
-              {isSaving ? "Saving..." : "Save Report"}
-            </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveReport}
+                  disabled={isSaving}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+                >
+                  <Download size={16} />
+                  {isSaving ? "Saving..." : "Save Report"}
+                </button>
 
-            <button
-              onClick={handlePrint}
-              className="bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
-            >
-              <Printer size={16} />
-              Print Report
-            </button>
-
-            <button
-              onClick={handleSilentPrint}
-              disabled={isPrinting || reportData.length === 0}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
-            >
-              {isPrinting ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Printing...
-                </>
-              ) : (
-                <>
+                <button
+                  onClick={handlePrint}
+                  className="bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+                >
                   <Printer size={16} />
-                  Silent Print
-                </>
-              )}
+                  Print Report
+                </button>
+
+                <button
+                  onClick={handleSilentPrint}
+                  disabled={isPrinting || reportData.length === 0}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+                >
+                  {isPrinting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Printing...
+                    </>
+                  ) : (
+                    <>
+                      <Printer size={16} />
+                      Silent Print
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Cross-tab interlinks — quick navigation to related tabs */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => switchToTab("sales")}
+              className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+            >
+              <ClipboardList size={14} />
+              Sales Tracking
+            </button>
+            <button
+              onClick={() => switchToTab("pos")}
+              className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+            >
+              <ShoppingCart size={14} />
+              Point of Sale
+            </button>
+            <button
+              onClick={() => switchToTab("reports")}
+              className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+            >
+              <BarChart3 size={14} />
+              Reports Center
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Cross-tab interlinks — quick navigation to related tabs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => switchToTab("sales")}
-          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
-        >
-          <ClipboardList size={14} />
-          Sales Tracking
-        </button>
-        <button
-          onClick={() => switchToTab("pos")}
-          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
-        >
-          <ShoppingCart size={14} />
-          Point of Sale
-        </button>
-        <button
-          onClick={() => switchToTab("reports")}
-          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
-        >
-          <BarChart3 size={14} />
-          Reports Center
-        </button>
-      </div>
-
-      {/* Quick Stats — DYNAMIC per configured fuel type */}
-      <div
-        className={`grid gap-4 ${trackedFuelTypes.length >= 3 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3"}`}
-      >
-        {trackedFuelTypes.map((ft) => {
-          const label = getFuelLabel(ft);
-          const t = totals[ft] || { sales: 0, litres: 0 };
-          return (
-            <div
-              key={ft}
-              className="bg-slate-700/30 border border-slate-500 p-4 rounded-lg"
-            >
+          {/* Quick Stats — DYNAMIC per configured fuel type */}
+          <div
+            className={`grid gap-4 ${trackedFuelTypes.length >= 3 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3"}`}
+          >
+            {trackedFuelTypes.map((ft) => {
+              const label = getFuelLabel(ft);
+              const t = totals[ft] || { sales: 0, litres: 0 };
+              return (
+                <div
+                  key={ft}
+                  className="bg-slate-700/30 border border-slate-500 p-4 rounded-lg"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="text-indigo-400" size={20} />
+                    <span className="text-sm text-slate-300">
+                      {label} Sales
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-gray-900 dark:text-white">
+                    {currency} {t.sales.toFixed(2)}
+                  </div>
+                  {t.litres > 0 && (
+                    <div className="text-xs text-slate-300 mt-1">
+                      {t.litres.toFixed(2)} L sold
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="bg-purple-900/30 border border-purple-600 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="text-indigo-400" size={20} />
-                <span className="text-sm text-slate-300">{label} Sales</span>
+                <TrendingUp className="text-purple-400" size={20} />
+                <span className="text-sm text-purple-300">Total Revenue</span>
               </div>
               <div className="text-xl font-bold text-gray-900 dark:text-white">
-                {currency} {t.sales.toFixed(2)}
-              </div>
-              {t.litres > 0 && (
-                <div className="text-xs text-slate-300 mt-1">
-                  {t.litres.toFixed(2)} L sold
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <div className="bg-purple-900/30 border border-purple-600 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="text-purple-400" size={20} />
-            <span className="text-sm text-purple-300">Total Revenue</span>
-          </div>
-          <div className="text-xl font-bold text-gray-900 dark:text-white">
-            {currency}{" "}
-            {trackedFuelTypes
-              .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
-              .toFixed(2)}
-          </div>
-          {trackedFuelTypes.some((ft) => (totals[ft]?.litres || 0) > 0) && (
-            <div className="text-xs text-purple-300 mt-1">
-              {trackedFuelTypes
-                .reduce((sum, ft) => sum + (totals[ft]?.litres || 0), 0)
-                .toFixed(2)}{" "}
-              L total
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Report Content */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-        <div id="report-content" className="p-6">
-          {/* Header - Only show if company data exists */}
-          <div className="text-center mb-6">
-            {state.companyData.logo && (
-              <div className="logo mb-4">
-                <img
-                  src={state.companyData.logo}
-                  alt="Company Logo"
-                  className="report-logo h-16 mx-auto max-w-[150px] max-h-[60px] object-contain"
-                />
-              </div>
-            )}
-            {state.companyData.name && state.companyData.name.trim() !== "" ? (
-              <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
-                {state.companyData.name}
-              </div>
-            ) : (
-              <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
-                Company Name
-              </div>
-            )}
-            <div className="report-title text-md font-semibold text-gray-200 mb-2">
-              Fuel Sales Report
-            </div>
-            <div className="month-year text-gray-300">
-              <div>Month: {months[selectedMonth - 1]}</div>
-              <div>Year: {selectedYear}</div>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            {reportData.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText size={48} className="mx-auto text-gray-500 mb-4" />
-                <div className="text-lg font-semibold text-gray-300 mb-2">
-                  No sales recorded for this period
-                </div>
-                <div className="text-gray-500 dark:text-gray-400">
-                  Sales data for {months[selectedMonth - 1]} {selectedYear} will
-                  appear here once you save sales tracking records.
-                </div>
-              </div>
-            ) : (
-              <table className="w-full border-collapse bg-white text-black">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-gray-400 p-3 text-left">
-                      DD/MM/YYYY(SHIFT)
-                    </th>
-                    {trackedFuelTypes.map((ft) => (
-                      <th
-                        key={ft}
-                        className="border border-gray-400 p-3 text-right"
-                      >
-                        {getFuelLabel(ft)} (L)
-                      </th>
-                    ))}
-                    {trackedFuelTypes.map((ft) => (
-                      <th
-                        key={`sales-${ft}`}
-                        className="border border-gray-400 p-3 text-right"
-                      >
-                        {getFuelLabel(ft)} Sales ({currency})
-                      </th>
-                    ))}
-                    <th className="border border-gray-400 p-3 text-right">
-                      Total Sales/Revenue ({currency})
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportData.map((entry, index) => (
-                    <tr
-                      key={index}
-                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                    >
-                      <td className="border border-gray-400 p-3">
-                        {entry.date}
-                      </td>
-                      {trackedFuelTypes.map((ft) => (
-                        <td
-                          key={ft}
-                          className="border border-gray-400 p-3 text-right"
-                        >
-                          {(entry.fuelSales[ft]?.litres || 0).toFixed(2)}
-                        </td>
-                      ))}
-                      {trackedFuelTypes.map((ft) => (
-                        <td
-                          key={`sales-${ft}`}
-                          className="border border-gray-400 p-3 text-right"
-                        >
-                          {(entry.fuelSales[ft]?.sales || 0).toFixed(2)}
-                        </td>
-                      ))}
-                      <td className="border border-gray-400 p-3 text-right">
-                        {entry.totalSales.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Totals - Only show if there's data */}
-          {reportData.length > 0 && (
-            <div className="totals mt-6 space-y-2">
-              {trackedFuelTypes.map((ft) => {
-                const label = getFuelLabel(ft);
-                const t = totals[ft] || { sales: 0, litres: 0 };
-                return (
-                  <div key={ft} className="text-gray-900 dark:text-white">
-                    <span className="font-semibold">
-                      Monthly Total {label} Sales:
-                    </span>{" "}
-                    {currency} {t.sales.toFixed(2)}
-                    {t.litres > 0 && (
-                      <span className="text-gray-300 ml-2">
-                        ({t.litres.toFixed(2)} L)
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-              <div className="text-gray-900 dark:text-white text-lg">
-                <span className="font-bold">Total Monthly Sales/Revenue:</span>{" "}
                 {currency}{" "}
                 {trackedFuelTypes
                   .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
                   .toFixed(2)}
               </div>
+              {trackedFuelTypes.some((ft) => (totals[ft]?.litres || 0) > 0) && (
+                <div className="text-xs text-purple-300 mt-1">
+                  {trackedFuelTypes
+                    .reduce((sum, ft) => sum + (totals[ft]?.litres || 0), 0)
+                    .toFixed(2)}{" "}
+                  L total
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Contact Info - Only show if actual data exists */}
-          {((state.companyData.poBox &&
-            state.companyData.poBox.trim() !== "") ||
-            (state.companyData.contacts &&
-              state.companyData.contacts.trim() !== "") ||
-            (state.companyData.email &&
-              state.companyData.email.trim() !== "")) && (
-            <div className="contact-info mt-8 text-gray-300 space-y-1">
-              {state.companyData.poBox &&
-                state.companyData.poBox.trim() !== "" && (
-                  <div>P.O. Box: {state.companyData.poBox}</div>
+          {/* Report Content */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
+            <div id="report-content" className="p-6">
+              {/* Header - Only show if company data exists */}
+              <div className="text-center mb-6">
+                {state.companyData.logo && (
+                  <div className="logo mb-4">
+                    <img
+                      src={state.companyData.logo}
+                      alt="Company Logo"
+                      className="report-logo h-16 mx-auto max-w-[150px] max-h-[60px] object-contain"
+                    />
+                  </div>
                 )}
-              {state.companyData.contacts &&
-                state.companyData.contacts.trim() !== "" && (
-                  <div>Contacts: {state.companyData.contacts}</div>
+                {state.companyData.name &&
+                state.companyData.name.trim() !== "" ? (
+                  <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
+                    {state.companyData.name}
+                  </div>
+                ) : (
+                  <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
+                    Company Name
+                  </div>
                 )}
-              {state.companyData.email &&
-                state.companyData.email.trim() !== "" && (
-                  <div>Email: {state.companyData.email}</div>
+                <div className="report-title text-md font-semibold text-gray-200 mb-2">
+                  Fuel Sales Report
+                </div>
+                <div className="month-year text-gray-300">
+                  <div>Month: {months[selectedMonth - 1]}</div>
+                  <div>Year: {selectedYear}</div>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                {reportData.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText
+                      size={48}
+                      className="mx-auto text-gray-500 mb-4"
+                    />
+                    <div className="text-lg font-semibold text-gray-300 mb-2">
+                      No sales recorded for this period
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">
+                      Sales data for {months[selectedMonth - 1]} {selectedYear}{" "}
+                      will appear here once you save sales tracking records.
+                    </div>
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse bg-white text-black">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-400 p-3 text-left">
+                          DD/MM/YYYY(SHIFT)
+                        </th>
+                        {trackedFuelTypes.map((ft) => (
+                          <th
+                            key={ft}
+                            className="border border-gray-400 p-3 text-right"
+                          >
+                            {getFuelLabel(ft)} (L)
+                          </th>
+                        ))}
+                        {trackedFuelTypes.map((ft) => (
+                          <th
+                            key={`sales-${ft}`}
+                            className="border border-gray-400 p-3 text-right"
+                          >
+                            {getFuelLabel(ft)} Sales ({currency})
+                          </th>
+                        ))}
+                        <th className="border border-gray-400 p-3 text-right">
+                          Total Sales/Revenue ({currency})
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.map((entry, index) => (
+                        <tr
+                          key={index}
+                          className={
+                            index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                          }
+                        >
+                          <td className="border border-gray-400 p-3">
+                            {entry.date}
+                          </td>
+                          {trackedFuelTypes.map((ft) => (
+                            <td
+                              key={ft}
+                              className="border border-gray-400 p-3 text-right"
+                            >
+                              {(entry.fuelSales[ft]?.litres || 0).toFixed(2)}
+                            </td>
+                          ))}
+                          {trackedFuelTypes.map((ft) => (
+                            <td
+                              key={`sales-${ft}`}
+                              className="border border-gray-400 p-3 text-right"
+                            >
+                              {(entry.fuelSales[ft]?.sales || 0).toFixed(2)}
+                            </td>
+                          ))}
+                          <td className="border border-gray-400 p-3 text-right">
+                            {entry.totalSales.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
+              </div>
+
+              {/* Totals - Only show if there's data */}
+              {reportData.length > 0 && (
+                <div className="totals mt-6 space-y-2">
+                  {trackedFuelTypes.map((ft) => {
+                    const label = getFuelLabel(ft);
+                    const t = totals[ft] || { sales: 0, litres: 0 };
+                    return (
+                      <div key={ft} className="text-gray-900 dark:text-white">
+                        <span className="font-semibold">
+                          Monthly Total {label} Sales:
+                        </span>{" "}
+                        {currency} {t.sales.toFixed(2)}
+                        {t.litres > 0 && (
+                          <span className="text-gray-300 ml-2">
+                            ({t.litres.toFixed(2)} L)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="text-gray-900 dark:text-white text-lg">
+                    <span className="font-bold">
+                      Total Monthly Sales/Revenue:
+                    </span>{" "}
+                    {currency}{" "}
+                    {trackedFuelTypes
+                      .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
+                      .toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              {/* Contact Info - Only show if actual data exists */}
+              {((state.companyData.poBox &&
+                state.companyData.poBox.trim() !== "") ||
+                (state.companyData.contacts &&
+                  state.companyData.contacts.trim() !== "") ||
+                (state.companyData.email &&
+                  state.companyData.email.trim() !== "")) && (
+                <div className="contact-info mt-8 text-gray-300 space-y-1">
+                  {state.companyData.poBox &&
+                    state.companyData.poBox.trim() !== "" && (
+                      <div>P.O. Box: {state.companyData.poBox}</div>
+                    )}
+                  {state.companyData.contacts &&
+                    state.companyData.contacts.trim() !== "" && (
+                      <div>Contacts: {state.companyData.contacts}</div>
+                    )}
+                  {state.companyData.email &&
+                    state.companyData.email.trim() !== "" && (
+                      <div>Email: {state.companyData.email}</div>
+                    )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
