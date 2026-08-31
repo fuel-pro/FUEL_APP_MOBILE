@@ -1,6 +1,7 @@
 import {
   useState,
   useEffect,
+  useRef,
   lazy,
   Suspense,
   useMemo,
@@ -14,6 +15,11 @@ import { useTenant } from "@/react-app/context/TenantContext";
 import { LocationProvider } from "@/react-app/context/LocationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useTutorial } from "@/react-app/context/TutorialContext";
+import { useUserPrefs } from "@/react-app/lib/user-preferences";
+import {
+  resolveLandingTab,
+  persistLastActiveTab,
+} from "@/react-app/lib/landing-tab";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import OnboardingTutorial from "@/react-app/components/OnboardingTutorial";
 import Header from "@/react-app/components/Header";
@@ -193,6 +199,11 @@ function HomeContent() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
+  // Default Landing Tab (General Settings): resolves the owner-configured
+  // landing tab once preferences load, then persists every subsequent tab
+  // switch so the optional "Resume where I left off" mode can restore it.
+  const { prefs: userPrefs, loading: prefsLoading } = useUserPrefs();
+  const landingAppliedRef = useRef(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [showStationManager, setShowStationManager] = useState(false);
   const [showCombined, setShowCombined] = useState(false);
@@ -212,6 +223,24 @@ function HomeContent() {
       return () => clearTimeout(t);
     }
   }, [tutorial.shouldAutoStart, tutorial.active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply the Default Landing Tab once when user preferences finish loading.
+  // Runs exactly once per mount (the ref guard keeps later preference edits
+  // from yanking the owner back mid-session; the new choice takes effect on
+  // the next login/navigation home).
+  useEffect(() => {
+    if (landingAppliedRef.current || prefsLoading) return;
+    landingAppliedRef.current = true;
+    const target = resolveLandingTab(userPrefs, fuelState.tabConfigurations);
+    if (target && target !== "dashboard") setActiveTab(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsLoading]);
+
+  // Persist the last-opened tab so "Resume where I left off" (General
+  // Settings → Default Landing Tab) can reopen it on the next login.
+  useEffect(() => {
+    persistLastActiveTab(activeTab);
+  }, [activeTab]);
 
   // Auto-login to role
   useEffect(() => {

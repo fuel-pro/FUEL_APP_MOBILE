@@ -91,6 +91,8 @@ import {
 } from "@/react-app/lib/currency";
 import { getVATRate } from "@/react-app/config/pricing";
 import { TabConfiguration } from "@/react-app/context/FuelContext";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { FALLBACK_TAB, resolveLandingTab } from "@/react-app/lib/landing-tab";
 
 // ─── Cloud-backed settings store ────────────────────────────────────────────
 const SETTINGS_KEY = "general_settings_v1";
@@ -650,6 +652,7 @@ export default function GeneralSettings() {
             updateAndSync={updateAndSync}
             prefs={prefs}
             updatePrefs={updatePrefs}
+            tabConfigs={state.tabConfigurations}
             show={show}
           />
         )}
@@ -1146,6 +1149,7 @@ function GeneralTab({
   updateAndSync,
   prefs,
   updatePrefs,
+  tabConfigs,
   show,
 }: {
   config: GeneralSettingsConfig;
@@ -1160,6 +1164,7 @@ function GeneralTab({
   ) => void;
   prefs: UserPreferences;
   updatePrefs: (patch: Partial<UserPreferences>) => Promise<void>;
+  tabConfigs: TabConfiguration[];
   show: (msg: string, type?: "success" | "error" | "info") => void;
 }) {
   const timezones = useMemo(() => {
@@ -1377,24 +1382,161 @@ function GeneralTab({
       </SectionCard>
 
       <SectionCard title="Default Landing Tab" icon={LayoutGrid}>
-        <Field label="Which tab should open when you log in?">
-          <select
-            className={inputClass}
-            value={prefs.defaultTab}
-            onChange={(e) => {
-              updatePrefs({ defaultTab: e.target.value });
-              show("Default tab updated — applies on next login", "success");
-            }}
-          >
-            <option value="dashboard">Dashboard</option>
-            <option value="pos">Point of Sale</option>
-            <option value="sales">Sales Tracking</option>
-            <option value="inventory">Stock Management</option>
-            <option value="analytics">Analytics</option>
-          </select>
-        </Field>
+        {/* Dynamic registry-driven dropdown — every tab registered in
+            FuelContext.tabConfigurations (current AND future) appears here
+            automatically. Hidden tabs stay selectable (marked) so the
+            owner can prepare a landing tab before un-hiding it; if the tab
+            is ever removed the app falls back to Dashboard. */}
+        <LandingTabOptions tabConfigs={tabConfigs}>
+          {(options) => (
+            <>
+              <Field
+                label="Which tab should open when you log in?"
+                hint="Lists every tab in the app — new tabs are added automatically when future features ship."
+              >
+                <select
+                  className={inputClass}
+                  value={prefs.defaultTab}
+                  onChange={(e) => {
+                    updatePrefs({ defaultTab: e.target.value });
+                    show(
+                      "Default tab updated — applies on next login",
+                      "success",
+                    );
+                  }}
+                >
+                  {options.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                      {!t.visible ? " (hidden)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="flex items-start gap-2.5 pt-1">
+                <input
+                  id="remember-last-tab"
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  checked={prefs.rememberLastTab ?? false}
+                  onChange={(e) => {
+                    updatePrefs({ rememberLastTab: e.target.checked });
+                    show(
+                      e.target.checked
+                        ? "Will reopen your last-used tab on login"
+                        : "Will use the Default Landing Tab on login",
+                      "success",
+                    );
+                  }}
+                />
+                <label
+                  htmlFor="remember-last-tab"
+                  className="text-sm text-gray-700 dark:text-gray-300 leading-snug cursor-pointer select-none"
+                >
+                  Resume where I left off
+                  <span className="block text-xs text-gray-400 dark:text-gray-500">
+                    Reopens the last tab you had open instead of the default
+                    landing tab above. Syncs across your devices.
+                  </span>
+                </label>
+              </div>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target =
+                      (prefs.rememberLastTab &&
+                        window.localStorage.getItem(
+                          "fuelpro_last_active_tab",
+                        )) ||
+                      prefs.defaultTab ||
+                      FALLBACK_TAB;
+                    switchToTab(target);
+                    show(
+                      `Opened "${target}" — that's your landing tab`,
+                      "info",
+                    );
+                  }}
+                  className="px-3 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  Apply &amp; preview now
+                </button>
+                <ResolvedLandingHint prefs={prefs} tabConfigs={tabConfigs} />
+              </div>
+            </>
+          )}
+        </LandingTabOptions>
       </SectionCard>
     </div>
+  );
+}
+
+// ─── Landing-tab helpers (module scope — General sub-tab above) ───────────
+/**
+ * Renders the dynamic options for the Default Landing Tab dropdown by
+ * deriving them from the live tab registry. Current and future tabs are
+ * all recognized automatically because the list is registry-driven (not a
+ * hardcoded enum).
+ */
+function LandingTabOptions({
+  tabConfigs,
+  children,
+}: {
+  tabConfigs: TabConfiguration[];
+  children: (options: TabConfiguration[]) => React.ReactNode;
+}) {
+  const options = useMemo(
+    () => [...tabConfigs].sort((a, b) => a.order - b.order),
+    [tabConfigs],
+  );
+  return <>{children(options)}</>;
+}
+
+/**
+ * Live read-out of which tab the app will actually open on next login —
+ * reverse-engineers the same resolveLandingTab decision the router makes,
+ * so the owner sees fallback/remember-last resolution immediately.
+ */
+function ResolvedLandingHint({
+  prefs,
+  tabConfigs,
+}: {
+  prefs: UserPreferences;
+  tabConfigs: TabConfiguration[];
+}) {
+  const [target, setTarget] = useState<string>(() =>
+    resolveLandingTab(prefs, tabConfigs),
+  );
+  useEffect(() => {
+    const recompute = () => setTarget(resolveLandingTab(prefs, tabConfigs));
+    recompute();
+    // localStorage (last-used tab) can change in another tab/window
+    window.addEventListener("storage", recompute);
+    window.addEventListener("user-prefs:changed", recompute);
+    return () => {
+      window.removeEventListener("storage", recompute);
+      window.removeEventListener("user-prefs:changed", recompute);
+    };
+  }, [prefs, tabConfigs]);
+
+  const label = useMemo(
+    () =>
+      tabConfigs.find((t) => t.id === target)?.label ||
+      (target === FALLBACK_TAB ? "Dashboard" : target),
+    [tabConfigs, target],
+  );
+  const isFallback =
+    target === FALLBACK_TAB && prefs.defaultTab !== FALLBACK_TAB;
+  return (
+    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+      Next login opens:{" "}
+      <span className="font-semibold text-gray-800 dark:text-gray-200">
+        {label}
+      </span>
+      <span className="text-gray-400 dark:text-gray-500"> ({target})</span>
+      {prefs.rememberLastTab ? " — resuming last-used tab" : ""}
+      {isFallback ? " (saved tab unavailable → fallback)" : ""}
+    </p>
   );
 }
 

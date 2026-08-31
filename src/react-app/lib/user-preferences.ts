@@ -98,7 +98,13 @@ export interface UserPreferences {
   // UI
   theme: "dark" | "light";
   compactMode: boolean;
+  /** Which registered tab id opens on login (General Settings →
+   *  Default Landing Tab). Validated against tabConfigurations at
+   *  apply-time with fallback to "dashboard". */
   defaultTab: string;
+  /** When true, reopen the tab the owner last had open instead of
+   *  defaultTab. */
+  rememberLastTab?: boolean;
 
   // Misc
   companyName: string;
@@ -144,6 +150,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "dark",
   compactMode: false,
   defaultTab: "dashboard",
+  rememberLastTab: false,
 
   companyName: "",
   companyAddress: "",

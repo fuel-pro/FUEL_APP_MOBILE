@@ -14,6 +14,7 @@ import NotificationCenter from "@/react-app/components/NotificationCenter";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   getDetectedCurrency,
@@ -542,6 +543,16 @@ export default function Header({
                       <HelpCircle size={13} className="text-amber-400" />
                       <span>Replay Tutorial</span>
                     </button>
+                    <button
+                      onClick={() => {
+                        switchToTab("settings");
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <Settings size={13} className="text-gray-500" />
+                      <span>General Settings</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -796,6 +807,22 @@ export default function Header({
                   <HelpCircle size={16} className="text-amber-400" />
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
                     Tutorial
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    switchToTab("settings");
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                  title="General Settings"
+                >
+                  <Settings
+                    size={16}
+                    className="text-gray-600 dark:text-gray-300"
+                  />
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Settings
                   </span>
                 </button>
                 <button
