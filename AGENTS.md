@@ -10144,3 +10144,21 @@ Verified live: shortlink rows created in app_kv
 (`payslip_shortlink_<code>__<ownerId>`, compressed envelope), resolver
 302s to raw storage URL, delete → 404 (revoke semantics). QA rows cleaned
 up after test. Tests: 38/38 pass. tsc 0 errors. Build success.
+
+
+## Session 2026-08-31 (cont.) — Send All Payslips: per-employee isolation (DEPLOYED LIVE, commit 46a8bc8)
+
+User report: clicking "Send All Payslips Now" sent to only one employee.
+
+**Root cause**: the bulk handler iterated `sendPayslipToEmployee` with NO
+per-employee try/catch — a throw in one employees pipeline aborted the whole
+batch after the first successful entry.
+
+**Fix (PayrollSystem.tsx)**:
+- `sendPayslipToEmployee` call now wrapped in try/catch inside the bulk
+  loop. A single bad employee record marks that employee as "failed" and
+  moves to the next — the batch never aborts early.
+- "Recent sends" log entries now carry `title=Error: ...` on failed rows so
+  hovering shows the exact failure reason for each employee.
+
+Verified: tsc 0 errors, 38/38 tests pass, build success.
