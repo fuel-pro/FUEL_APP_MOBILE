@@ -1,5 +1,59 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-08-31 — Competitor forecourt reverse-engineering (DEPLOYED LIVE)
+
+**Task**: reverse-engineer ~10 competitor forecourt/fuel-management products
+(Pesapal forecourt, Shell Fleet/eVMI, Codelab FMS, Advatech ATG, Crone
+SmartFuel, Livetrac PTS, Veira CRM) and integrate competitor features into
+existing host tabs (sub-tabs/inner views, NOT standalone tabs). All 6
+features wired; live UI verified on fuel-app-mobile.pages.dev.
+
+### Features (commit 880a591 + fix 0a94db7)
+1. **Tank Monitor** sub-tab · Stock Management (Crone/Advatech ATG + Shell
+   eVMI exceptions): ATG/dip readings, variance >2% + water >5mm exception
+   alerts, book stock from sales history, "Stock empty — re-order" CTA to
+   Suppliers. Verified: Super Petrol 4,400 vs 4,500 book → -2.2% VARIANCE.
+2. **Fleet & Cards** sub-tab · Credit (Pesapal/Shell fleet cards): issue
+   cards (number, plate, driver, optional credit-account link, fuel
+   restriction, per-txn/daily limits, prepaid/postpaid), daily usage with
+   limit bars, suspend/delete. Verified: FC-1001 issued, $500/day limit.
+3. **Segments & Events** inner view · Customers (Veira CRM): VIP/Active/
+   At-risk(30d)/Dormant(60d)/New(month) tier cards + filters, computed from
+   visit/spend data; birthday:event tokens from notes. Verified: 4 customers
+   → New segment.
+4. **Nozzle & Attendant** sub-tab · Fuel Sales Report (Codelab FMS):
+   per-pump dispensed/volume share distribution + attendant day-book from
+   Team shifts; price fallback (fix 0a94db7) values litres at current
+   configured price when stored amount is 0.
+5. **Forecourt Hardware** sub-tab · Integration Hub (Livetrac PTS/maratech):
+   register dispenser/ATG/peripheral devices with brand catalog (Gilbarco/
+   Wayne/Tokheim/Bennett...), protocol defaults, COM/IP connection,
+   pump/tank mapping, search/filter/export. Verified: Gilbarco registered.
+6. **Day Book** report button · Reports Center (Codelab cash day book):
+   daily pump revenue + POS sales (fix 0a94db7: pos_transactions, split
+   cash/M-Pesa/card-bank, non-fuel-M-Pesa added to till to avoid double
+   counting) → expected cash; banked deposit + variance + notes, CSV.
+   Verified: POS CASH (4 sales) $44.02 counted.
+
+### Quality
+tsc 0 errors, eslint 0, prettier clean, vitest 49/49. Clean Vite-cache build.
+
+### Deploy
+- GitHub main: 880a591 (features) + 0a94db7 (DayBook/Nozzle fixes).
+- Cloudflare Pages: LIVE (preview f9423edc + main alias).
+- Vercel production: LIVE (prebuilt, aliased fuel-app-mobile.vercel.app).
+- Supabase: no schema changes — forecourt features reuse existing app_kv
+  cloud keys (tank_readings, daybook_entries, fleet_cards, forecourt_devices)
+  via useCloudKV. No new tables.
+
+### Lost-commit audit (69 branches, deepened history)
+Same documented state: founder-username-login (+7, needs manual rebase —
+awaiting user authorization), identifying-security-vulnerabilities-8d289
+(+3, needs /api/r2/* + /api/cache/* endpoints), qwen-code-6a328546 (+2,
+would DELETE LiveStreamService.ts — must NOT merge). dependabot/npm_and_yarn
+flagged for manual review (pdfjs-dist MAJOR 5→6 break). All other branches
+are old divergent snapshots (218-309 ahead/741 behind) superseded on main.
+
 ## Session 2026-08-31 — General Settings "Default Landing Tab": all current+future tabs, fully working (DEPLOYED)
 
 ### Task
