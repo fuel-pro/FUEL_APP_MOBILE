@@ -10107,3 +10107,40 @@ identifying-security-vulnerabilities-8d289 (+3, needs /api/r2/* +
 /api/cache/* endpoints), qwen-code-6a328546 (+2, would DELETE
 LiveStreamService.ts — must NOT merge). All other branches are old divergent
 snapshots (200+ commits behind) already superseded on main.
+
+
+## Session 2026-08-31 (cont.) — Payslip short links /api/payslip-link?code= + security (DEPLOYED LIVE, commit 5ebffe8)
+
+User report: payslip delivery links were too long and leaked data (employee
+name, filename, raw Supabase storage path + owner uid) in broadcast text.
+
+**Short opaque links (part 1)**: every payslip send registers a short link
+`/api/payslip-link?code=<12-char base62>` on the same origin (~65 chars vs
+~300+) via `createPayslipShortlink` in `payslip-delivery.ts`. The raw
+storage URL never leaves the app; wa.me/mailto captions carry only the short
+link. Filename dropped from the broadcast message (less PII, shorter text).
+
+**Security (part 2)**:
+- crypto-random 12-char base62 code (rejection sampling, ~72-bit entropy)
+- server-side expiry — `PayslipDeliveryConfig.linkExpiryDays` (default 7,
+  owner-editable 1-90 via the new "Link expiry (days)" input)
+- "Revoke links" button — instantly kills all live shortlinks
+- resolver validates the redirect target strictly (Supabase storage origin
+  only → no open-redirect abuse), naive per-IP rate limiting (60/60s),
+  no-store + nosniff headers
+- Handles the cloud-storage compressed envelope (`{__compressed,c}`) via
+  gunzip server-side.
+
+Resolver endpoints on BOTH hosts:
+- api/payslip-link.ts (Vercel) — resolves with SUPABASE_URL +
+  SUPABASE_SERVICE_ROLE_KEY → verified live (404 on unknown code,
+  302 → storage URL for real codes).
+- functions/api/payslip-link.ts (CF Pages Function) — falls back to the
+  Vercel resolver (302 → fuel-app-mobile.vercel.app/api/payslip-link) when
+  the Pages env is not in effect yet. Vercel /api now has exactly 12
+  functions (Hobby cap).
+
+Verified live: shortlink rows created in app_kv
+(`payslip_shortlink_<code>__<ownerId>`, compressed envelope), resolver
+302s to raw storage URL, delete → 404 (revoke semantics). QA rows cleaned
+up after test. Tests: 38/38 pass. tsc 0 errors. Build success.
