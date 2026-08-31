@@ -15,11 +15,30 @@ import {
   BarChart3,
   Loader2,
   Receipt,
+  Send,
+  CalendarClock,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useStations } from "@/react-app/context/StationContext";
+import {
+  PAYSLIP_CONFIG_KEY,
+  PAYSLIP_LOG_KEY,
+  currentPeriodKey,
+  currentPeriodLabel,
+  defaultPayslipConfig,
+  deliverPayslip,
+  maskRecipient,
+  normalizePhoneForSending,
+  uploadPayslipPdf,
+  type CommGatewayConfig,
+  type PayslipChannel,
+  type PayslipDeliveryConfig,
+  type PayslipSendLogEntry,
+} from "@/react-app/lib/payslip-delivery";
 import {
   navigateToTab,
   type ExpensePrefill,
@@ -324,6 +343,24 @@ export default function PayrollSystem() {
   const [showNssfModal, setShowNssfModal] = useState(false);
   const [showColumnModal, setShowColumnModal] = useState(false);
 
+  // Payslip delivery (email/WhatsApp) — config + log are cloud-synced
+  // (station-scoped), so a schedule set on one device fires on every device.
+  const [payslipConfig, setPayslipConfig] =
+    useState<PayslipDeliveryConfig>(defaultPayslipConfig);
+  const [payslipLog, setPayslipLog] = useState<PayslipSendLogEntry[]>([]);
+  const payslipConfigRef = useRef(payslipConfig);
+  payslipConfigRef.current = payslipConfig;
+  const payslipLogRef = useRef(payslipLog);
+  payslipLogRef.current = payslipLog;
+  const [sendingPayslips, setSendingPayslips] = useState(false);
+  const [editingPayslipSendDay, setEditingPayslipSendDay] = useState("1");
+  const [editPayslipDayFocus, setEditPayslipDayFocus] = useState(false);
+  // Shared email/WhatsApp gateway config (the SAME one Communication →
+  // Settings writes to `comm_integration_config`) — no double entry.
+  const [commGateway, setCommGateway] = useState<CommGatewayConfig | null>(
+    null,
+  );
+
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<number | null>(null);
   const [employeeToDeleteId, setEmployeeToDeleteId] = useState<string>("");
@@ -520,6 +557,31 @@ export default function PayrollSystem() {
       Promise.all([fetchEmployees(), fetchSettings()]).finally(() => {
         cloudLoadCompleteRef.current = true;
       });
+      // Payslip delivery config + log (station-scoped cloud keys).
+      (async () => {
+        try {
+          const cfg = await cloudStorageService.get<PayslipDeliveryConfig>(
+            PAYSLIP_CONFIG_KEY,
+            stationId,
+          );
+          if (cfg && typeof cfg === "object") {
+            setPayslipConfig({ ...defaultPayslipConfig, ...cfg });
+          }
+          const log = await cloudStorageService.get<PayslipSendLogEntry[]>(
+            PAYSLIP_LOG_KEY,
+            stationId,
+          );
+          if (Array.isArray(log)) setPayslipLog(log);
+          // Shared gateway config (Communication → Settings, no double entry).
+          const gw = await cloudStorageService.get<CommGatewayConfig>(
+            "comm_integration_config",
+            stationId,
+          );
+          if (gw && typeof gw === "object") setCommGateway(gw);
+        } catch (e) {
+          console.warn("[payslip-config] load failed:", e);
+        }
+      })();
     } else {
       cloudLoadCompleteRef.current = false;
     }
@@ -1397,8 +1459,11 @@ export default function PayrollSystem() {
     );
   };
 
-  // Individual payslip PDF generation
-  const exportEmployeePayslip = async (employee: Employee) => {
+  // Individual payslip PDF generation — returns the jsPDF doc so it can be
+  // downloaded, emailed, or sent over WhatsApp.
+  const buildEmployeePayslipPdf = async (
+    employee: Employee,
+  ): Promise<jsPDF> => {
     const doc = new jsPDF();
     const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
       "default",
@@ -1594,11 +1659,196 @@ export default function PayrollSystem() {
       { align: "center" },
     );
 
-    // Save the PDF
+    return doc;
+  };
+
+  // Download the payslip PDF for a single employee (the pre-existing
+  // behaviour that used to live inline here).
+  const exportEmployeePayslip = async (employee: Employee) => {
+    const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
+      "default",
+      { month: "long" },
+    );
+    const doc = await buildEmployeePayslipPdf(employee);
     doc.save(
       `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`,
     );
   };
+
+  // ─── Payslip delivery (email / WhatsApp) ────────────────────────────────
+
+  const savePayslipConfig = async (patch: Partial<PayslipDeliveryConfig>) => {
+    const merged = { ...payslipConfigRef.current, ...patch };
+    setPayslipConfig(merged);
+    try {
+      await cloudStorageService.set(PAYSLIP_CONFIG_KEY, merged, stationId);
+    } catch (e) {
+      console.warn("[payslip-config] save failed:", e);
+    }
+  };
+
+  const appendPayslipLog = async (entries: PayslipSendLogEntry[]) => {
+    const updated = [...entries, ...payslipLogRef.current].slice(0, 200);
+    setPayslipLog(updated);
+    try {
+      await cloudStorageService.set(PAYSLIP_LOG_KEY, updated, stationId);
+    } catch (e) {
+      console.warn("[payslip-log] save failed:", e);
+    }
+  };
+
+  /**
+   * Send one employee's payslip PDF via the configured channel. The
+   * recipient email/phone comes from the employee's OWN payroll record — no
+   * manual re-entry. Logs the outcome so the owner can audit delivery.
+   */
+  const sendPayslipToEmployee = async (
+    employee: Employee,
+    manual = true,
+  ): Promise<PayslipSendLogEntry> => {
+    const cfg = payslipConfigRef.current;
+    const periodLabel = currentPeriodLabel();
+    const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
+      "default",
+      { month: "long" },
+    );
+    const filename = `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`;
+    const recipient =
+      cfg.channel === "email"
+        ? employee.email
+        : cfg.channel === "whatsapp"
+          ? normalizePhoneForSending(employee.phone)
+          : employee.email || normalizePhoneForSending(employee.phone);
+
+    const entry: PayslipSendLogEntry = {
+      id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      employeeId: employee.employeeId || String(employee.id || ""),
+      employeeName: employee.fullName || "Employee",
+      period: periodLabel,
+      channel: cfg.channel,
+      recipient: maskRecipient(recipient),
+      status: "pending",
+      sentAt: new Date().toISOString(),
+      manual,
+    };
+
+    try {
+      // 1. Build the PDF (no download).
+      const doc = await buildEmployeePayslipPdf(employee);
+      const pdfBlob = doc.output("blob");
+      const pdfBase64 = doc.output("datauristring").split(",")[1] || "";
+
+      // 2. Upload to public storage (WhatsApp document link + email fallback).
+      const { url } = await uploadPayslipPdf(
+        pdfBlob,
+        user?.id || "unknown",
+        filename,
+      );
+
+      // 3. Deliver via the configured channel(s).
+      const gateway: CommGatewayConfig = {
+        emailEnabled: commGateway?.emailEnabled,
+        emailProvider: commGateway?.emailProvider,
+        emailApiKey: commGateway?.emailApiKey,
+        emailDomain: commGateway?.emailDomain,
+        senderEmail: commGateway?.senderEmail,
+        smtpUser: commGateway?.smtpUser,
+        stationName:
+          commGateway?.stationName || settings.organizationName || "Payroll",
+        whatsappEnabled: commGateway?.whatsappEnabled,
+        whatsappPhone: commGateway?.whatsappPhone,
+        whatsappToken: commGateway?.whatsappToken,
+      };
+      const result = await deliverPayslip({
+        channel: cfg.channel,
+        toEmail: employee.email,
+        toPhone: employee.phone,
+        filename,
+        pdfBase64,
+        publicUrl: url,
+        periodLabel,
+        employeeName: employee.fullName || "Employee",
+        gateway,
+      });
+      entry.status = result.success ? "sent" : "failed";
+      if (result.error) entry.error = result.error;
+    } catch (e) {
+      entry.status = "failed";
+      entry.error = (e as Error).message;
+    }
+    return entry;
+  };
+
+  /** Send payslips to ALL employees who have contact info. */
+  const sendAllPayslips = async (manual = true) => {
+    if (sendingPayslips) return;
+    setSendingPayslips(true);
+    const results: PayslipSendLogEntry[] = [];
+    try {
+      for (const employee of employees) {
+        // Skip employees with no contact info at all — log them as failed so
+        // the owner knows their record is incomplete.
+        if (!employee.email && !employee.phone) {
+          results.push({
+            id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            employeeId: employee.employeeId || String(employee.id || ""),
+            employeeName: employee.fullName || "Employee",
+            period: currentPeriodLabel(),
+            channel: payslipConfigRef.current.channel,
+            recipient: "",
+            status: "failed",
+            error: "no email or phone on file",
+            sentAt: new Date().toISOString(),
+            manual,
+          });
+          continue;
+        }
+        results.push(await sendPayslipToEmployee(employee, manual));
+        // Small yield so the UI stays responsive during a large batch.
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      await appendPayslipLog(results);
+      const sent = results.filter((r) => r.status === "sent").length;
+      const failed = results.length - sent;
+      if (failed === 0) {
+        toastSuccess(`Payslips sent to ${sent} employee(s).`);
+      } else if (sent > 0) {
+        toastError(
+          `Sent ${sent} payslip(s); ${failed} failed. Check the send log below.`,
+        );
+      } else {
+        toastError(
+          `All ${failed} payslip(s) failed to send. Check the gateway config (Communication → Settings) and the send log.`,
+        );
+      }
+    } finally {
+      setSendingPayslips(false);
+    }
+  };
+
+  // Auto-send: fires the first time the app is open on/after the configured
+  // day of the month (checked on mount + hourly). Cloud-synced config means
+  // the schedule is consistent across devices; the lastAutoSentPeriod guard
+  // prevents duplicate sends.
+  useEffect(() => {
+    const maybeAutoSend = () => {
+      const cfg = payslipConfigRef.current;
+      if (!cfg.enabled || !cfg.autoSend) return;
+      if (!user || employees.length === 0) return;
+      const today = new Date();
+      if (today.getDate() < cfg.sendDay) return;
+      const period = currentPeriodKey();
+      if (cfg.lastAutoSentPeriod === period) return;
+      void (async () => {
+        await sendAllPayslips(false);
+        await savePayslipConfig({ lastAutoSentPeriod: period });
+      })();
+    };
+    maybeAutoSend();
+    const timer = setInterval(maybeAutoSend, 60 * 60 * 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, employees.length]);
 
   // Excel import functionality
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2919,12 +3169,214 @@ export default function PayrollSystem() {
         Employee Payslips
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-4">
-        Generate and download individual payslips for employees for{" "}
+        Generate, download and send individual payslips for employees for{" "}
         {new Date(2023, settings.payrollMonth - 1).toLocaleString("default", {
           month: "long",
         })}{" "}
         {settings.payrollYear}
       </p>
+
+      {/* ── Payslip Delivery (auto / manual via email or WhatsApp) ── */}
+      <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Send size={16} className="text-blue-500" />
+          <h4 className="font-semibold text-sm md:text-base">
+            Payslip Delivery
+          </h4>
+        </div>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+          Send each employee&apos;s payslip as a PDF via email or WhatsApp.
+          Recipients are taken from each employee&apos;s payroll record — no
+          re-entering numbers.
+        </p>
+
+        {/* Delivery controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+              Channel
+            </label>
+            <select
+              value={payslipConfig.channel}
+              onChange={(e) =>
+                savePayslipConfig({
+                  channel: e.target.value as PayslipChannel,
+                })
+              }
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
+              <option value="email">Email (PDF attachment)</option>
+              <option value="whatsapp">WhatsApp (PDF document)</option>
+              <option value="both">Both (Email + WhatsApp)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+              <CalendarClock size={12} className="inline mr-1" />
+              Send day of month
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={28}
+              value={
+                editPayslipDayFocus
+                  ? editingPayslipSendDay
+                  : String(payslipConfig.sendDay)
+              }
+              onFocus={() => {
+                setEditPayslipDayFocus(true);
+                setEditingPayslipSendDay(String(payslipConfig.sendDay));
+              }}
+              onChange={(e) => setEditingPayslipSendDay(e.target.value)}
+              onBlur={() => {
+                setEditPayslipDayFocus(false);
+                const day = Math.max(
+                  1,
+                  Math.min(28, parseInt(editingPayslipSendDay, 10) || 1),
+                );
+                savePayslipConfig({ sendDay: day });
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={payslipConfig.enabled}
+                onChange={(e) =>
+                  savePayslipConfig({ enabled: e.target.checked })
+                }
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium">Enable delivery</span>
+            </label>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={payslipConfig.autoSend}
+                onChange={(e) =>
+                  savePayslipConfig({ autoSend: e.target.checked })
+                }
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium">
+                Auto-send on day {payslipConfig.sendDay}
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Gateway status + cross-link */}
+        {(() => {
+          const needEmail =
+            payslipConfig.channel === "email" ||
+            payslipConfig.channel === "both";
+          const needWhatsApp =
+            payslipConfig.channel === "whatsapp" ||
+            payslipConfig.channel === "both";
+          const emailReady = !!(
+            commGateway?.emailEnabled && commGateway?.emailApiKey
+          );
+          const whatsappReady = !!(
+            commGateway?.whatsappEnabled &&
+            commGateway?.whatsappPhone &&
+            commGateway?.whatsappToken
+          );
+          const missing: string[] = [];
+          if (needEmail && !emailReady) missing.push("Email gateway");
+          if (needWhatsApp && !whatsappReady) missing.push("WhatsApp Business");
+          return missing.length > 0 ? (
+            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/20 text-xs text-amber-800 dark:text-amber-300 flex flex-wrap items-center gap-2">
+              <span>
+                Not configured: <strong>{missing.join(", ")}</strong>. Set it up
+                once — it&apos;s shared with the Communication tab.
+              </span>
+              <button
+                onClick={() => navigateToTab("communication")}
+                className="btn btn-secondary px-2 py-1 text-xs"
+              >
+                Open Communication → Settings
+              </button>
+            </div>
+          ) : (
+            <div className="mb-4 p-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800/40 dark:bg-green-900/20 text-xs text-green-800 dark:text-green-300 flex items-center gap-2">
+              <CheckCircle2 size={14} />
+              Gateway ready (
+              {[emailReady && "Email", whatsappReady && "WhatsApp"]
+                .filter(Boolean)
+                .join(" + ")}
+              ).
+            </div>
+          );
+        })()}
+
+        {/* Manual send + last auto-send info */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => sendAllPayslips(true)}
+            disabled={sendingPayslips || !payslipConfig.enabled}
+            className="btn btn-primary px-4 py-2 text-sm flex items-center gap-2"
+          >
+            {sendingPayslips ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Send size={16} />
+            )}
+            Send All Payslips Now
+          </button>
+          {payslipConfig.lastAutoSentPeriod && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Auto-sent: {payslipConfig.lastAutoSentPeriod}
+            </span>
+          )}
+        </div>
+
+        {/* Recent send log */}
+        {payslipLog.length > 0 && (
+          <div className="mt-4">
+            <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+              Recent sends
+            </h5>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {payslipLog.slice(0, 8).map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-700/50"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {e.status === "sent" ? (
+                      <CheckCircle2
+                        size={13}
+                        className="text-green-500 shrink-0"
+                      />
+                    ) : (
+                      <XCircle size={13} className="text-red-500 shrink-0" />
+                    )}
+                    <span className="font-medium truncate">
+                      {e.employeeName}
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400 hidden sm:inline">
+                      → {e.recipient || "—"} ({e.channel})
+                    </span>
+                  </div>
+                  <span className="text-gray-400 shrink-0 ml-2">
+                    {new Date(e.sentAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {payslipLog.some((e) => e.status === "failed") && (
+              <p className="text-xs text-red-500 mt-1">
+                Some sends failed — hover the entries above for details.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Search */}
       <div className="mb-4">
@@ -2954,6 +3406,17 @@ export default function PayrollSystem() {
                 </p>
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   ID: {employee.employeeId || "N/A"}
+                </p>
+                {/* Contact info used for delivery (from payroll record) */}
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                  {employee.email && `📧 ${employee.email}`}
+                  {employee.email && employee.phone && " · "}
+                  {employee.phone && `📱 ${employee.phone}`}
+                  {!employee.email && !employee.phone && (
+                    <span className="text-amber-500">
+                      No contact info on file
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -2985,14 +3448,56 @@ export default function PayrollSystem() {
               </div>
             </div>
 
-            {/* Export Button */}
-            <button
-              onClick={() => exportEmployeePayslip(employee)}
-              className="w-full btn btn-primary px-3 py-2 text-xs md:text-sm flex items-center justify-center gap-2"
-            >
-              <FileText size={14} />
-              Export Payslip (PDF)
-            </button>
+            {/* Export + Send Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportEmployeePayslip(employee)}
+                className="flex-1 btn btn-primary px-3 py-2 text-xs md:text-sm flex items-center justify-center gap-2"
+              >
+                <FileText size={14} />
+                Export (PDF)
+              </button>
+              <button
+                onClick={async () => {
+                  if (!payslipConfig.enabled) {
+                    toastError(
+                      'Enable "Payslip Delivery" above (and configure the gateway in Communication → Settings) before sending.',
+                    );
+                    return;
+                  }
+                  setSaving(true);
+                  try {
+                    const entry = await sendPayslipToEmployee(employee, true);
+                    await appendPayslipLog([entry]);
+                    if (entry.status === "sent") {
+                      toastSuccess(
+                        `Payslip sent to ${employee.fullName} via ${entry.channel}.`,
+                      );
+                    } else {
+                      toastError(
+                        `Failed to send to ${employee.fullName}: ${entry.error || "unknown error"}`,
+                      );
+                    }
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+                className="flex-1 btn btn-secondary px-3 py-2 text-xs md:text-sm flex items-center justify-center gap-2"
+                title={
+                  employee.email || employee.phone
+                    ? `Send PDF to ${employee.email || employee.phone}`
+                    : "No contact info on file for this employee"
+                }
+              >
+                {saving ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : (
+                  <Send size={14} />
+                )}
+                Send
+              </button>
+            </div>
           </div>
         ))}
       </div>

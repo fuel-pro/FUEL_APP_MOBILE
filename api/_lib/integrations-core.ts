@@ -426,6 +426,11 @@ export async function sendEmail(body: {
   fromName?: string;
   apiKey?: string;
   domain?: string; // mailgun
+  attachment?: {
+    filename: string;
+    contentBase64: string;
+    mimeType?: string; // default application/pdf
+  };
 }): Promise<IntegrationResult> {
   if (!body.to?.includes("@")) return err("Invalid recipient email.");
   if (!body.apiKey) return err("Email provider API key is required.");
@@ -442,6 +447,18 @@ export async function sendEmail(body: {
           },
           subject: body.subject,
           content: [{ type: "text/plain", value: body.text }],
+          ...(body.attachment
+            ? {
+                attachments: [
+                  {
+                    content: body.attachment.contentBase64,
+                    filename: body.attachment.filename,
+                    type: body.attachment.mimeType || "application/pdf",
+                    disposition: "attachment",
+                  },
+                ],
+              }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -454,20 +471,50 @@ export async function sendEmail(body: {
     }
     if (body.provider === "mailgun") {
       if (!body.domain) return err("Mailgun requires a domain.");
+      let mgHeaders: Record<string, string>;
+      let mgBody: BodyInit;
+      if (body.attachment) {
+        // Multipart form (required for attachments)
+        const bin = atob(body.attachment.contentBase64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const form = new FormData();
+        form.append(
+          "from",
+          `${body.fromName || body.fromEmail} <${body.fromEmail}>`,
+        );
+        form.append("to", body.to);
+        form.append("subject", body.subject);
+        form.append("text", body.text);
+        form.append(
+          "attachment",
+          new Blob([bytes], {
+            type: body.attachment.mimeType || "application/pdf",
+          }),
+          body.attachment.filename,
+        );
+        mgHeaders = {
+          Authorization: `Basic ${toBase64(`api:${body.apiKey}`)}`,
+        };
+        mgBody = form;
+      } else {
+        mgHeaders = {
+          Authorization: `Basic ${toBase64(`api:${body.apiKey}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        };
+        mgBody = new URLSearchParams({
+          from: `${body.fromName || body.fromEmail} <${body.fromEmail}>`,
+          to: body.to,
+          subject: body.subject,
+          text: body.text,
+        });
+      }
       const res = await fetch(
         `https://api.mailgun.net/v3/${body.domain}/messages`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Basic ${toBase64(`api:${body.apiKey}`)}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            from: `${body.fromName || body.fromEmail} <${body.fromEmail}>`,
-            to: body.to,
-            subject: body.subject,
-            text: body.text,
-          }),
+          headers: mgHeaders,
+          body: mgBody,
         },
       );
       const data = await readJson(res);
@@ -488,6 +535,16 @@ export async function sendEmail(body: {
         to: [body.to],
         subject: body.subject,
         text: body.text,
+        ...(body.attachment
+          ? {
+              attachments: [
+                {
+                  filename: body.attachment.filename,
+                  content: body.attachment.contentBase64,
+                },
+              ],
+            }
+          : {}),
       }),
     });
     const data = await readJson(res);
@@ -510,23 +567,40 @@ export async function sendWhatsApp(body: {
   token: string;
   to: string;
   message: string;
+  // Optional PDF/document attachment (sent as a WhatsApp document message
+  // with a public URL; the document caption carries the message text).
+  documentUrl?: string;
+  documentFilename?: string;
 }): Promise<IntegrationResult> {
   if (!body.phoneNumberId || !body.token)
     return err("WhatsApp requires phoneNumberId + token.");
   const to = String(body.to || "").replace(/\D/g, "");
   if (!to) return err("Invalid WhatsApp recipient.");
+  const hasDoc = !!(body.documentUrl && /^https:\/\//.test(body.documentUrl));
+  const messageBody = hasDoc
+    ? {
+        messaging_product: "whatsapp",
+        to,
+        type: "document",
+        document: {
+          link: body.documentUrl,
+          filename: body.documentFilename || "document.pdf",
+          caption: body.message,
+        },
+      }
+    : {
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: body.message },
+      };
   try {
     const res = await fetch(
       `https://graph.facebook.com/v18.0/${body.phoneNumberId}/messages`,
       {
         method: "POST",
         headers: { ...JSON_HEADERS, Authorization: `Bearer ${body.token}` },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to,
-          type: "text",
-          text: { body: body.message },
-        }),
+        body: JSON.stringify(messageBody),
       },
     );
     const data = await readJson(res);
