@@ -46,16 +46,24 @@ export default function DayBook() {
   const { data: entries, setData: setEntries } = useCloudKV<
     Record<string, DayBookEntry>
   >(CLOUD_KEYS.daybook, stationId, {});
+  // POS transactions (fuel + shop items, with per-payment-method split) —
+  // the same cloud key PointOfSale writes. Read directly so the day book
+  // reconciles the POS channel even when no Sales Tracking shift was saved.
+  const { data: posTxns } = useCloudKV<any[]>(
+    "pos_transactions",
+    stationId,
+    [],
+  );
 
   const [depositInput, setDepositInput] = useState("");
   const [notesInput, setNotesInput] = useState("");
 
-  // Aggregate all sales-history entries for the chosen date (both shifts).
+  // Aggregate all sales-history entries for the chosen date (both shifts)
+  // PLUS POS transactions for the same date (payment-method-aware).
   const totals = useMemo(() => {
     let revenue = 0;
     let till = 0;
     let expensesTotal = 0;
-    let posAmount = 0;
     const entriesForDate = Object.values(state.salesHistory || {}).filter(
       (e: any) => e?.date === date,
     ) as any[];
@@ -75,27 +83,55 @@ export default function DayBook() {
         (sum: number, ex: any) => sum + (ex?.amount || 0),
         0,
       );
-      const pos = e.posSales || {};
-      posAmount +=
-        (pos.pmsAmount || 0) +
-        (pos.agoAmount || 0) +
-        Object.values(pos.byTypeAmount || {}).reduce(
-          (sum: number, v: any) => sum + (Number.isFinite(v) ? v : 0),
-          0,
-        );
-      // POS till/mpesa isn't tracked per-method in posSales; tillPayment already
-      // includes M-Pesa POS from PointOfSale — no double counting.
     }
-    const expectedCash = Math.max(0, revenue - till - expensesTotal);
+    // POS sales for the date, split by payment method. pos_transactions is
+    // the authoritative record (salesHistory.posSales is only a fuel-only
+    // mirror and is intentionally NOT added here to avoid double counting).
+    // NOTE: POS M-Pesa *fuel* sales are already mirrored into
+    // salesHistory.tillPayment by PointOfSale.syncFuelSalesToHistory, so only
+    // the non-fuel portion of POS M-Pesa is added to till here.
+    let posCash = 0;
+    let posMpesa = 0;
+    let posCardBank = 0;
+    let posMpesaNonFuel = 0;
+    const posForDate = (Array.isArray(posTxns) ? posTxns : []).filter(
+      (t: any) =>
+        typeof t?.timestamp === "string" && t.timestamp.startsWith(date),
+    );
+    for (const t of posForDate) {
+      const amt = Number.isFinite(t?.total) ? t.total : 0;
+      const fuelAmt = (Array.isArray(t?.items) ? t.items : []).reduce(
+        (s: number, i: any) => s + (i?.fuelType ? i?.total || 0 : 0),
+        0,
+      );
+      const nonFuelAmt = Math.max(0, amt - fuelAmt);
+      if (t?.paymentMethod === "mpesa") {
+        posMpesa += amt;
+        posMpesaNonFuel += nonFuelAmt;
+      } else if (t?.paymentMethod === "card" || t?.paymentMethod === "bank")
+        posCardBank += amt;
+      else posCash += amt;
+    }
+    till += posMpesaNonFuel;
+    // Physical cash expected = fuel sales cash portion + POS cash - expenses.
+    // Card/bank settle straight to the bank, so they are excluded from the
+    // cash-in-hand expectation (shown separately).
+    const expectedCash = Math.max(
+      0,
+      revenue - (till - posMpesaNonFuel) + posCash - expensesTotal,
+    );
     return {
       revenue,
       till,
       expensesTotal,
-      posAmount,
+      posCash,
+      posMpesa,
+      posCardBank,
+      posCount: posForDate.length,
       expectedCash,
       count: entriesForDate.length,
     };
-  }, [state.salesHistory, date]);
+  }, [state.salesHistory, posTxns, date]);
 
   const recorded = entries[date];
 
@@ -122,19 +158,44 @@ export default function DayBook() {
     const rows: (string | number | null)[][] = [
       [
         "date",
-        "revenue",
+        "pump_revenue",
+        "pos_cash",
         "till/mpesa",
+        "card/bank",
         "expenses",
         "expected_cash",
         "deposited",
         "variance",
         "notes",
       ],
-      ...Object.values(entries).map((e: DayBookEntry) => {
-        return [e.date, "", "", "", "", e.depositAmount, "", e.notes || ""] as (
-          string | number | null
-        )[];
-      }),
+      [
+        date,
+        totals.revenue.toFixed(2),
+        totals.posCash.toFixed(2),
+        totals.till.toFixed(2),
+        totals.posCardBank.toFixed(2),
+        totals.expensesTotal.toFixed(2),
+        totals.expectedCash.toFixed(2),
+        recorded ? recorded.depositAmount.toFixed(2) : "",
+        variance != null ? variance.toFixed(2) : "",
+        recorded?.notes || "",
+      ],
+      ...Object.values(entries)
+        .filter((e: DayBookEntry) => e.date !== date)
+        .map((e: DayBookEntry) => {
+          return [
+            e.date,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            e.depositAmount,
+            "",
+            e.notes || "",
+          ] as (string | number | null)[];
+        }),
     ];
     downloadCsv(`daybook-${date}.csv`, rows);
   };
@@ -161,22 +222,32 @@ export default function DayBook() {
         </button>
       </div>
 
-      {totals.count === 0 ? (
+      {totals.count === 0 && totals.posCount === 0 ? (
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
-          No Sales Tracking records for {date}. Save a shift in the Sales
-          Tracking tab first.
+          No sales records for {date}. Save a shift in Sales Tracking or
+          complete a sale in Point of Sale first.
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard
             icon={<Banknote className="w-4 h-4 text-amber-500" />}
-            label="Fuel Revenue"
+            label="Pump Revenue"
             value={`${currencySymbol} ${formatNumber(totals.revenue, 2)}`}
+          />
+          <StatCard
+            icon={<Banknote className="w-4 h-4 text-emerald-500" />}
+            label={`POS Cash (${totals.posCount} sale${totals.posCount === 1 ? "" : "s"})`}
+            value={`${currencySymbol} ${formatNumber(totals.posCash, 2)}`}
           />
           <StatCard
             icon={<CreditCard className="w-4 h-4 text-sky-500" />}
             label="Till / M-Pesa"
             value={`${currencySymbol} ${formatNumber(totals.till, 2)}`}
+          />
+          <StatCard
+            icon={<CreditCard className="w-4 h-4 text-violet-500" />}
+            label="Card / Bank"
+            value={`${currencySymbol} ${formatNumber(totals.posCardBank, 2)}`}
           />
           <StatCard
             icon={<Wallet className="w-4 h-4 text-rose-500" />}

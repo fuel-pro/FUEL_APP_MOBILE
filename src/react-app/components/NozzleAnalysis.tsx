@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Fuel, Users, Download, Clock, TrendingUp } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import { resolveCurrencySymbol } from "@/react-app/lib/currency";
@@ -39,6 +40,7 @@ interface EmployeeEntry {
 export default function NozzleAnalysis() {
   const { state } = useFuel();
   const { currentStation } = useStations();
+  const fuelTypeApi = useStationFuelTypes();
   const stationId = currentStation?.id;
   const currencySymbol = useMemo(
     () =>
@@ -60,7 +62,9 @@ export default function NozzleAnalysis() {
     [],
   );
 
-  // Nozzle-wise (per-pump) analysis.
+  // Nozzle-wise (per-pump) analysis. When a saved shift has no stored amount
+  // (salesKsh missing/0), value the dispensed litres at the station's current
+  // configured price so the nozzle report is never blank on amounts.
   const pumpRows = useMemo(() => {
     const pumps = state.fuelPumpsByType || {};
     const rows: {
@@ -76,12 +80,14 @@ export default function NozzleAnalysis() {
     for (const [type, list] of Object.entries(pumps)) {
       (list as any[]).forEach((p: any) => {
         const salesL = p?.salesL ?? (p?.closingL ?? 0) - (p?.openingL ?? 0);
+        const stored = Number(p?.salesKsh ?? 0);
+        const price = fuelTypeApi.getPriceFor(getFuelLabel(type)) ?? 0;
         rows.push({
           id: `${type}-${p?.id ?? Math.random()}`,
           label: getFuelLabel(type),
           pumpId: p?.id ?? "—",
           salesL,
-          salesAmount: p?.salesKsh ?? 0,
+          salesAmount: stored > 0 ? stored : salesL * price,
           opening: p?.openingL ?? 0,
           closing: p?.closingL ?? 0,
         });
@@ -89,7 +95,7 @@ export default function NozzleAnalysis() {
       });
     }
     return { rows, totalL };
-  }, [state.fuelPumpsByType]);
+  }, [state.fuelPumpsByType, fuelTypeApi]);
 
   // Attendant (salesman) day book — shifts with employee names + hours.
   const attendantRows = useMemo(() => {
