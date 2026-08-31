@@ -1916,11 +1916,30 @@ export default function PayrollSystem() {
           });
           continue;
         }
-        const { entry, fallbacks } = await sendPayslipToEmployee(
-          employee,
-          manual,
-          false,
-        );
+        let entry: PayslipSendLogEntry;
+        let fallbacks: PayslipWebFallback[] = [];
+        try {
+          ({ entry, fallbacks } = await sendPayslipToEmployee(
+            employee,
+            manual,
+            false,
+          ));
+        } catch (e) {
+          // One bad employee record must NEVER abort the whole batch — log
+          // the failure and move on to the next employee.
+          entry = {
+            id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            employeeId: employee.employeeId || String(employee.id || ""),
+            employeeName: employee.fullName || "Employee",
+            period: currentPeriodLabel(),
+            channel: payslipConfigRef.current.channel,
+            recipient: maskRecipient(employee.email || employee.phone || ""),
+            status: "failed",
+            error: (e as Error).message,
+            sentAt: new Date().toISOString(),
+            manual,
+          };
+        }
         // Web fallback: queue for the modal (one click per employee) rather
         // than logging as failed.
         if (entry.status === "pending" && fallbacks.length > 0) {
@@ -3609,6 +3628,7 @@ export default function PayrollSystem() {
               {payslipLog.slice(0, 8).map((e) => (
                 <div
                   key={e.id}
+                  title={e.error ? `Error: ${e.error}` : undefined}
                   className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-gray-50 dark:bg-gray-700/50"
                 >
                   <div className="flex items-center gap-2 min-w-0">
