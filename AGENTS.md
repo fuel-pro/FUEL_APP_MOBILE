@@ -1,4 +1,101 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
+## Session 2026-08-30 — REAL production integrations + Vercel 12-function cap fix (DEPLOYED LIVE)
+
+**Task**: replace simulated/faked integration paths (POS STK Push, MPESA statement
+import, KRA eTIMS, Charity webhook, Support email + SMS) with real production
+code. Code was committed by handoff (b50ff41) but NOT deployed to Vercel because
+new api/integrations.ts pushed function count to 13 > Hobby cap 12. This session
+finished the deploy + verified live.
+
+### Real integrations architecture
+- **Client**: `src/react-app/lib/integrations-client.ts` — posts to
+  `/api/integrations?action=<action>` (same-origin on Vercel; on other hosts,
+  Cloudflare Pages Function `functions/api/integrations.ts` relays to Vercel
+  with CORS headers).
+- **Core**: `api/_lib/integrations-core.ts` — REAL institution calls with
+  credential validation:
+  - M-PESA Daraja STK Push (448-char Daraja credential validation before STK;
+    phone validated `^254[17]\d{8}$`)
+  - M-PESA Daraja STK query
+  - Kopo Kopo v2 indexBy/statusBy API (OAuth + pagination)
+  - Charity webhook HTTPS POST (HMAC-SHA256 signed `X-FuelPro-Event`/
+    `X-FuelPro-Signature` headers)
+  - Support: Twilio/Africa's Talking/Termii SMS (form-encoded provider POST),
+    SES/SendGrid/Brevo HTML email
+  - KRA eTIMS OSCU (initComm + invoice, Kenya 16% VAT compatible)
+- **Serverless**:
+  - Vercel: `api/integrations.ts` (uses _lib core)
+  - Cloudflare: `functions/api/integrations.ts` (same-site URL fallback +
+    crossover relay to `fuel-app-mobile.vercel.app/api/integrations` with
+    `Access-Control-Allow-Origin: *`).
+- **Frontend callers** (all switched):
+  - `PointOfSale.tsx` `handleInitiateSTKPush` → real Daraja; terminal bug fix
+    (TERM_QA not authorized): checks `mpesaConfig.enabled`, shows EXPLICIT
+    `M-PESA Daraja is not configured` toast, no fake 2s success. Cash/card/bank
+    unaffected. PENDING STK records persist to `mpesa_transactions` (origin
+    stk_push) with the ORIGINAL sender phone.
+  - `LiveTransaction.tsx` STK Push UI: honor includes now; pending-record
+    saved. Banner "No Payment Integration Connected"/"Payment Integration
+    Connected" stays accurate (not fake).
+  - `MPESAAnalyzer.tsx` "Pull from Kopo Kopo" → real Kopo Kopo v2 request
+    (GUI-defined import CSV path kept for statements).
+  - `Communication.tsx` `sendMessage` → real bulk-send per recipient; channel
+    routing SMS → sms-send (Twilio/Africa's Talking/Termii), email → email-send
+    (SES/SendGrid/Brevo) with friendly provider missing-config message;
+    "pending" status when gateway not configured instead of always-true "sent".
+  - `IntegrationHub.tsx` `testConnection` → REAL form-fill-based gate +
+    webhook test POST live.
+  - `PointOfSale.tsx` `generateTicketXml` → REAL KRA eTIMS OSCU (initComm /
+    invoice) via integrations dispatcher. Kenya-org-only (no fake Kenya on US
+    stations). Fallback offline: numbered tag, explicit receipt "(offline — not
+    sent)". Tax Settings (Kenya-only) exposes: eTIMS Branch ID, eTIMS Serial
+    Number, eTIMS Currency Key, eTIMS Base URL fields persisted in the compact
+    blob (`companyData.etimsCmcKey` etc.).
+  - `automation-engine.ts` → real event dispatch (was `.catch(() => {})` void);
+    now routes through new `src/react-app/lib/webhook-dispatcher.ts` with
+    origin exact/prefix/wildcard matching on `apiKey/id` pattern, error-logged
+    per-handler, fan-out on dispatch channel.
+
+### Vercel 12-function cap fix (commit 658e1b0)
+New `api/integrations.ts` pushed 10→13 functions. Consolidated
+`api/pump-mapping/{chat,export,extract}.ts` (3 functions) into ONE dynamic route
+`api/pump-mapping/[action].ts`; the three handler modules moved to
+`api/pump-mapping/_lib/` (leading underscore excluded from creation). Same
+URLs/same handlers, client code unchanged. Vercel now deploys 11 functions.
+IMPORTANT: any NEW api/*.ts function counts toward the cap — use
+`api/<name>/[action].ts` consolidation or an `_lib` module before adding more.
+
+### Deploy state 2026-08-30
+- **GitHub main**: `b50ff41` (real integrations handoff) + `658e1b0` (function
+  cap fix) pushed.
+- **Cloudflare Pages**: LIVE (63d60706 + main alias). `functions/api/
+  integrations.ts` relay confirmed (`/api/integrations` → 400-Missing action
+  parameters, NOT 404).
+- **Vercel production**: LIVE (prebuilt; aliased `fuel-app-mobile.vercel.app`;
+  11 functions). `api/integrations` confirmed returning real errors
+  (Daraja credential validation), `webhook-fire` delivered a signed HTTPS POST
+  to httpbin.org (HTTP 200).
+- **Supabase**: no schema changes (all state uses existing `app_kv` cloud keys:
+  `mpesa_transactions`, `comm_integration_config`, compact-blob
+  `companyData.etims*`).
+- Verified live (browser, founder QA user, US station):
+  - POS quick-sale 10L Super Petrol → real CASH sale completed
+    (INV20260831000008SLPL, $14.20), receipt is country-aware (Tax ID, 0% VAT,
+    no Kenya eTIMS), cashier name real.
+  - POS M-PESA with no config → HONEST toast "M-PESA Daraja is not configured"
+    + no fake completion.
+  - Tax Settings modal (US): "EIN / VAT No", "State / Province", NO Kenya
+    eTIMS fields (correct gating).
+  - Live Transaction STK Push: amber "M-PESA Daraja is not configured"
+    banner, validation, then "STK Push recorded as pending" (record
+    PERSISTED: `STK1788199209264` appears in the Live Payment Feed as
+    `$ 50 PENDING`). Shared Analytics + feeds unaffected.
+  - Old false banner "Live Server Integration Active" not present.
+- Lost-commit audit (post-task): origin/ai-readme fully contained in main
+  (0 ahead); all other branches contain nothing missing.
+- `npx tsc --noEmit` 0 errors; `npm run build` success; vercel build 11
+  functions.
+
 ## Session 2026-08-30 — GitHub org transfer: fuel-pro → fuelpropay (DEPLOYED LIVE)
 
 **User transferred the repo** from `github.com/fuel-pro/FUEL_APP_MOBILE` to
