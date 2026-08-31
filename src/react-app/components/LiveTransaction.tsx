@@ -696,15 +696,21 @@ export default function LiveTransaction() {
       );
 
       if (data.success) {
+        const checkoutId = data.checkout_request_id
+          ? String(data.checkout_request_id)
+          : undefined;
         setStkPushStatus({
           loading: false,
           success: true,
           error: "",
-          checkout_request_id: data.checkout_request_id,
+          checkout_request_id: checkoutId,
         });
         // Start polling for transaction status.
-        if (data.checkout_request_id) {
-          startTransactionPolling(data.checkout_request_id, checkoutRef);
+        if (checkoutId) {
+          startTransactionPolling(
+            String(data.checkout_request_id),
+            checkoutRef,
+          );
         }
       } else {
         setStkPushStatus({

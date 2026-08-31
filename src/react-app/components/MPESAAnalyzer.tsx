@@ -168,7 +168,8 @@ export default function MPESAAnalyzer() {
         );
         return;
       }
-      const txns: UnifiedTransaction[] = payments.map((p) => ({
+      const txns: UnifiedTransaction[] = payments.map((p, idx) => ({
+        id: String(p.id || p.reference || `KK${Date.now()}_${idx}`),
         transaction_ref: String(p.reference || p.id || `KK${Date.now()}`),
         origin: "kopokopo" as const,
         transaction_type: String(p.type || "Incoming Payment"),

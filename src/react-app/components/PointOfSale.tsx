@@ -750,7 +750,7 @@ export default function PointOfSale() {
             items: cart.map((i) => ({
               itemNm: i.name,
               qty: i.quantity,
-              prc: i.price,
+              prc: i.unitPrice,
               taxTyCd: "A",
             })),
             paymentType:

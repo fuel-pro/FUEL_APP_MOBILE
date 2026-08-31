@@ -472,7 +472,9 @@ export async function sendEmail(body: {
     if (body.provider === "mailgun") {
       if (!body.domain) return err("Mailgun requires a domain.");
       let mgHeaders: Record<string, string>;
-      let mgBody: BodyInit;
+      // FormData | URLSearchParams covers both branches below without the
+      // DOM-lib-only BodyInit global (not in the server tsconfig libs).
+      let mgBody: FormData | URLSearchParams;
       if (body.attachment) {
         // Multipart form (required for attachments)
         const bin = atob(body.attachment.contentBase64);
