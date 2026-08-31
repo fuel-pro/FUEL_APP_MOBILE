@@ -1,5 +1,73 @@
 # FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
 
+## Session 2026-08-31 — General Settings "Default Landing Tab": all current+future tabs recognized, fully working (DEPLOYED)
+
+**Task**: make the General Settings "Default Landing Tab" recognize/identify
+ALL registered tabs (current + future) and actually apply the selection on
+login, add reverse-engineered helper features, add a General Settings
+shortcut to the Header "Branding & Tools" dropdown, test, and ship to
+production. Also unblocked the CI `tsc -b` Type Check gate.
+
+### What was built (commits f4e0f1b + 46e8459, on main)
+
+- **Dynamic registry-driven dropdown** (`GeneralSettings.tsx` General
+  sub-tab): options come from `state.tabConfigurations` sorted by `order`,
+  so every registered tab (current AND future) appears automatically.
+  Hidden tabs stay selectable with a "(hidden)" marker (owner can prepare
+  the landing tab before un-hiding). Previously hardcoded to 5 tabs.
+- **The feature now fully works** (`Home.tsx`): previously `prefs.defaultTab`
+  was a dead write-only preference (nothing read it). Home now resolves the
+  landing tab ONCE on prefs load via the new
+  `src/react-app/lib/landing-tab.ts` helper
+  (`resolveLandingTab(prefs, tabConfigs)`), with graceful fallback to
+  "dashboard" when the saved tab was removed/unregistered/hidden.
+- **"Resume where I left off" toggle** (new `rememberLastTab` pref in
+  `user-preferences.ts`, cloud-synced): Home persists every tab switch to
+  `fuelpro_last_active_tab`; when enabled, login reopens the last tab.
+- **"Apply & preview now" button** — jumps to the resolved target
+  immediately via `switchToTab`.
+- **Live resolved-target readout** (`ResolvedLandingHint`): shows
+  "Next login opens: <label> (<id>)" with remember-last/fallback notes,
+  reacting to `storage` + `user-prefs:changed` events.
+- **Header shortcut** (`Header.tsx` Branding & Tools section, desktop +
+  mobile grid): "General Settings" → `switchToTab("settings")`.
+- **CI unblocked (fix commit 46e8459)**: `tsc -b` (stricter project-refs
+  build used by the CI Type Check job) had 5 pre-existing errors:
+  - `LiveTransaction.tsx`: coerce `IntegrationResponse.checkout_request_id`
+    (unknown via `[key: string]: unknown`) to string.
+  - `MPESAAnalyzer.tsx`: include required `UnifiedTransaction.id` in the
+    Kopo Kopo pull mapping.
+  - `PointOfSale.tsx`: receipt XML used nonexistent `CartItem.price` →
+    `unitPrice` (was sending `undefined` price into the eTIMS payload).
+  - `api/_lib/integrations-core.ts`: replaced DOM-lib-only `BodyInit` with
+    `FormData | URLSearchParams` union (server tsconfig has no DOM lib).
+  Adds 11 landing-tab vitest cases (49/49 total pass).
+
+### Verified
+
+- `tsc -b` 0 errors, `tsc --noEmit` 0 errors, eslint 0 errors
+  (pre-existing warnings only), prettier clean, vitest 49/49,
+  build success (clean Vite cache).
+- Build markers confirmed in chunks: `resume where I left off`,
+  `rememberLastTab`, `fuelpro_last_active_tab` (GeneralSettings chunk);
+  `General Settings`, `fuelpro_last_active_tab` (index chunk).
+- GitHub: pushed main `f4e0f1b` (landing feature) + `46e8459` (CI fix).
+- Deploy workflow (GitHub→Vercel prebuilt): SUCCEEDED for `f4e0f1b`
+  (production live with all features); `46e8459` deploy triggered
+  automatically on push. Cloudflare Pages deploy not possible from this
+  environment — no `CLOUDFLARE_API_TOKEN`/`VERCEL_TOKEN` available
+  (env only had OPENHANDS_API_KEY + GITHUB_TOKEN; `/workspace/API KEYS.txt`
+  contains template var names, no deploy tokens). Supabase: no schema
+  changes (frontend-only).
+
+### Lost-commit audit 2026-08-31
+
+No new unmerged work — remaining documented branches
+(founder-username-login, identifying-security-vulnerabilities-8d289,
+qwen-code-6a328546) hold no lost code per prior audits.
+
+# FuelPro Mobile Г”Г‡Г¶ Repository Knowledge
+
 ## Session 2026-08-31 — Payslip Delivery web-redirect fallback (wa.me / mailto) (DEPLOYED LIVE)
 
 **Task**: when the email/WhatsApp API gateway is not configured, redirect to
