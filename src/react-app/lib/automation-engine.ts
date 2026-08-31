@@ -191,12 +191,47 @@ export interface AutomationLogEntry {
   actionTaken?: string;
 }
 
+/**
+ * Convert a domain event into a short, human-readable summary shown in the
+ * Activity Log. Never falls back to raw JSON.
+ */
+function summarizeEvent(event: DomainEvent): string {
+  switch (event.type) {
+    case "product:created":
+      return `Product created (ID ${event.productId.slice(0, 8)})`;
+    case "product:updated":
+      return `Product updated (ID ${event.productId.slice(0, 8)})`;
+    case "product:deleted":
+      return `Product deleted (ID ${event.productId.slice(0, 8)})`;
+    case "stock:adjusted":
+      return `Stock adjusted: ${event.newQty} units — ${event.reason || "adjustment"}`;
+    case "stock:transfer":
+      return `Stock transfer of ${event.qty} units`;
+    case "stock:wastage":
+      return `Wastage of ${event.qty} units recorded`;
+    case "sale:completed":
+      return `Sale completed — ${event.total} total (${event.items?.length ?? 0} items)`;
+    case "expense:created":
+      return `Expense recorded — ${event.amount} (${event.category || "uncategorized"})`;
+    case "price:changed":
+      return `Price for ${event.fuelType} changed to ${event.newPrice}`;
+    case "shift:opened":
+      return `Shift opened`;
+    case "shift:closed":
+      return `Shift closed`;
+    case "station:switched":
+      return `Station switched`;
+    default:
+      return event.type.replace(":", " ");
+  }
+}
+
 async function logEvent(event: DomainEvent): Promise<void> {
   const entry: AutomationLogEntry = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     timestamp: Date.now(),
     eventType: event.type,
-    summary: JSON.stringify(event).slice(0, 500),
+    summary: summarizeEvent(event),
     stationId: "stationId" in event ? event.stationId : undefined,
   };
   const log =

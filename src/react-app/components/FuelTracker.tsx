@@ -61,19 +61,26 @@ export default function FuelTracker() {
     setStatus("locating");
     setError(null);
 
-    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60000,
+    let pos: GeolocationPosition | null = null;
+    try {
+      pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
       });
-    }).catch((e: GeolocationPositionError) => {
-      throw new Error(
-        e.code === e.PERMISSION_DENIED
+    } catch (e) {
+      const geoErr = e as GeolocationPositionError;
+      setError(
+        geoErr.code === geoErr.PERMISSION_DENIED
           ? "Location permission denied. Enable GPS to see local prices."
           : "Could not determine your location.",
       );
-    });
+      setStatus("error");
+      inFlight.current = false;
+      return;
+    }
 
     if (!pos) {
       inFlight.current = false;
