@@ -674,32 +674,26 @@ export default function LiveTransaction() {
     }
 
     try {
-      const response = await fetch("/api/mpesa/stk-push", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stkPushData),
-      });
-
-      if (!response.ok) {
-        // 404 etc. — the Daraja backend is not deployed. The pending record is
-        // already saved, so this is a soft failure (no destructive alert).
-        setStkPushStatus({
-          loading: false,
-          success: false,
-          error: "",
-          pending: true,
-          pendingMessage: `The M-PESA Daraja backend returned HTTP ${response.status} (not deployed). The record is saved and visible in the M-PESA Analyzer. Connect the backend to trigger live prompts.`,
-        });
-        setStkPushData({
-          phone_number: "",
-          amount: 0,
-          account_reference: "",
-          transaction_desc: "",
-        });
-        return;
-      }
-
-      const data = await response.json();
+      // REAL Daraja STK Push via the integrations dispatcher. The station's
+      // own Daraja credentials (configured in Integration Hub → Payment Setup)
+      // are used to call Safaricom for real.
+      const { mpesaStkPush } =
+        await import("@/react-app/lib/integrations-client");
+      const data = await mpesaStkPush(
+        {
+          consumerKey: mpesaConfig.consumerKey,
+          consumerSecret: mpesaConfig.consumerSecret,
+          passkey: mpesaConfig.passkey,
+          shortcode: mpesaConfig.shortcode,
+          environment: mpesaConfig.environment,
+        },
+        {
+          phoneNumber: formatPhoneNumber(stkPushData.phone_number),
+          amount: stkPushData.amount,
+          accountReference: stkPushData.account_reference || "FuelPro",
+          transactionDesc: stkPushData.transaction_desc || "STK Push payment",
+        },
+      );
 
       if (data.success) {
         setStkPushStatus({

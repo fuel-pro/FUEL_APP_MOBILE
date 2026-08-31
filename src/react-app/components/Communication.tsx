@@ -445,23 +445,121 @@ export default function Communication() {
         type: messageForm.type || "sms",
         content: messageForm.content || "",
         subject: messageForm.subject || "",
-        // Status is "pending" — the message is stored, not actually sent via a
-        // gateway. The previous "sent" status was misleading.
+        // Status starts "pending" — it is upgraded to "sent"/"failed" below
+        // when a real gateway is configured and the institution responds.
         status: "pending",
         timestamp: now,
         sentBy,
       }));
+
+      // REAL gateway sending. If the station configured an SMS/email/WhatsApp
+      // gateway in Communication → Settings, actually send each message via
+      // the real institution and record the true delivery status. Without a
+      // configured gateway the messages stay "pending" (honest) and the toast
+      // says exactly what to configure.
+      const commCfg =
+        (await cloudStorageService
+          .get<CommIntegrationConfig>("comm_integration_config", stationId)
+          .catch(() => null)) || null;
+      let sentCount = 0;
+      let failedCount = 0;
+      const wantSms = (messageForm.type || "sms") === "sms";
+      const smsReady = !!(
+        commCfg?.smsEnabled &&
+        (commCfg.smsProvider === "custom"
+          ? commCfg.smsCustomUrl
+          : commCfg.smsProvider === "twilio"
+            ? commCfg.smsAccountSid &&
+              commCfg.smsAuthToken &&
+              commCfg.smsFromNumber
+            : commCfg.smsApiKey && commCfg.smsUsername)
+      );
+      const emailReady = !!(
+        commCfg?.emailEnabled &&
+        commCfg?.emailApiKey &&
+        commCfg?.emailProvider !== "smtp"
+      );
+
+      if ((wantSms && smsReady) || (!wantSms && emailReady)) {
+        const { callIntegration } =
+          await import("@/react-app/lib/integrations-client");
+        for (const msg of newMessages) {
+          const contact = contactsRef.current.find(
+            (c) => c.id === msg.contactId,
+          );
+          try {
+            let result: { success: boolean; error?: string };
+            if (wantSms) {
+              const to = contact?.phone || "";
+              result = await callIntegration("sms-send", {
+                provider: commCfg!.smsProvider,
+                to,
+                message: msg.content,
+                accountSid: commCfg!.smsAccountSid,
+                authToken: commCfg!.smsAuthToken,
+                fromNumber: commCfg!.smsFromNumber,
+                apiKey: commCfg!.smsApiKey,
+                username: commCfg!.smsUsername,
+                senderId: commCfg!.smsSender,
+                customUrl: commCfg!.smsCustomUrl,
+              });
+            } else {
+              const to = contact?.email || "";
+              result = await callIntegration("email-send", {
+                provider: commCfg!.emailProvider,
+                to,
+                subject:
+                  msg.subject ||
+                  `Message from ${commCfg!.stationName || "Fuel Station"}`,
+                text: msg.content,
+                fromEmail: commCfg!.senderEmail || commCfg!.smtpUser,
+                fromName: commCfg!.stationName,
+                apiKey: commCfg!.emailApiKey,
+                domain: commCfg!.emailDomain,
+              });
+            }
+            msg.status = result.success ? "sent" : "failed";
+            if (result.success) sentCount++;
+            else {
+              failedCount++;
+              console.warn(
+                `[comm] real send failed for ${msg.contactId}:`,
+                result.error,
+              );
+            }
+          } catch (e) {
+            msg.status = "failed";
+            failedCount++;
+            console.warn(`[comm] real send error for ${msg.contactId}:`, e);
+          }
+        }
+      }
+
       const updated = [...newMessages, ...messagesRef.current];
       await cloudStorageService.set("comm_messages", updated, stationId);
       setMessages(updated);
       setShowMessageModal(false);
       setSelectedContacts([]);
       resetMessageForm();
-      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-        toastSuccess(
-          `Message queued for ${recipients.length} recipient(s). Configure an SMS/email gateway in Integration Hub to actually send.`,
-        ),
-      );
+      import("@/react-app/lib/toast").then(({ toastSuccess, toastWarning }) => {
+        if (sentCount > 0 && failedCount === 0) {
+          toastSuccess(
+            `Sent ${sentCount} message(s) via the configured gateway.`,
+          );
+        } else if (sentCount > 0 && failedCount > 0) {
+          toastWarning(
+            `Sent ${sentCount}, failed ${failedCount}. Check the gateway config.`,
+          );
+        } else if (failedCount > 0) {
+          toastWarning(
+            `All ${failedCount} message(s) failed to send. Check the gateway config in Communication → Settings.`,
+          );
+        } else {
+          toastSuccess(
+            `Message queued for ${recipients.length} recipient(s). Configure an SMS/email gateway in Communication → Settings to actually send.`,
+          );
+        }
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
@@ -1511,16 +1609,24 @@ interface CommIntegrationConfig {
   smsProvider: string; // "twilio" | "africa-talking" | "custom"
   smsApiKey: string;
   smsSender: string; // sender ID / shortcode
+  // Real-gateway extra fields
+  smsAccountSid: string; // twilio Account SID
+  smsAuthToken: string; // twilio Auth Token
+  smsFromNumber: string; // twilio From number
+  smsUsername: string; // africa's talking username
+  smsCustomUrl: string; // custom HTTP gateway URL
   // Email
   emailEnabled: boolean;
-  emailProvider: string; // "smtp" | "sendgrid" | "mailgun"
+  emailProvider: string; // "sendgrid" | "mailgun" | "resend" | "smtp"
+  emailApiKey: string;
+  emailDomain: string; // mailgun domain
   smtpHost: string;
   smtpPort: string;
   smtpUser: string;
   smtpPassword: string;
   // WhatsApp Business
   whatsappEnabled: boolean;
-  whatsappPhone: string; // WhatsApp Business number
+  whatsappPhone: string; // WhatsApp Business phone_number_id
   whatsappApiUrl: string;
   whatsappToken: string;
 }
@@ -1533,8 +1639,15 @@ const DEFAULT_COMM_CONFIG: CommIntegrationConfig = {
   smsProvider: "africa-talking",
   smsApiKey: "",
   smsSender: "",
+  smsAccountSid: "",
+  smsAuthToken: "",
+  smsFromNumber: "",
+  smsUsername: "",
+  smsCustomUrl: "",
   emailEnabled: false,
-  emailProvider: "smtp",
+  emailProvider: "sendgrid",
+  emailApiKey: "",
+  emailDomain: "",
   smtpHost: "",
   smtpPort: "587",
   smtpUser: "",
@@ -1671,29 +1784,107 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               <option value="custom">Custom HTTP API</option>
             </select>
           </div>
-          <div>
-            <label className="text-xs text-gray-500">API Key</label>
-            <input
-              type="password"
-              value={config.smsApiKey}
-              onChange={(e) => update("smsApiKey", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="Your gateway API key"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">
-              Sender ID / Shortcode
-            </label>
-            <input
-              type="text"
-              value={config.smsSender}
-              onChange={(e) => update("smsSender", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="e.g. ACME"
-            />
-          </div>
+          {config.smsProvider === "twilio" && (
+            <>
+              <div>
+                <label className="text-xs text-gray-500">Account SID</label>
+                <input
+                  type="text"
+                  value={config.smsAccountSid}
+                  onChange={(e) => update("smsAccountSid", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="ACxxxxxxxxxxxxxxxx"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Auth Token</label>
+                <input
+                  type="password"
+                  value={config.smsAuthToken}
+                  onChange={(e) => update("smsAuthToken", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="Twilio auth token"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">From Number</label>
+                <input
+                  type="text"
+                  value={config.smsFromNumber}
+                  onChange={(e) => update("smsFromNumber", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="+15550001234"
+                />
+              </div>
+            </>
+          )}
+          {config.smsProvider === "africa-talking" && (
+            <>
+              <div>
+                <label className="text-xs text-gray-500">API Key</label>
+                <input
+                  type="password"
+                  value={config.smsApiKey}
+                  onChange={(e) => update("smsApiKey", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="Your Africa's Talking API key"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Username</label>
+                <input
+                  type="text"
+                  value={config.smsUsername}
+                  onChange={(e) => update("smsUsername", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="e.g. sandbox or your app username"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">
+                  Sender ID (optional)
+                </label>
+                <input
+                  type="text"
+                  value={config.smsSender}
+                  onChange={(e) => update("smsSender", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="e.g. ACME"
+                />
+              </div>
+            </>
+          )}
+          {config.smsProvider === "custom" && (
+            <>
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-500">Gateway URL</label>
+                <input
+                  type="text"
+                  value={config.smsCustomUrl}
+                  onChange={(e) => update("smsCustomUrl", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="https://your-sms-gateway.com/api/send"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">
+                  API Key (Bearer, optional)
+                </label>
+                <input
+                  type="password"
+                  value={config.smsApiKey}
+                  onChange={(e) => update("smsApiKey", e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                  placeholder="Bearer token"
+                />
+              </div>
+            </>
+          )}
         </div>
+        <p className="text-xs text-gray-500 mt-2">
+          When enabled, messages are ACTUALLY sent via this gateway (real
+          delivery status is recorded on each message).
+        </p>
       </div>
 
       {/* Email */}
@@ -1720,52 +1911,42 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               onChange={(e) => update("emailProvider", e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             >
-              <option value="smtp">SMTP</option>
               <option value="sendgrid">SendGrid</option>
               <option value="mailgun">Mailgun</option>
+              <option value="resend">Resend</option>
+              <option value="smtp">
+                SMTP (not supported — use an HTTP API)
+              </option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500">SMTP Host</label>
-            <input
-              type="text"
-              value={config.smtpHost}
-              onChange={(e) => update("smtpHost", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="smtp.gmail.com"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">SMTP Port</label>
-            <input
-              type="text"
-              value={config.smtpPort}
-              onChange={(e) => update("smtpPort", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="587"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">SMTP User</label>
-            <input
-              type="text"
-              value={config.smtpUser}
-              onChange={(e) => update("smtpUser", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="user@gmail.com"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">SMTP Password</label>
+            <label className="text-xs text-gray-500">API Key</label>
             <input
               type="password"
-              value={config.smtpPassword}
-              onChange={(e) => update("smtpPassword", e.target.value)}
+              value={config.emailApiKey}
+              onChange={(e) => update("emailApiKey", e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
-              placeholder="App password"
+              placeholder="Your email provider API key"
             />
           </div>
+          {config.emailProvider === "mailgun" && (
+            <div>
+              <label className="text-xs text-gray-500">Mailgun Domain</label>
+              <input
+                type="text"
+                value={config.emailDomain}
+                onChange={(e) => update("emailDomain", e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
+                placeholder="mg.yourdomain.com"
+              />
+            </div>
+          )}
         </div>
+        <p className="text-xs text-gray-500 mt-2">
+          When enabled, emails are ACTUALLY sent via this provider's real HTTP
+          API. SMTP (raw TCP) is not reachable from a serverless backend — use
+          SendGrid, Mailgun, or Resend.
+        </p>
       </div>
 
       {/* WhatsApp Business */}

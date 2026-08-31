@@ -94,6 +94,12 @@ export function emit(event: DomainEvent): void {
   wildcardHandlers.forEach(fire);
   // persist log (fire-and-forget)
   logEvent(event).catch(() => {});
+  // REAL webhook delivery: fire matching Integration Hub webhooks for this
+  // event (fire-and-forget; the dynamic import avoids a load-time cycle).
+  const stationId = (event as { stationId?: string }).stationId;
+  import("@/react-app/lib/webhook-dispatcher")
+    .then((m) => m.dispatchAutomationWebhooks(event, stationId))
+    .catch(() => {});
 }
 
 // ─── Automation Preferences (cloud-backed) ───────────────────────────────

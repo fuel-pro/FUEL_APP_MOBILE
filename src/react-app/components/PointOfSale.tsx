@@ -46,8 +46,14 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { emit } from "@/react-app/lib/automation-engine";
 import {
   addTransaction,
+  getMpesaConfig,
   type UnifiedTransaction,
 } from "@/react-app/lib/mpesa-integration-service";
+import {
+  darajaConfigured,
+  mpesaStkPush,
+  mpesaStkQuery,
+} from "@/react-app/lib/integrations-client";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
 import { lazy, Suspense } from "react";
@@ -589,14 +595,91 @@ export default function PointOfSale() {
 
     setStkPushStatus("pending");
 
-    // Simulate STK push delay for local mode
-    setTimeout(() => {
-      setStkPushStatus("success");
-      // Auto-process the payment after simulated confirmation
-      setTimeout(() => {
-        processPayment();
-      }, 1500);
-    }, 2000);
+    // REAL M-PESA Daraja STK Push. The station's own Daraja credentials are
+    // configured in Integration Hub → Payment Setup and stored owner-scoped in
+    // the cloud. When they are missing we do NOT fake a payment — we tell the
+    // user exactly what to configure. The previous implementation simulated a
+    // 2-second delay and auto-"succeeded" a payment that never happened.
+    try {
+      const cfg = await getMpesaConfig(stationId);
+      if (!cfg?.enabled || !darajaConfigured(cfg)) {
+        setStkPushStatus("failed");
+        import("@/react-app/lib/toast").then(({ toastError }) =>
+          toastError(
+            "M-PESA Daraja is not configured. Set it up in Integration Hub → Payment Setup to take real M-PESA payments.",
+          ),
+        );
+        return;
+      }
+
+      const res = await mpesaStkPush(cfg, {
+        phoneNumber: customerPhone,
+        amount: total,
+        accountReference: currentStation?.code || "FuelPro",
+        transactionDesc: `POS sale ${generateInvoiceNumber()}`,
+      });
+
+      if (!res.success || !res.checkout_request_id) {
+        setStkPushStatus("failed");
+        import("@/react-app/lib/toast").then(({ toastError }) =>
+          toastError(
+            `M-PESA STK Push failed: ${res.error || "Daraja rejected the request"}`,
+          ),
+        );
+        return;
+      }
+
+      // Daraja accepted the request — the customer's phone is now prompting
+      // for their M-PESA PIN. Poll Daraja for the REAL result.
+      import("@/react-app/lib/toast").then(({ toastInfo }) =>
+        toastInfo(
+          "STK Push sent — ask the customer to enter their M-PESA PIN on their phone.",
+        ),
+      );
+      const checkoutId = String(res.checkout_request_id);
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        attempts++;
+        try {
+          const q = await mpesaStkQuery(cfg, checkoutId);
+          const rc = q.result_code !== undefined ? String(q.result_code) : "";
+          if (rc === "0") {
+            // REAL payment confirmed by Safaricom.
+            setStkPushStatus("success");
+            processPayment();
+            return;
+          }
+          if (rc !== "") {
+            // Final failure (1032 cancelled, 1037 timeout, 1 insufficient, etc.)
+            setStkPushStatus("failed");
+            import("@/react-app/lib/toast").then(({ toastError }) =>
+              toastError(
+                `M-PESA payment not completed: ${(q.result_desc as string) || `code ${rc}`}`,
+              ),
+            );
+            return;
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+        if (attempts >= 20) {
+          setStkPushStatus("failed");
+          import("@/react-app/lib/toast").then(({ toastError }) =>
+            toastError(
+              "M-PESA payment timed out waiting for the customer. No sale was recorded.",
+            ),
+          );
+          return;
+        }
+        setTimeout(poll, 6000);
+      };
+      setTimeout(poll, 6000);
+    } catch (e) {
+      setStkPushStatus("failed");
+      import("@/react-app/lib/toast").then(({ toastError }) =>
+        toastError(`M-PESA STK Push error: ${(e as Error).message}`),
+      );
+    }
   };
 
   const processPayment = async () => {
@@ -637,6 +720,76 @@ export default function PointOfSale() {
       cuSignature,
       fiscalCounter,
     };
+
+    // ─── REAL KRA eTIMS submission (Kenya stations with OSCU credentials) ───
+    // When the station configured its eTIMS credentials (Tax Settings → eTIMS
+    // Branch ID + CMC Key), the sale is ACTUALLY submitted to the Kenya
+    // Revenue Authority and the receipt carries the REAL KRA control-unit
+    // receipt signature + KRA QR URL — replacing the local stand-in. If KRA
+    // rejects/unreachable, the sale still completes locally but the user is
+    // told honestly that the eTIMS submission failed (never fake KRA data).
+    if (
+      kenyaStation &&
+      state.companyData?.etimsBhfId &&
+      state.companyData?.etimsCmcKey
+    ) {
+      try {
+        const { kraEtimsInvoice } =
+          await import("@/react-app/lib/integrations-client");
+        const etimsResult = await kraEtimsInvoice(
+          {
+            tin: etrConfig.kraPin,
+            bhfId: state.companyData.etimsBhfId,
+            cmcKey: state.companyData.etimsCmcKey,
+            environment: state.companyData.etimsEnvironment || "sandbox",
+          },
+          {
+            custTin: customerPin || "",
+            custNm: customerName || "",
+            trdInvcNo: invoiceNumber,
+            items: cart.map((i) => ({
+              itemNm: i.name,
+              qty: i.quantity,
+              prc: i.price,
+              taxTyCd: "A",
+            })),
+            paymentType:
+              paymentMethod === "cash"
+                ? "01"
+                : paymentMethod === "mpesa"
+                  ? "06"
+                  : paymentMethod === "card"
+                    ? "05"
+                    : "02",
+          },
+        );
+        if (etimsResult.success && etimsResult.receipt_signature) {
+          // REAL KRA control-unit data onto the receipt.
+          transactionData.cuSignature = String(etimsResult.receipt_signature);
+          transactionData.cuInvoiceNo = String(
+            etimsResult.internal_data || transactionData.cuInvoiceNo,
+          );
+          import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+            toastSuccess(
+              "Sale submitted to KRA eTIMS — real fiscal receipt issued.",
+            ),
+          );
+        } else {
+          import("@/react-app/lib/toast").then(({ toastWarning }) =>
+            toastWarning(
+              `KRA eTIMS submission failed: ${etimsResult.error || "rejected"}. The sale is saved locally with a non-fiscal receipt.`,
+            ),
+          );
+        }
+      } catch (etimsErr) {
+        console.warn("eTIMS submission error:", etimsErr);
+        import("@/react-app/lib/toast").then(({ toastWarning }) =>
+          toastWarning(
+            "KRA eTIMS unreachable. The sale is saved locally with a non-fiscal receipt.",
+          ),
+        );
+      }
+    }
 
     const { qrString, qrUrl } = await generateQRData(transactionData);
     setQrCodeUrl(qrUrl);
@@ -1814,6 +1967,63 @@ export default function PointOfSale() {
                             placeholder="CU-00000000"
                             className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            eTIMS Branch ID (bhfId)
+                          </label>
+                          <input
+                            type="text"
+                            value={state.companyData.etimsBhfId || ""}
+                            onChange={(e) =>
+                              updateCompanyData("etimsBhfId", e.target.value)
+                            }
+                            placeholder="00"
+                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            eTIMS CMC Key
+                          </label>
+                          <input
+                            type="password"
+                            value={state.companyData.etimsCmcKey || ""}
+                            onChange={(e) =>
+                              updateCompanyData("etimsCmcKey", e.target.value)
+                            }
+                            placeholder="From the KRA eTIMS portal"
+                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            eTIMS Environment
+                          </label>
+                          <select
+                            value={
+                              state.companyData.etimsEnvironment || "sandbox"
+                            }
+                            onChange={(e) =>
+                              updateCompanyData(
+                                "etimsEnvironment",
+                                e.target.value as "sandbox" | "production",
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                          >
+                            <option value="sandbox">Sandbox (KRA test)</option>
+                            <option value="production">
+                              Production (live KRA)
+                            </option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2 text-xs text-gray-500 dark:text-gray-400">
+                          With a Branch ID + CMC Key configured, every POS sale
+                          is ACTUALLY submitted to KRA eTIMS and the receipt
+                          carries the real KRA control-unit signature. Get the
+                          CMC key from the KRA eTIMS portal (device
+                          registration).
                         </div>
                       </>
                     )}

@@ -94,6 +94,13 @@ export interface CompanyData {
   etrSerialNo: string;
   cuSerialNo: string;
   etrInvoicePrefix: string;
+  // KRA eTIMS OSCU credentials (Kenya only) — obtained from the KRA eTIMS
+  // portal. When present, POS sales are ACTUALLY submitted to KRA and the
+  // receipt carries the real KRA control-unit signature instead of a local
+  // stand-in.
+  etimsBhfId?: string; // branch id ("00" for HQ)
+  etimsCmcKey?: string; // CMC key from the eTIMS portal
+  etimsEnvironment?: "sandbox" | "production";
 }
 
 export interface DeliveryColumn {

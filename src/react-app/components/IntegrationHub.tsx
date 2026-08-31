@@ -2738,6 +2738,59 @@ export default function IntegrationHub() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={async () => {
+                        // REAL webhook test — actually POSTs a signed test
+                        // event to the endpoint via the integrations
+                        // dispatcher and reports the true HTTP result.
+                        addLog(`Testing webhook: ${wh.name}...`);
+                        setTestResult(`Testing webhook ${wh.name}...`);
+                        try {
+                          const { fireWebhook } =
+                            await import("@/react-app/lib/integrations-client");
+                          const res = await fireWebhook(
+                            wh.url,
+                            "webhook:test",
+                            { webhook_id: wh.id, name: wh.name, test: true },
+                            wh.secret,
+                          );
+                          if (res.success) {
+                            setTestResult(
+                              `✓ Webhook ${wh.name} delivered — endpoint returned HTTP ${res.status}.`,
+                            );
+                            addLog(
+                              `Webhook ${wh.name} test delivered (HTTP ${res.status})`,
+                            );
+                            setWebhooks((p) =>
+                              p.map((w) =>
+                                w.id === wh.id
+                                  ? {
+                                      ...w,
+                                      lastTriggered: new Date().toISOString(),
+                                    }
+                                  : w,
+                              ),
+                            );
+                          } else {
+                            setTestResult(
+                              `Webhook ${wh.name} delivery failed: ${res.error || `HTTP ${res.status}`}`,
+                            );
+                            addLog(
+                              `Webhook ${wh.name} test failed: ${res.error || res.status}`,
+                            );
+                          }
+                        } catch (e) {
+                          setTestResult(
+                            `Webhook ${wh.name} test error: ${(e as Error).message}`,
+                          );
+                          addLog(`Webhook ${wh.name} test error`);
+                        }
+                      }}
+                      className="p-2 rounded-lg bg-blue-50 text-blue-700"
+                      title="Send a real signed test event to this endpoint"
+                    >
+                      <TestTube size={14} />
+                    </button>
+                    <button
                       onClick={() => {
                         setWebhooks((p) =>
                           p.map((w) =>
@@ -2772,6 +2825,12 @@ export default function IntegrationHub() {
                       {e}
                     </span>
                   ))}
+                  {wh.lastTriggered && (
+                    <span className="text-[10px] px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                      Last delivered:{" "}
+                      {new Date(wh.lastTriggered).toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

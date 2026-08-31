@@ -34,6 +34,7 @@ import {
 import {
   addBatchTransactions,
   getTransactions,
+  getKopokopoConfig,
   clearTransactions,
   subscribeToTransactions,
   switchToTab,
@@ -132,6 +133,67 @@ export default function MPESAAnalyzer() {
   const [stats, setStats] = useState<AnalysisStats | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
+  const [kopoPulling, setKopoPulling] = useState(false);
+
+  // REAL Kopo Kopo pull — fetches the station's actual incoming payments
+  // from the Kopo Kopo API (client_id/secret configured in Integration Hub →
+  // Payment Setup) and imports them into the shared transaction store. When
+  // not configured, the user is told exactly what to set up — never faked.
+  const pullFromKopokopo = async () => {
+    setKopoPulling(true);
+    try {
+      const cfg = await getKopokopoConfig(stationId);
+      if (!cfg?.enabled || !cfg.clientId || !cfg.clientSecret) {
+        toastError(
+          "Kopo Kopo is not configured. Set the client ID + secret in Integration Hub → Payment Setup to pull real payments.",
+        );
+        return;
+      }
+      const { kopokopoPull } =
+        await import("@/react-app/lib/integrations-client");
+      const res = await kopokopoPull({
+        clientId: cfg.clientId,
+        clientSecret: cfg.clientSecret,
+        tillNumber: cfg.tillNumber,
+        environment: cfg.environment,
+      });
+      if (!res.success) {
+        toastError(`Kopo Kopo pull failed: ${res.error || "API error"}`);
+        return;
+      }
+      const payments = (res.payments || []) as Array<Record<string, unknown>>;
+      if (payments.length === 0) {
+        import("@/react-app/lib/toast").then(({ toastInfo }) =>
+          toastInfo("Kopo Kopo returned no incoming payments."),
+        );
+        return;
+      }
+      const txns: UnifiedTransaction[] = payments.map((p) => ({
+        transaction_ref: String(p.reference || p.id || `KK${Date.now()}`),
+        origin: "kopokopo" as const,
+        transaction_type: String(p.type || "Incoming Payment"),
+        amount: Number(p.amount) || 0,
+        currency: String(p.currency || "KES"),
+        sender_info: String(p.sender_phone || p.sender_name || ""),
+        description: `Kopo Kopo ${p.type || "payment"} (till ${p.till_number || cfg.tillNumber})`,
+        status: "completed" as const,
+        payment_method: "Kopo Kopo",
+        transaction_time: String(p.initiation_time || new Date().toISOString()),
+        receipt: String(p.reference || p.id || ""),
+        is_online: true,
+      }));
+      const result = await addBatchTransactions(txns, stationId);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess(
+          `Pulled ${payments.length} real payment(s) from Kopo Kopo — ${result.added} new, ${result.skipped} already imported.`,
+        ),
+      );
+    } catch (e) {
+      toastError(`Kopo Kopo pull error: ${(e as Error).message}`);
+    } finally {
+      setKopoPulling(false);
+    }
+  };
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("auto");
   const [actualMethodUsed, setActualMethodUsed] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -1072,6 +1134,17 @@ export default function MPESAAnalyzer() {
             {label}
           </button>
         ))}
+        <div className="flex-1" />
+        {/* REAL Kopo Kopo API pull — imports the station's actual incoming
+            payments from the Kopo Kopo institution (not a statement parse). */}
+        <button
+          onClick={pullFromKopokopo}
+          disabled={kopoPulling}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 transition-all"
+          title="Pull real incoming payments from the Kopo Kopo API (configure in Integration Hub → Payment Setup)"
+        >
+          {kopoPulling ? "Pulling…" : "Pull from Kopo Kopo (live API)"}
+        </button>
       </div>
 
       {/* ===== PDF UPLOAD INPUT ===== */}
