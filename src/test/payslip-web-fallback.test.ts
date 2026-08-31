@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildMailtoUrl,
   buildPayslipWebFallbacks,
+  generatePayslipCode,
   buildWhatsAppWebUrl,
   maskRecipient,
   normalizePhoneForSending,
@@ -47,7 +48,7 @@ describe("buildPayslipWebFallbacks", () => {
       channel: "email",
       toEmail: "john@test.com",
       toPhone: "0712345678",
-      publicUrl: "https://x/sup/1.pdf",
+      shortUrl: "https://app/api/payslip-link?code=abc123",
       filename: "Payslip_John.pdf",
       periodLabel: "August 2026",
       employeeName: "John",
@@ -64,7 +65,7 @@ describe("buildPayslipWebFallbacks", () => {
       channel: "whatsapp",
       toEmail: "",
       toPhone: "254712345678",
-      publicUrl: "https://x/sup/1.pdf",
+      shortUrl: "https://app/api/payslip-link?code=abc123",
       filename: "Payslip_John.pdf",
       periodLabel: "August 2026",
       employeeName: "John",
@@ -81,7 +82,7 @@ describe("buildPayslipWebFallbacks", () => {
       channel: "both",
       toEmail: "john@test.com",
       toPhone: "254712345678",
-      publicUrl: "https://x/sup/1.pdf",
+      shortUrl: "https://app/api/payslip-link?code=abc123",
       filename: "Payslip_John.pdf",
       periodLabel: "August 2026",
       employeeName: "John",
@@ -96,7 +97,7 @@ describe("buildPayslipWebFallbacks", () => {
       channel: "email",
       toEmail: "john@test.com",
       toPhone: "",
-      publicUrl: "https://x/sup/1.pdf",
+      shortUrl: "https://app/api/payslip-link?code=abc123",
       filename: "Payslip_John.pdf",
       periodLabel: "August 2026",
       employeeName: "John",
@@ -107,5 +108,24 @@ describe("buildPayslipWebFallbacks", () => {
       } as CommGatewayConfig,
     });
     expect(fb).toHaveLength(0);
+  });
+});
+
+describe("payslip short-link code generator", () => {
+  it("generates 12-char base62 codes by default", () => {
+    const code = generatePayslipCode();
+    expect(code).toHaveLength(12);
+    expect(code).toMatch(/^[A-Za-z0-9]+$/);
+  });
+
+  it("generates unique codes on repeated calls", () => {
+    const a = generatePayslipCode();
+    const b = generatePayslipCode();
+    expect(a).not.toBe(b);
+  });
+
+  it("supports custom lengths", () => {
+    expect(generatePayslipCode(8)).toHaveLength(8);
+    expect(generatePayslipCode(16)).toHaveLength(16);
   });
 });

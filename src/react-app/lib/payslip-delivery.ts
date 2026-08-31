@@ -6,6 +6,7 @@
  */
 import { getSupabaseClient } from "@/supabase/client";
 import { getDetectedCountryCode } from "./currency";
+import cloudStorageService from "./cloud-storage-service";
 
 export type PayslipChannel = "email" | "whatsapp" | "both";
 
@@ -26,6 +27,12 @@ export interface PayslipDeliveryConfig {
    * a configured API gateway.
    */
   webFallback: boolean;
+  /**
+   * Days a generated payslip short-link (/p/<code>) stays valid after
+   * being shared. After expiry the link returns an "expired" page instead
+   * of the PDF. Default 7; configurable 1–90.
+   */
+  linkExpiryDays: number;
 }
 
 export const PAYSLIP_CONFIG_KEY = "payroll_payslip_config";
@@ -38,6 +45,7 @@ export const defaultPayslipConfig: PayslipDeliveryConfig = {
   autoSend: false,
   lastAutoSentPeriod: "",
   webFallback: true,
+  linkExpiryDays: 7,
 };
 
 export interface PayslipSendLogEntry {
@@ -133,6 +141,92 @@ export function maskRecipient(v: string): string {
   return "****";
 }
 
+/** Short opaque payslip link (/p/<code>) mapped to the raw storage URL. */
+export const PAYSLIP_SHORTLINK_PREFIX = "payslip_shortlink_";
+
+export interface PayslipShortlinkRecord {
+  /** The raw storage URL — only ever resolved server-side via the short link. */
+  url: string;
+  employeeName: string;
+  periodLabel: string;
+  createdAt: string;
+  /** ISO timestamp after which the link returns "expired". */
+  expiresAt: string;
+}
+
+const BASE62_CHARS =
+  "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Crypto-random unguessable short code (12 base62 chars ≈ 71.6 bits of
+ * entropy). Rejection sampling removes modulo bias — each char is uniformly
+ * distributed, so brute-forcing a valid code is infeasible.
+ */
+export function generatePayslipCode(length = 12): string {
+  const out: string[] = [];
+  // 256 % 62 == 8 → accept bytes < 248 to eliminate modulo bias.
+  while (out.length < length) {
+    const buf = crypto.getRandomValues(new Uint8Array(length * 2));
+    for (const b of buf) {
+      if (b < 248) {
+        out.push(BASE62_CHARS[b % 62]);
+        if (out.length === length) break;
+      }
+    }
+  }
+  return out.join("");
+}
+
+/**
+ * Register a short link for a payslip PDF. The raw storage URL (which leaks
+ * the owner uid + employee filename + storage path when shared directly) is
+ * stored server-side; only the opaque /p/<code> link ever leaves the app.
+ * Security properties:
+ * - 12-char crypto-random code (unguessable, unique per send)
+ * - server-side expiry (default 7 days, owner-configurable 1–90)
+ * - revocable via revokePayslipShortlinks()
+ * - the /p endpoint rate-limits lookups + validates the redirect target
+ *   against the Supabase storage origin (no open redirects).
+ */
+export async function createPayslipShortlink(opts: {
+  rawUrl: string;
+  employeeName: string;
+  periodLabel: string;
+  expiryDays: number;
+}): Promise<{ code: string; shortUrl: string }> {
+  const code = generatePayslipCode();
+  const days = Math.min(90, Math.max(1, Math.trunc(opts.expiryDays) || 7));
+  const record: PayslipShortlinkRecord = {
+    url: opts.rawUrl,
+    employeeName: opts.employeeName,
+    periodLabel: opts.periodLabel,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + days * 86400000).toISOString(),
+  };
+  await cloudStorageService.set(PAYSLIP_SHORTLINK_PREFIX + code, record);
+  // Both hosts resolve /api/payslip-link?code=<code> (Vercel serverless +
+  // Cloudflare Pages Function), so an origin-relative short link always
+  // resolves. ~65 chars instead of a 200+ char raw storage URL.
+  const shortUrl = `${window.location.origin}/api/payslip-link?code=${code}`;
+  return { code, shortUrl };
+}
+
+/**
+ * Revoke every live payslip short-link for this owner (e.g. after a leak,
+ * or to rotate access). Each revoked link immediately returns "not found"
+ * on the /p endpoint.
+ */
+export async function revokePayslipShortlinks(): Promise<number> {
+  const all = await cloudStorageService.getAll();
+  const keys = Object.keys(all).filter((k) =>
+    k.startsWith(PAYSLIP_SHORTLINK_PREFIX),
+  );
+  for (const key of keys) {
+    await cloudStorageService.delete(key);
+  }
+  return keys.length;
+}
+
 /**
  * Official WhatsApp deep link (wa.me) — opens WhatsApp Web on desktop and the
  * WhatsApp app on mobile, with the message pre-filled. This is the public,
@@ -176,7 +270,12 @@ export function buildPayslipWebFallbacks(opts: {
   channel: PayslipChannel;
   toEmail: string;
   toPhone: string; // raw payroll phone
-  publicUrl: string;
+  /**
+   * Short opaque payslip link (/p/<code>) — the recipient taps this. The
+   * raw storage URL never appears in the shared message, and the link is
+   * expiring + revocable.
+   */
+  shortUrl: string;
   filename: string;
   periodLabel: string;
   employeeName: string;
@@ -202,8 +301,8 @@ export function buildPayslipWebFallbacks(opts: {
         body:
           `Dear ${opts.employeeName},\n\n` +
           `Please find your payslip for ${opts.periodLabel} at the link below:\n\n` +
-          `${opts.publicUrl}\n\n` +
-          `(Attach the downloaded file "${opts.filename}" if you want it embedded in the email.)\n\n` +
+          `${opts.shortUrl}\n\n` +
+          `This link expires in a few days — download it soon.\n\n` +
           `Thank you,\n${opts.stationName}`,
       }),
       label: "Open email app",
@@ -217,7 +316,7 @@ export function buildPayslipWebFallbacks(opts: {
         kind: "whatsapp",
         url: buildWhatsAppWebUrl(
           waTo,
-          `Hello ${opts.employeeName}, your ${opts.periodLabel} payslip is ready: ${opts.publicUrl} (${opts.filename}) — ${opts.stationName}`,
+          `Hello ${opts.employeeName}, your ${opts.periodLabel} payslip is ready (link expires in a few days): ${opts.shortUrl} — ${opts.stationName}`,
         ),
         label: "Open WhatsApp",
       });
@@ -304,6 +403,8 @@ export async function deliverPayslip(opts: {
   filename: string;
   pdfBase64: string;
   publicUrl: string;
+  /** Optional short link (/p/<code>) used in user-visible text/captions. */
+  shortUrl?: string;
   periodLabel: string;
   employeeName: string;
   gateway: CommGatewayConfig;
@@ -329,7 +430,7 @@ export async function deliverPayslip(opts: {
           text:
             `Dear ${opts.employeeName},\n\n` +
             `Please find attached your payslip for ${opts.periodLabel}.\n\n` +
-            `If the attachment does not open, you can also download it here:\n${opts.publicUrl}\n\n` +
+            `If the attachment does not open, you can also download it here:\n${opts.shortUrl || opts.publicUrl}\n\n` +
             `Thank you,\n${opts.gateway.stationName || "Payroll"}`,
           fromEmail: opts.gateway.senderEmail || opts.gateway.smtpUser || "",
           fromName: opts.gateway.stationName || "Payroll",
@@ -365,7 +466,9 @@ export async function deliverPayslip(opts: {
           phoneNumberId: opts.gateway.whatsappPhone,
           token: opts.gateway.whatsappToken,
           to: waTo,
-          message: `Your ${opts.periodLabel} payslip is attached.`,
+          message:
+            `Your ${opts.periodLabel} payslip is attached.` +
+            (opts.shortUrl ? ` Backup link: ${opts.shortUrl}` : ""),
           documentUrl: opts.publicUrl,
           documentFilename: opts.filename,
         });
@@ -385,7 +488,7 @@ export async function deliverPayslip(opts: {
       channel: opts.channel,
       toEmail: opts.toEmail,
       toPhone: opts.toPhone,
-      publicUrl: opts.publicUrl,
+      shortUrl: opts.shortUrl || opts.publicUrl,
       filename: opts.filename,
       periodLabel: opts.periodLabel,
       employeeName: opts.employeeName,

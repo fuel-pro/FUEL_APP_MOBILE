@@ -29,10 +29,12 @@ import {
   PAYSLIP_LOG_KEY,
   currentPeriodKey,
   currentPeriodLabel,
+  createPayslipShortlink,
   defaultPayslipConfig,
   deliverPayslip,
   maskRecipient,
   normalizePhoneForSending,
+  revokePayslipShortlinks,
   uploadPayslipPdf,
   type CommGatewayConfig,
   type PayslipChannel,
@@ -356,6 +358,10 @@ export default function PayrollSystem() {
   const [sendingPayslips, setSendingPayslips] = useState(false);
   const [editingPayslipSendDay, setEditingPayslipSendDay] = useState("1");
   const [editPayslipDayFocus, setEditPayslipDayFocus] = useState(false);
+  // Short-link expiry input (days) — focus/edit state for the numeric input.
+  const [editingExpiryDays, setEditingExpiryDays] = useState("7");
+  const [editExpiryFocus, setEditExpiryFocus] = useState(false);
+  const [revokingLinks, setRevokingLinks] = useState(false);
   // Web-redirect fallback queue: manual sends whose API gateway is not
   // configured land here so the owner can open WhatsApp Web / the mail
   // client per employee with one click (each click is a user gesture, so
@@ -1705,6 +1711,24 @@ export default function PayrollSystem() {
     }
   };
 
+  /** Immediately invalidate every payslip short-link for this owner. */
+  const handleRevokeLinks = async () => {
+    if (revokingLinks) return;
+    setRevokingLinks(true);
+    try {
+      const n = await revokePayslipShortlinks();
+      if (n > 0) {
+        toastSuccess(`Revoked ${n} payslip link(s) — they no longer resolve.`);
+      } else {
+        toastError("No payslip links were registered yet.");
+      }
+    } catch (e) {
+      toastError("Revoke failed: " + (e as Error).message);
+    } finally {
+      setRevokingLinks(false);
+    }
+  };
+
   /**
    * Send one employee's payslip PDF via the configured channel. The
    * recipient email/phone comes from the employee's OWN payroll record — no
@@ -1764,6 +1788,24 @@ export default function PayrollSystem() {
         filename,
       );
 
+      // 2b. Register a short opaque link (/p/<code>) for user-visible text:
+      // the raw storage URL (which leaks owner uid + filename + storage path)
+      // never leaves the app. The short link is expiring + revocable.
+      let shortUrl: string | undefined;
+      try {
+        const link = await createPayslipShortlink({
+          rawUrl: url,
+          employeeName: employee.fullName || "Employee",
+          periodLabel,
+          expiryDays: cfg.linkExpiryDays ?? 7,
+        });
+        shortUrl = link.shortUrl;
+      } catch {
+        // Short-link creation failed (offline / transient) — fall back to the
+        // raw URL so delivery is never blocked by the privacy wrapper.
+        shortUrl = undefined;
+      }
+
       // 3. Deliver via the configured channel(s).
       const gateway: CommGatewayConfig = {
         emailEnabled: commGateway?.emailEnabled,
@@ -1785,6 +1827,7 @@ export default function PayrollSystem() {
         filename,
         pdfBase64,
         publicUrl: url,
+        shortUrl,
         periodLabel,
         employeeName: employee.fullName || "Employee",
         gateway,
@@ -3406,6 +3449,47 @@ export default function PayrollSystem() {
                 Web fallback (wa.me / mailto)
               </span>
             </label>
+          </div>
+          {/* Short-link expiry (days) */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Link expiry (days)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={
+                editExpiryFocus
+                  ? editingExpiryDays
+                  : String(payslipConfig.linkExpiryDays ?? 7)
+              }
+              onFocus={() => {
+                setEditExpiryFocus(true);
+                setEditingExpiryDays(String(payslipConfig.linkExpiryDays ?? 7));
+              }}
+              onChange={(e) => setEditingExpiryDays(e.target.value)}
+              onBlur={() => {
+                setEditExpiryFocus(false);
+                const days = Math.max(
+                  1,
+                  Math.min(90, parseInt(editingExpiryDays, 10) || 7),
+                );
+                savePayslipConfig({ linkExpiryDays: days });
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          {/* Revoke all live links */}
+          <div className="flex items-end">
+            <button
+              onClick={handleRevokeLinks}
+              disabled={revokingLinks}
+              title="Immediately invalidate every payslip short-link — recipients with old links see an expired/not-found page"
+              className="px-3 py-2 text-xs font-medium rounded-lg border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+            >
+              {revokingLinks ? "Revoking…" : "Revoke links"}
+            </button>
           </div>
         </div>
 
