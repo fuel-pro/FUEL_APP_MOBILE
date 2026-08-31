@@ -38,6 +38,7 @@ import {
   type PayslipChannel,
   type PayslipDeliveryConfig,
   type PayslipSendLogEntry,
+  type PayslipWebFallback,
 } from "@/react-app/lib/payslip-delivery";
 import {
   navigateToTab,
@@ -355,6 +356,13 @@ export default function PayrollSystem() {
   const [sendingPayslips, setSendingPayslips] = useState(false);
   const [editingPayslipSendDay, setEditingPayslipSendDay] = useState("1");
   const [editPayslipDayFocus, setEditPayslipDayFocus] = useState(false);
+  // Web-redirect fallback queue: manual sends whose API gateway is not
+  // configured land here so the owner can open WhatsApp Web / the mail
+  // client per employee with one click (each click is a user gesture, so
+  // popup blockers don't interfere).
+  const [webSendQueue, setWebSendQueue] = useState<
+    { entry: PayslipSendLogEntry; fallbacks: PayslipWebFallback[] }[]
+  >([]);
   // Shared email/WhatsApp gateway config (the SAME one Communication →
   // Settings writes to `comm_integration_config`) — no double entry.
   const [commGateway, setCommGateway] = useState<CommGatewayConfig | null>(
@@ -1700,12 +1708,21 @@ export default function PayrollSystem() {
   /**
    * Send one employee's payslip PDF via the configured channel. The
    * recipient email/phone comes from the employee's OWN payroll record — no
-   * manual re-entry. Logs the outcome so the owner can audit delivery.
+   * manual re-entry. When the API gateway is not configured, the configured
+   * web-redirect fallback (WhatsApp Web via wa.me, or the default mail
+   * client via mailto:) is offered instead — manual sends only; auto-send
+   * never opens web tabs.
+   * Returns the log entry plus any pending web fallback links (queued for
+   * the bulk modal or opened directly for single sends).
    */
   const sendPayslipToEmployee = async (
     employee: Employee,
     manual = true,
-  ): Promise<PayslipSendLogEntry> => {
+    openWebFallback = false,
+  ): Promise<{
+    entry: PayslipSendLogEntry;
+    fallbacks: PayslipWebFallback[];
+  }> => {
     const cfg = payslipConfigRef.current;
     const periodLabel = currentPeriodLabel();
     const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
@@ -1730,7 +1747,9 @@ export default function PayrollSystem() {
       status: "pending",
       sentAt: new Date().toISOString(),
       manual,
+      method: "api",
     };
+    let pendingFallbacks: PayslipWebFallback[] = [];
 
     try {
       // 1. Build the PDF (no download).
@@ -1770,20 +1789,71 @@ export default function PayrollSystem() {
         employeeName: employee.fullName || "Employee",
         gateway,
       });
-      entry.status = result.success ? "sent" : "failed";
-      if (result.error) entry.error = result.error;
+
+      if (result.success) {
+        entry.status = "sent";
+        entry.method = "api";
+      } else if (cfg.webFallback && manual && result.webFallbacks?.length) {
+        // API gateway missing → web-redirect fallback (WhatsApp Web / mailto).
+        pendingFallbacks = result.webFallbacks;
+        if (openWebFallback) {
+          // Single send: open the web app(s) right now (user gesture, so
+          // popup blockers allow it).
+          for (const fb of pendingFallbacks) {
+            window.open(fb.url, "_blank", "noopener");
+          }
+          entry.status = "sent";
+          entry.method = "web";
+          entry.error = undefined;
+          pendingFallbacks = [];
+        } else {
+          entry.status = "pending";
+          entry.error = "waiting for web send (open the link below)";
+        }
+      } else {
+        entry.status = "failed";
+        if (result.error) entry.error = result.error;
+      }
     } catch (e) {
       entry.status = "failed";
       entry.error = (e as Error).message;
     }
-    return entry;
+    return { entry, fallbacks: pendingFallbacks };
+  };
+
+  /** Open a queued web fallback and mark its entry as sent-via-web. */
+  const openWebFallbackLink = async (queued: {
+    entry: PayslipSendLogEntry;
+    fallbacks: PayslipWebFallback[];
+  }) => {
+    for (const fb of queued.fallbacks) {
+      window.open(fb.url, "_blank", "noopener");
+    }
+    const sentEntry: PayslipSendLogEntry = {
+      ...queued.entry,
+      status: "sent",
+      method: "web",
+      error: undefined,
+    };
+    setWebSendQueue((q) =>
+      q.filter((item) => item.entry.id !== queued.entry.id),
+    );
+    await appendPayslipLog([sentEntry]);
+    toastSuccess(
+      `Opened ${queued.entry.channel === "whatsapp" ? "WhatsApp" : "email"} for ${queued.entry.employeeName} — hit Send there to complete delivery.`,
+    );
   };
 
   /** Send payslips to ALL employees who have contact info. */
   const sendAllPayslips = async (manual = true) => {
     if (sendingPayslips) return;
     setSendingPayslips(true);
+    setWebSendQueue([]);
     const results: PayslipSendLogEntry[] = [];
+    const queuedWeb: {
+      entry: PayslipSendLogEntry;
+      fallbacks: PayslipWebFallback[];
+    }[] = [];
     try {
       for (const employee of employees) {
         // Skip employees with no contact info at all — log them as failed so
@@ -1803,14 +1873,32 @@ export default function PayrollSystem() {
           });
           continue;
         }
-        results.push(await sendPayslipToEmployee(employee, manual));
+        const { entry, fallbacks } = await sendPayslipToEmployee(
+          employee,
+          manual,
+          false,
+        );
+        // Web fallback: queue for the modal (one click per employee) rather
+        // than logging as failed.
+        if (entry.status === "pending" && fallbacks.length > 0) {
+          queuedWeb.push({ entry, fallbacks });
+        } else {
+          results.push(entry);
+        }
         // Small yield so the UI stays responsive during a large batch.
         await new Promise((r) => setTimeout(r, 150));
       }
-      await appendPayslipLog(results);
+      if (queuedWeb.length > 0) {
+        setWebSendQueue(queuedWeb);
+      }
+      if (results.length > 0) await appendPayslipLog(results);
       const sent = results.filter((r) => r.status === "sent").length;
       const failed = results.length - sent;
-      if (failed === 0) {
+      if (queuedWeb.length > 0) {
+        toastError(
+          `${queuedWeb.length} payslip(s) queued for web send — open each link below (WhatsApp Web / email app) to complete delivery.`,
+        );
+      } else if (failed === 0) {
         toastSuccess(`Payslips sent to ${sent} employee(s).`);
       } else if (sent > 0) {
         toastError(
@@ -3268,6 +3356,24 @@ export default function PayrollSystem() {
               </span>
             </label>
           </div>
+          <div className="flex items-end col-span-1 sm:col-span-2 lg:col-span-1">
+            <label
+              className="flex items-center gap-2 cursor-pointer"
+              title="When the API gateway is not configured, manual sends open WhatsApp Web (wa.me) or the mail client (mailto:) instead of failing."
+            >
+              <input
+                type="checkbox"
+                checked={payslipConfig.webFallback}
+                onChange={(e) =>
+                  savePayslipConfig({ webFallback: e.target.checked })
+                }
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium">
+                Web fallback (wa.me / mailto)
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Gateway status + cross-link */}
@@ -3292,8 +3398,11 @@ export default function PayrollSystem() {
           return missing.length > 0 ? (
             <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/20 text-xs text-amber-800 dark:text-amber-300 flex flex-wrap items-center gap-2">
               <span>
-                Not configured: <strong>{missing.join(", ")}</strong>. Set it up
-                once — it&apos;s shared with the Communication tab.
+                API gateway not configured:{" "}
+                <strong>{missing.join(", ")}</strong>
+                {payslipConfig.webFallback
+                  ? " — manual sends will redirect to WhatsApp Web (wa.me) or the mail client (mailto:) instead."
+                  : " — sending is disabled until you enable the Web fallback toggle or set up the gateway."}
               </span>
               <button
                 onClick={() => navigateToTab("communication")}
@@ -3313,6 +3422,44 @@ export default function PayrollSystem() {
             </div>
           );
         })()}
+
+        {/* Web send queue (manual redirects for gateway-less channels) */}
+        {webSendQueue.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800/40 dark:bg-blue-900/20">
+            <h5 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-2">
+              {webSendQueue.length} payslip(s) ready for web send — open each
+              one:
+            </h5>
+            <div className="space-y-2">
+              {webSendQueue.map((queued) => (
+                <div
+                  key={queued.entry.id}
+                  className="flex flex-wrap items-center gap-2 text-xs"
+                >
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {queued.entry.employeeName}
+                  </span>
+                  <span className="text-gray-500">
+                    → {queued.entry.recipient || "—"}
+                  </span>
+                  {queued.fallbacks.map((fb) => (
+                    <button
+                      key={fb.kind}
+                      onClick={() => openWebFallbackLink(queued)}
+                      className="btn btn-primary px-2 py-1 text-xs"
+                    >
+                      {fb.kind === "whatsapp" ? "WhatsApp Web" : "Email app"}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-blue-700 dark:text-blue-400 mt-2">
+              The link opens WhatsApp Web / your mail client with the message
+              and payslip link pre-filled — press Send there to finish.
+            </p>
+          </div>
+        )}
 
         {/* Manual send + last auto-send info */}
         <div className="flex flex-wrap items-center gap-3">
@@ -3360,7 +3507,8 @@ export default function PayrollSystem() {
                       {e.employeeName}
                     </span>
                     <span className="text-gray-500 dark:text-gray-400 hidden sm:inline">
-                      → {e.recipient || "—"} ({e.channel})
+                      → {e.recipient || "—"} ({e.channel}
+                      {e.method === "web" ? " via web" : ""})
                     </span>
                   </div>
                   <span className="text-gray-400 shrink-0 ml-2">
@@ -3461,17 +3609,23 @@ export default function PayrollSystem() {
                 onClick={async () => {
                   if (!payslipConfig.enabled) {
                     toastError(
-                      'Enable "Payslip Delivery" above (and configure the gateway in Communication → Settings) before sending.',
+                      'Enable "Payslip Delivery" above before sending (optionally configure an API gateway in Communication → Settings).',
                     );
                     return;
                   }
                   setSaving(true);
                   try {
-                    const entry = await sendPayslipToEmployee(employee, true);
+                    const { entry } = await sendPayslipToEmployee(
+                      employee,
+                      true,
+                      true, // open the web fallback immediately (user gesture)
+                    );
                     await appendPayslipLog([entry]);
                     if (entry.status === "sent") {
                       toastSuccess(
-                        `Payslip sent to ${employee.fullName} via ${entry.channel}.`,
+                        entry.method === "web"
+                          ? `Opened ${entry.channel === "whatsapp" ? "WhatsApp" : "email app"} for ${employee.fullName} — hit Send there to deliver.`
+                          : `Payslip sent to ${employee.fullName} via ${entry.channel}.`,
                       );
                     } else {
                       toastError(

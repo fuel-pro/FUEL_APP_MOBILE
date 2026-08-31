@@ -18,6 +18,14 @@ export interface PayslipDeliveryConfig {
   autoSend: boolean;
   /** Last period key ("YYYY-MM") auto-sent, to avoid duplicates. */
   lastAutoSentPeriod: string;
+  /**
+   * When the API gateway is NOT configured, manual sends fall back to
+   * opening the web app instead: WhatsApp Web (wa.me deep link, works on
+   * desktop + mobile app) or the default mail client (mailto:). Auto-send
+   * never opens web tabs (popup blockers + unattended sends) — it requires
+   * a configured API gateway.
+   */
+  webFallback: boolean;
 }
 
 export const PAYSLIP_CONFIG_KEY = "payroll_payslip_config";
@@ -29,6 +37,7 @@ export const defaultPayslipConfig: PayslipDeliveryConfig = {
   sendDay: 1,
   autoSend: false,
   lastAutoSentPeriod: "",
+  webFallback: true,
 };
 
 export interface PayslipSendLogEntry {
@@ -42,6 +51,15 @@ export interface PayslipSendLogEntry {
   error?: string;
   sentAt: string;
   manual: boolean;
+  /** How the payslip was delivered: "api" (gateway) or "web" (wa.me/mailto). */
+  method?: "api" | "web";
+}
+
+/** A web-redirect fallback for a channel whose API gateway is not configured. */
+export interface PayslipWebFallback {
+  kind: "email" | "whatsapp";
+  url: string;
+  label: string;
 }
 
 const DIALING_CODES: Record<string, string> = {
@@ -115,6 +133,100 @@ export function maskRecipient(v: string): string {
   return "****";
 }
 
+/**
+ * Official WhatsApp deep link (wa.me) — opens WhatsApp Web on desktop and the
+ * WhatsApp app on mobile, with the message pre-filled. This is the public,
+ * no-API-key redirect documented by WhatsApp (https://faq.whatsapp.com/...).
+ * The payslip PDF cannot be attached to a wa.me link, so the message carries
+ * the public download URL (the recipient taps it to get the PDF).
+ */
+export function buildWhatsAppWebUrl(
+  phoneDigits: string,
+  message: string,
+): string {
+  const to = String(phoneDigits || "").replace(/\D/g, "");
+  const text = encodeURIComponent(message);
+  return `https://wa.me/${to}?text=${text}`;
+}
+
+/**
+ * mailto: deep link — opens the user's default mail client (Gmail web,
+ * Outlook, Apple Mail...) with recipient/subject/body pre-filled. mailto
+ * cannot attach files, so the body includes the public payslip download link.
+ */
+export function buildMailtoUrl(opts: {
+  to: string;
+  subject: string;
+  body: string;
+}): string {
+  const q = new URLSearchParams({
+    subject: opts.subject,
+    body: opts.body,
+  }).toString();
+  return `mailto:${encodeURIComponent(opts.to)}?${q}`;
+}
+
+/**
+ * Build the web-redirect fallback link(s) for whichever channel(s) lack a
+ * configured API gateway. Returns an empty array when everything needed is
+ * API-ready. Used to give the user a one-click manual path instead of a dead
+ * "not configured" failure.
+ */
+export function buildPayslipWebFallbacks(opts: {
+  channel: PayslipChannel;
+  toEmail: string;
+  toPhone: string; // raw payroll phone
+  publicUrl: string;
+  filename: string;
+  periodLabel: string;
+  employeeName: string;
+  stationName: string;
+  gateway: CommGatewayConfig;
+}): PayslipWebFallback[] {
+  const out: PayslipWebFallback[] = [];
+  const tryEmail = opts.channel === "email" || opts.channel === "both";
+  const tryWhatsApp = opts.channel === "whatsapp" || opts.channel === "both";
+  const emailReady = !!(opts.gateway.emailEnabled && opts.gateway.emailApiKey);
+  const whatsappReady = !!(
+    opts.gateway.whatsappEnabled &&
+    opts.gateway.whatsappPhone &&
+    opts.gateway.whatsappToken
+  );
+
+  if (tryEmail && !emailReady && opts.toEmail?.includes("@")) {
+    out.push({
+      kind: "email",
+      url: buildMailtoUrl({
+        to: opts.toEmail,
+        subject: `Your ${opts.periodLabel} Payslip — ${opts.stationName}`,
+        body:
+          `Dear ${opts.employeeName},\n\n` +
+          `Please find your payslip for ${opts.periodLabel} at the link below:\n\n` +
+          `${opts.publicUrl}\n\n` +
+          `(Attach the downloaded file "${opts.filename}" if you want it embedded in the email.)\n\n` +
+          `Thank you,\n${opts.stationName}`,
+      }),
+      label: "Open email app",
+    });
+  }
+
+  if (tryWhatsApp && !whatsappReady) {
+    const waTo = normalizePhoneForSending(opts.toPhone);
+    if (waTo) {
+      out.push({
+        kind: "whatsapp",
+        url: buildWhatsAppWebUrl(
+          waTo,
+          `Hello ${opts.employeeName}, your ${opts.periodLabel} payslip is ready: ${opts.publicUrl} (${opts.filename}) — ${opts.stationName}`,
+        ),
+        label: "Open WhatsApp",
+      });
+    }
+  }
+
+  return out;
+}
+
 /** Current payroll period key, e.g. "2026-08". */
 export function currentPeriodKey(): string {
   const d = new Date();
@@ -172,6 +284,12 @@ export interface PayslipSendResult {
   channel: PayslipChannel;
   success: boolean;
   error?: string;
+  /**
+   * Web-redirect links for any channel that could not be delivered via its
+   * API gateway (e.g. gateway not configured). The caller may open these
+   * (manual sends only) to deliver via WhatsApp Web / the mail client.
+   */
+  webFallbacks?: PayslipWebFallback[];
 }
 
 /**
@@ -259,9 +377,36 @@ export async function deliverPayslip(opts: {
     }
   }
 
+  // If any requested channel could not go out via its API gateway, offer the
+  // equivalent web-redirect link(s) so a manual send can still be completed.
+  let webFallbacks: PayslipWebFallback[] | undefined;
+  if (!results.length || (errs.length && channel === "both")) {
+    const fb = buildPayslipWebFallbacks({
+      channel: opts.channel,
+      toEmail: opts.toEmail,
+      toPhone: opts.toPhone,
+      publicUrl: opts.publicUrl,
+      filename: opts.filename,
+      periodLabel: opts.periodLabel,
+      employeeName: opts.employeeName,
+      stationName: opts.gateway.stationName || "Payroll",
+      gateway: opts.gateway,
+    });
+    // Only surface fallbacks for the channels that actually failed.
+    const failedEmail = tryEmail && !results.includes("email");
+    const failedWhatsApp = tryWhatsApp && !results.includes("whatsapp");
+    const filtered = fb.filter(
+      (f) =>
+        (f.kind === "email" && failedEmail) ||
+        (f.kind === "whatsapp" && failedWhatsApp),
+    );
+    if (filtered.length) webFallbacks = filtered;
+  }
+
   return {
     channel,
     success: results.length > 0,
     error: errs.length ? errs.join(" | ") : undefined,
+    webFallbacks,
   };
 }
