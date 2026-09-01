@@ -45,11 +45,7 @@ export default function LossControl() {
     [],
   );
 
-  const priceOf = (fuelType: string) =>
-    fuelTypeApi.getPriceFor(fuelType) ??
-    fuelTypeApi.getCanonical()(fuelType) ??
-    null ??
-    0;
+  const priceOf = (fuelType: string) => fuelTypeApi.getPriceFor(fuelType) ?? 0;
 
   type LossRow = {
     kind: "tank-variant" | "tank-water" | "daybook";

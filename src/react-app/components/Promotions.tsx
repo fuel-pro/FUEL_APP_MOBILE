@@ -61,11 +61,9 @@ export default function Promotions() {
   );
 
   const fuelOptions = useMemo(() => {
-    const fts = (fuelTypeApi.fuelTypes ?? []).filter(
-      (f): f is { fuelName?: string } => typeof f !== "boolean",
-    );
+    const fts = fuelTypeApi.fuelTypes ?? [];
     const opts = fts
-      .map((f) => fuelTypeApi.labelOf(f.fuelName ?? ""))
+      .map((f) => fuelTypeApi.labelOf(f.name ?? ""))
       .filter(Boolean);
     const uniq = [...new Set(opts)];
     return uniq;

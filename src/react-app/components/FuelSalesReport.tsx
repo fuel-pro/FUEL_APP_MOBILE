@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import {
   FileText,
   Printer,
-  TrendingUp,
   Download,
   Loader2,
   ShoppingCart,

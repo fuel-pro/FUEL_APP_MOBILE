@@ -26,9 +26,10 @@ import {
 } from "@/react-app/lib/forecourt-features";
 
 interface CreditAccountLite {
-  id: number;
+  id: string | number;
   customerName: string;
-  balance: number;
+  balance?: number;
+  balanceUsed?: number;
 }
 
 /**

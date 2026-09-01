@@ -82,11 +82,9 @@ export default function PriceScheduler() {
   });
 
   const fuelOptions = useMemo(() => {
-    const fts = (fuelTypeApi.fuelTypes ?? []).filter(
-      (f): f is { fuelName?: string } => typeof f !== "boolean",
-    );
+    const fts = fuelTypeApi.fuelTypes ?? [];
     const opts = fts
-      .map((f) => fuelTypeApi.labelOf(f.fuelName ?? ""))
+      .map((f) => fuelTypeApi.labelOf(f.name ?? ""))
       .filter(Boolean);
     const uniq = [...new Set(opts)];
     return uniq.length > 0 ? uniq : ["Super Petrol", "Diesel"];
@@ -138,20 +136,15 @@ export default function PriceScheduler() {
 
   const marginRows = useMemo(
     () =>
-      (fuelTypeApi.fuelTypes ?? [])
-        .filter(
-          (f): f is { fuelName?: string; price?: number; cost?: number } =>
-            typeof f !== "boolean",
-        )
-        .map((f) => {
-          const m = marginInfo(f.price ?? 0, f.cost ?? 0);
-          return {
-            raw: fuelTypeApi.labelOf(f.fuelName ?? ""),
-            price: f.price ?? 0,
-            cost: f.cost ?? 0,
-            ...m,
-          };
-        }),
+      (fuelTypeApi.fuelTypes ?? []).map((f) => {
+        const m = marginInfo(f.price ?? 0, f.costPrice ?? 0);
+        return {
+          raw: fuelTypeApi.labelOf(f.name ?? ""),
+          price: f.price ?? 0,
+          cost: f.costPrice ?? 0,
+          ...m,
+        };
+      }),
     [fuelTypeApi],
   );
 

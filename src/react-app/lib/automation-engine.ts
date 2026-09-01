@@ -222,7 +222,7 @@ function summarizeEvent(event: DomainEvent): string {
     case "station:switched":
       return `Station switched`;
     default:
-      return event.type.replace(":", " ");
+      return (event as DomainEvent).type.replace(":", " ");
   }
 }
 
