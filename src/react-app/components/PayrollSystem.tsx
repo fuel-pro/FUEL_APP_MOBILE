@@ -19,7 +19,9 @@ import {
   CalendarClock,
   CheckCircle2,
   XCircle,
+  Coins,
 } from "lucide-react";
+import Commissions from "@/react-app/components/Commissions";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -3875,6 +3877,18 @@ export default function PayrollSystem() {
             <span className="sm:hidden">Pay</span>
           </button>
           <button
+            onClick={() => setActiveTab("commissions")}
+            className={`px-2 md:px-6 py-1 md:py-3 font-medium text-xs md:text-base flex-shrink-0 ${
+              activeTab === "commissions"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            <Coins size={12} className="inline mr-1 md:mr-2 md:w-4 md:h-4" />
+            <span className="hidden sm:inline">Commissions</span>
+            <span className="sm:hidden">Com</span>
+          </button>
+          <button
             onClick={() => setActiveTab("settings")}
             className={`px-2 md:px-6 py-1 md:py-3 font-medium text-xs md:text-base flex-shrink-0 ${
               activeTab === "settings"
@@ -3891,6 +3905,7 @@ export default function PayrollSystem() {
         {/* Tab Content */}
         {activeTab === "employees" && renderEmployeesTab()}
         {activeTab === "payslip" && renderPayslipTab()}
+        {activeTab === "commissions" && <Commissions />}
         {activeTab === "settings" && renderSettingsTab()}
       </div>
 

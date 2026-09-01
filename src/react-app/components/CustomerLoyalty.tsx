@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Gift,
+  Sparkles,
   Phone,
   Mail,
   MapPin,
@@ -26,6 +27,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import { navigateToTab } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import CustomerSegments from "@/react-app/components/CustomerSegments";
+import Promotions from "@/react-app/components/Promotions";
 
 interface Customer {
   id: string;
@@ -155,9 +157,9 @@ function normalizeLoyaltyCustomers(arr: unknown): Customer[] {
 }
 
 export default function CustomerLoyalty() {
-  const [innerView, setInnerView] = useState<"customers" | "segments">(
-    "customers",
-  );
+  const [innerView, setInnerView] = useState<
+    "customers" | "segments" | "promos"
+  >("customers");
   const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();
@@ -531,18 +533,23 @@ export default function CustomerLoyalty() {
         </div>
       </div>
 
-      {/* Inner sub-tabs: Customers list vs Segments & Events (Veira CRM) */}
+      {/* Inner sub-tabs: Customers list vs Segments & Events vs Promotions */}
       <SubTabBar
         tabs={[
           { id: "customers", label: "Customers", icon: Users },
           { id: "segments", label: "Segments & Events", icon: Star },
+          { id: "promos", label: "Promotions", icon: Sparkles },
         ]}
         active={innerView}
-        onChange={(id) => setInnerView(id as "customers" | "segments")}
+        onChange={(id) =>
+          setInnerView(id as "customers" | "segments" | "promos")
+        }
       />
 
       {innerView === "segments" ? (
         <CustomerSegments customers={customers} />
+      ) : innerView === "promos" ? (
+        <Promotions />
       ) : (
         <>
           {/* KPIs */}

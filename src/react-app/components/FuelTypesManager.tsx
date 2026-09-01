@@ -31,6 +31,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import PriceBoard from "@/react-app/components/PriceBoard";
+import PriceScheduler from "@/react-app/components/PriceScheduler";
 import FuelQualityTesting from "@/react-app/components/FuelQualityTesting";
 import {
   emitFuelTypeChange,
@@ -338,7 +339,7 @@ export default function FuelTypesManager() {
   // now merged INTO the Fuel Types sub-tab as a per-fuel-type "Number of
   // Pumps" action (see the expanded fuel-type card).
   const [activeView, setActiveView] = useState<
-    "fueltypes" | "priceboard" | "quality"
+    "fueltypes" | "priceboard" | "scheduler" | "quality"
   >("fueltypes");
 
   // Form state
@@ -661,11 +662,14 @@ export default function FuelTypesManager() {
         tabs={[
           { id: "fueltypes", label: "Fuel Types", icon: Fuel },
           { id: "priceboard", label: "Price Board", icon: Monitor },
+          { id: "scheduler", label: "Price Scheduler", icon: Monitor },
           { id: "quality", label: "Fuel Quality", icon: FlaskConical },
         ]}
         active={activeView}
         onChange={(id) =>
-          setActiveView(id as "fueltypes" | "priceboard" | "quality")
+          setActiveView(
+            id as "fueltypes" | "priceboard" | "scheduler" | "quality",
+          )
         }
       />
 
@@ -673,6 +677,8 @@ export default function FuelTypesManager() {
         <PriceBoard />
       ) : activeView === "quality" ? (
         <FuelQualityTesting />
+      ) : activeView === "scheduler" ? (
+        <PriceScheduler />
       ) : (
         <>
           {/* Summary Cards */}

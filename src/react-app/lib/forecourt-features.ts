@@ -18,6 +18,11 @@ export const CLOUD_KEYS = {
   fleetCards: "fleet_cards",
   fleetUsage: "fleet_card_usage",
   forecourtHardware: "forecourt_hardware",
+  // Round 2
+  tankCalibration: "tank_calibration",
+  priceSchedules: "price_schedules",
+  promoRules: "loyalty_promo_rules",
+  commissionSettings: "commission_settings",
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -63,6 +68,149 @@ export function classifyReading(
     return { status: "variance", variance, variancePct };
   if (measured <= 0) return { status: "low", variance, variancePct };
   return { status: "ok", variance, variancePct };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tank calibration (dip / ullage / strapping chart math) — round 2    */
+/* ------------------------------------------------------------------ */
+
+export interface TankCalibration {
+  id: string;
+  fuelType: string;
+  label: string;
+  /** total geometric capacity of the tank (litres) */
+  capacity: number;
+  /** tank inner diameter in mm (horizontal cylinder model) */
+  diameterMm: number;
+  /** tank length in mm (informational, stored for audit) */
+  lengthMm: number;
+}
+
+export function cylinderVolumeFraction(
+  dipMm: number,
+  diameterMm: number,
+): number {
+  if (diameterMm <= 0 || dipMm < 0) return 0;
+  if (dipMm >= diameterMm) return 1;
+  const x = 1 - (2 * dipMm) / diameterMm; // 1 at empty, -1 at full
+  const theta = Math.acos(Math.max(-1, Math.min(1, x)));
+  const frac = (theta - x * Math.sqrt(Math.max(0, 1 - x * x))) / Math.PI;
+  return Math.max(0, Math.min(1, frac));
+}
+
+export function dipToVolume(
+  dipMm: number,
+  diameterMm: number,
+  capacity: number,
+): number {
+  return capacity * cylinderVolumeFraction(dipMm, diameterMm);
+}
+
+export function ullage(
+  dipMm: number,
+  diameterMm: number,
+  capacity: number,
+): number {
+  return capacity - dipToVolume(dipMm, diameterMm, capacity);
+}
+
+/* ------------------------------------------------------------------ */
+/* Price scheduling (Shell / Livetrac price-change calendars)  — rnd 2 */
+/* ------------------------------------------------------------------ */
+
+export interface PriceSchedule {
+  id: string;
+  fuelType: string;
+  label: string;
+  price: number;
+  /** ISO date when the change should activate */
+  effectiveOn: string;
+  status: "pending" | "applied" | "cancelled";
+  createdAt: string;
+}
+
+export function marginInfo(price: number, cost: number) {
+  const margin = price - cost;
+  const marginPct =
+    price > 0 && isFinite(price) && isFinite(cost) ? (margin / price) * 100 : 0;
+  return { margin, marginPct: isFinite(marginPct) ? marginPct : 0 };
+}
+
+export const LOW_MARGIN_PCT = 2;
+
+/* ------------------------------------------------------------------ */
+/* Loyalty promotions (Veira / BPme / Petro-Points) — round 2          */
+/* ------------------------------------------------------------------ */
+
+export interface PromoRule {
+  id: string;
+  label: string;
+  /** points earned per litre for the matched fuel ("" = all fuels) */
+  fuelType: string;
+  pointsPerLitre: number;
+  /** additional multiplier window (happy hours / promo days) */
+  multiplier: number;
+  /** ISO window boundaries; optional ("" = no window limit) */
+  fromDate: string;
+  toDate: string;
+  active: boolean;
+}
+
+export interface LoyaltySettings {
+  /** fallback earn rate when no promo/rule applies */
+  basePointsPerLitre: number;
+  /** points monetary value: how many points = 1 unit of currency */
+  redemptionPointsPerCurrency: number;
+  /** points needed to redeem one unit of currency */
+  redemptionRate: number;
+  rules: PromoRule[];
+}
+
+export function bestRuleFor(
+  rules: PromoRule[],
+  fuelType: string,
+  dateIso: string,
+): PromoRule | null {
+  let best: PromoRule | null = null;
+  for (const r of rules) {
+    if (!r.active) continue;
+    if (r.fuelType && r.fuelType !== fuelType) continue;
+    if (r.fromDate && dateIso < r.fromDate) continue;
+    if (r.toDate && dateIso > r.toDate) continue;
+    if (!best || r.pointsPerLitre > best.pointsPerLitre) best = r;
+  }
+  return best;
+}
+
+export function earnForLitres(
+  litres: number,
+  canonical: string,
+  settings: LoyaltySettings,
+  dateIso: string,
+): { points: number; via: string } {
+  const rule = bestRuleFor(settings.rules, canonical, dateIso);
+  const rate = rule
+    ? rule.pointsPerLitre * (rule.multiplier || 1)
+    : settings.basePointsPerLitre;
+  const points = litres * rate;
+  return {
+    points: isFinite(points) ? points : 0,
+    via: rule ? `promo: ${rule.label}` : "base rate",
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Attendant commissions (Codelab FMS style) — round 2                 */
+/* ------------------------------------------------------------------ */
+
+export interface CommissionSetting {
+  id: string;
+  /** litres per pump-sale price basis → commission per litre */
+  ratePerLitre: number;
+  /** optional fuel restriction; "" = any fuel */
+  fuelType: string;
+  active: boolean;
+  label: string;
 }
 
 /* ------------------------------------------------------------------ */

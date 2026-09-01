@@ -55,6 +55,7 @@ import {
 } from "@/react-app/lib/automation-engine";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import TankMonitor from "@/react-app/components/TankMonitor";
+import TankCalibration from "@/react-app/components/TankCalibration";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
 import { lazy, Suspense } from "react";
@@ -110,6 +111,7 @@ const INITIAL_PRODUCT = {
 type InventoryTab =
   | "products"
   | "tankmonitor"
+  | "calibration"
   | "adjustments"
   | "transfers"
   | "counts"
@@ -121,6 +123,7 @@ type InventoryTab =
 const TABS = [
   { id: "products", label: "Products" },
   { id: "tankmonitor", label: "Tank Monitor" },
+  { id: "calibration", label: "Calibration" },
   { id: "adjustments", label: "Adjustments" },
   { id: "transfers", label: "Transfers" },
   { id: "counts", label: "Counts" },
@@ -2136,12 +2139,15 @@ export default function InventoryManagement() {
       </div>
       <div
         className={
-          activeTab === "products" || activeTab === "tankmonitor"
+          activeTab === "products" ||
+          activeTab === "tankmonitor" ||
+          activeTab === "calibration"
             ? ""
             : "max-w-2xl"
         }
       >
         {activeTab === "tankmonitor" && <TankMonitor />}
+        {activeTab === "calibration" && <TankCalibration />}
         {activeTab === "products" && (
           <ProductsPanel
             products={products}
