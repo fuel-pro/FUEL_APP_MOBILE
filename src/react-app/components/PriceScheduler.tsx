@@ -72,7 +72,14 @@ export default function PriceScheduler() {
 
   const [fuel, setFuel] = useState("");
   const [price, setPrice] = useState("");
-  const [date, setDate] = useState("");
+  // Default to tomorrow 06:00 so Queue always has a valid datetime-local value.
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(6, 0, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:0${d.getMinutes()}`;
+  });
 
   const fuelOptions = useMemo(() => {
     const fts = (fuelTypeApi.fuelTypes ?? []).filter(
