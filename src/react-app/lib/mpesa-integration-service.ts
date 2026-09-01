@@ -70,6 +70,15 @@ export interface KopokopoIntegrationConfig {
   enabled: boolean;
 }
 
+export interface PayheroIntegrationConfig {
+  name: string;
+  apiUsername: string;
+  apiPassword: string;
+  channelId: string;
+  accountReference: string;
+  enabled: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Cloud storage keys (station-scoped)
 // ---------------------------------------------------------------------------
@@ -77,6 +86,7 @@ export interface KopokopoIntegrationConfig {
 const TXN_KEY = "mpesa_transactions";
 const MPESA_CONFIG_KEY = "mpesa_config";
 const KOPOKOPO_CONFIG_KEY = "kopokopo_config";
+const PAYHERO_CONFIG_KEY = "payhero_config";
 
 // ---------------------------------------------------------------------------
 // Default configs
@@ -109,6 +119,15 @@ export const DEFAULT_KOPOKOPO_CONFIG: KopokopoIntegrationConfig = {
   apiKey: "",
   environment: "sandbox",
   searchWindowHours: 24,
+  enabled: false,
+};
+
+export const DEFAULT_PAYHERO_CONFIG: PayheroIntegrationConfig = {
+  name: "PayHero",
+  apiUsername: "",
+  apiPassword: "",
+  channelId: "",
+  accountReference: "",
   enabled: false,
 };
 
@@ -245,6 +264,22 @@ export async function saveKopokopoConfig(
   stationId?: string,
 ): Promise<void> {
   await cloudStorageService.set(KOPOKOPO_CONFIG_KEY, config, stationId);
+}
+
+export async function getPayheroConfig(
+  stationId?: string,
+): Promise<PayheroIntegrationConfig> {
+  const cloud = await cloudStorageService.get<
+    Partial<PayheroIntegrationConfig>
+  >(PAYHERO_CONFIG_KEY, stationId);
+  return { ...DEFAULT_PAYHERO_CONFIG, ...(cloud || {}) };
+}
+
+export async function savePayheroConfig(
+  config: PayheroIntegrationConfig,
+  stationId?: string,
+): Promise<void> {
+  await cloudStorageService.set(PAYHERO_CONFIG_KEY, config, stationId);
 }
 
 // ---------------------------------------------------------------------------

@@ -6,10 +6,14 @@ import {
   saveMpesaConfig,
   getKopokopoConfig,
   saveKopokopoConfig,
+  getPayheroConfig,
+  savePayheroConfig,
   DEFAULT_MPESA_CONFIG,
   DEFAULT_KOPOKOPO_CONFIG,
+  DEFAULT_PAYHERO_CONFIG,
   type MpesaIntegrationConfig,
   type KopokopoIntegrationConfig,
+  type PayheroIntegrationConfig,
 } from "@/react-app/lib/mpesa-integration-service";
 import {
   Smartphone,
@@ -25,7 +29,7 @@ import {
 } from "lucide-react";
 import { isKenyaStation } from "@/react-app/lib/currency";
 
-type View = "catalog" | "mpesa" | "kopokopo";
+type View = "catalog" | "mpesa" | "kopokopo" | "payhero";
 
 export default function IntegrationsSettings() {
   const { user } = useAuth();
@@ -36,6 +40,7 @@ export default function IntegrationsSettings() {
   const [view, setView] = useState<View>("catalog");
   const [mpesaConnected, setMpesaConnected] = useState(false);
   const [kopoConnected, setKopoConnected] = useState(false);
+  const [payheroConnected, setPayheroConnected] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -44,6 +49,8 @@ export default function IntegrationsSettings() {
       setMpesaConnected(m.enabled && !!m.consumerKey);
       const k = await getKopokopoConfig(stationId);
       setKopoConnected(k.enabled && !!k.clientId);
+      const p = await getPayheroConfig(stationId);
+      setPayheroConnected(p.enabled && !!p.apiUsername);
     })();
   }, [user, stationId]);
 
@@ -59,6 +66,15 @@ export default function IntegrationsSettings() {
   if (view === "kopokopo") {
     return (
       <KopokopoSetup
+        onBack={() => setView("catalog")}
+        stationId={stationId}
+        isKenya={isKenya}
+      />
+    );
+  }
+  if (view === "payhero") {
+    return (
+      <PayheroSetup
         onBack={() => setView("catalog")}
         stationId={stationId}
         isKenya={isKenya}
@@ -111,6 +127,18 @@ export default function IntegrationsSettings() {
                 connected={kopoConnected}
                 onSetup={() => setView("kopokopo")}
               />
+              {/* PayHero Kenya */}
+              <IntegrationCard
+                icon={
+                  <Smartphone className="text-violet-600 dark:text-violet-400" />
+                }
+                iconBg="bg-violet-100 dark:bg-violet-900/30"
+                name="PayHero Kenya"
+                category="Payment"
+                description="Accept M-PESA payments via PayHero Kenya (payherokenya.com). STK Push through your PayHero channel (till/paybill), payment status queries, and callback notifications."
+                connected={payheroConnected}
+                onSetup={() => setView("payhero")}
+              />
             </>
           ) : (
             <div className="md:col-span-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl p-6 flex items-start gap-3">
@@ -123,10 +151,10 @@ export default function IntegrationsSettings() {
                   M-PESA is available in Kenya only
                 </h4>
                 <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
-                  Safaricom M-PESA and Kopo Kopo integrations are Kenya-specific
-                  mobile money payment methods. They are not available for the
-                  detected station country. Switch your station to Kenya to
-                  configure these integrations.
+                  Safaricom M-PESA, Kopo Kopo and PayHero Kenya integrations are
+                  Kenya-specific mobile money payment methods. They are not
+                  available for the detected station country. Switch your
+                  station to Kenya to configure these integrations.
                 </p>
               </div>
             </div>
@@ -788,6 +816,239 @@ function KopokopoSetup({
             onClick={handleSave}
             disabled={saving}
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <>
+                <Zap size={18} className="animate-pulse" /> Saving…
+              </>
+            ) : (
+              <>
+                <Save size={18} /> Save Integration
+              </>
+            )}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PayHero Kenya Setup Form
+// ---------------------------------------------------------------------------
+
+function PayheroSetup({
+  onBack,
+  stationId,
+  isKenya,
+}: {
+  onBack: () => void;
+  stationId: string | undefined;
+  isKenya: boolean;
+}) {
+  const [config, setConfig] = useState<PayheroIntegrationConfig>(
+    DEFAULT_PAYHERO_CONFIG,
+  );
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const c = await getPayheroConfig(stationId);
+      setConfig(c);
+      setLoaded(true);
+    })();
+  }, [stationId]);
+
+  const update = (patch: Partial<PayheroIntegrationConfig>) =>
+    setConfig((prev) => ({ ...prev, ...patch }));
+
+  const handleSave = async () => {
+    setError("");
+    if (!config.apiUsername.trim() || !config.apiPassword.trim()) {
+      setError("API Username and API Password are required.");
+      return;
+    }
+    if (!config.channelId.trim() || isNaN(Number(config.channelId))) {
+      setError("Channel ID must be a valid number (from your PayHero dashboard).");
+      return;
+    }
+    setSaving(true);
+    try {
+      await savePayheroConfig(config, stationId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loaded)
+    return <div className="py-8 text-center text-gray-400">Loading…</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Breadcrumb */}
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+      >
+        <ChevronLeft size={16} /> Integrations
+      </button>
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 rounded-xl flex items-center justify-center">
+          <Smartphone className="text-violet-600 dark:text-violet-400" size={24} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            PayHero Kenya Integration
+          </h2>
+          <p className="text-xs text-gray-400 uppercase tracking-wide">
+            Payment Gateway (payherokenya.com)
+          </p>
+        </div>
+      </div>
+
+      {!isKenya && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-6 flex items-start gap-3">
+          <AlertTriangle
+            size={22}
+            className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+          />
+          <div>
+            <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+              PayHero is available in Kenya only
+            </h3>
+            <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+              PayHero Kenya processes M-PESA mobile money payments and cannot
+              be configured for the detected station country. Switch your
+              station to Kenya to configure PayHero.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isKenya && (
+        <>
+          {/* Integration Details */}
+          <Section
+            title="Integration Details"
+            subtitle="Basic information about this integration"
+          >
+            <Field label="Integration Name" required>
+              <input
+                type="text"
+                value={config.name}
+                onChange={(e) => update({ name: e.target.value })}
+                placeholder="PayHero"
+                className={inputCls}
+              />
+            </Field>
+          </Section>
+
+          {/* API Credentials */}
+          <Section
+            title="API Credentials"
+            subtitle="Your Basic-auth credentials + channel ID from the PayHero dashboard (backend.payhero.co.ke)"
+          >
+            <Field label="API Username" required>
+              <input
+                type="text"
+                value={config.apiUsername}
+                onChange={(e) => update({ apiUsername: e.target.value })}
+                placeholder="Enter your PayHero API Username"
+                className={inputCls}
+              />
+            </Field>
+            <Field label="API Password" required>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={config.apiPassword}
+                  onChange={(e) => update({ apiPassword: e.target.value })}
+                  placeholder="Enter your PayHero API Password"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            <Field
+              label="Channel ID"
+              required
+              hint="Your PayHero payment channel ID (numeric) — created in the PayHero dashboard under Payment Channels"
+            >
+              <input
+                type="text"
+                inputMode="numeric"
+                value={config.channelId}
+                onChange={(e) => update({ channelId: e.target.value })}
+                placeholder="e.g. 4242"
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="Account Reference"
+              hint="Shown to customers on the M-PESA prompt. Max 12 characters. Defaults to the station name."
+            >
+              <input
+                type="text"
+                maxLength={12}
+                value={config.accountReference}
+                onChange={(e) => update({ accountReference: e.target.value })}
+                placeholder="e.g. FUELPRO"
+                className={inputCls}
+              />
+            </Field>
+          </Section>
+
+          {/* Configuration */}
+          <Section title="Configuration" subtitle="Integration settings">
+            <Field
+              label="Status"
+              hint="When enabled, PayHero STK Push is available for payment collection"
+            >
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.enabled}
+                  onChange={(e) => update({ enabled: e.target.checked })}
+                  className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Enable this integration
+                </span>
+              </label>
+            </Field>
+          </Section>
+
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+              <AlertTriangle size={16} /> {error}
+            </div>
+          )}
+          {saved && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle2 size={16} /> Integration saved successfully!
+            </div>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? (
               <>

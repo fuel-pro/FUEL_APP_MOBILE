@@ -47,12 +47,16 @@ import { emit } from "@/react-app/lib/automation-engine";
 import {
   addTransaction,
   getMpesaConfig,
+  getPayheroConfig,
   type UnifiedTransaction,
 } from "@/react-app/lib/mpesa-integration-service";
 import {
   darajaConfigured,
   mpesaStkPush,
   mpesaStkQuery,
+  payheroStkPush,
+  payheroQueryStatus,
+  payheroConfigured,
 } from "@/react-app/lib/integrations-client";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
@@ -595,23 +599,96 @@ export default function PointOfSale() {
 
     setStkPushStatus("pending");
 
-    // REAL M-PESA Daraja STK Push. The station's own Daraja credentials are
-    // configured in Integration Hub → Payment Setup and stored owner-scoped in
-    // the cloud. When they are missing we do NOT fake a payment — we tell the
-    // user exactly what to configure. The previous implementation simulated a
-    // 2-second delay and auto-"succeeded" a payment that never happened.
+    // REAL STK Push over whichever gateway is configured: M-PESA Daraja
+    // first, then PayHero Kenya as the automatic fallback. Both are real
+    // institution calls via /api/integrations. The station's own credentials
+    // live in Integration Hub → Payment Setup (owner-scoped cloud KV).
+    // When neither is configured we do NOT fake a payment — we say exactly
+    // what to configure.
     try {
       const cfg = await getMpesaConfig(stationId);
-      if (!cfg?.enabled || !darajaConfigured(cfg)) {
+      const darajaReady = !!cfg?.enabled && darajaConfigured(cfg);
+      const phCfg = await getPayheroConfig(stationId);
+      const phReady = !!phCfg?.enabled && payheroConfigured(phCfg);
+
+      if (!darajaReady && !phReady) {
         setStkPushStatus("failed");
         import("@/react-app/lib/toast").then(({ toastError }) =>
           toastError(
-            "M-PESA Daraja is not configured. Set it up in Integration Hub → Payment Setup to take real M-PESA payments.",
+            "No M-PESA gateway configured. Set up M-PESA Daraja, PayHero Kenya, or Kopo Kopo in Integration Hub → Payment Setup.",
           ),
         );
         return;
       }
 
+      // ── PayHero Kenya path ──────────────────────────────────────────────
+      if (!darajaReady && phReady) {
+        const ref =
+          phCfg.accountReference ||
+          `POS-${generateInvoiceNumber()}`;
+        const res = await payheroStkPush(phCfg, {
+          phoneNumber: customerPhone,
+          amount: total,
+          transactionDesc: ref,
+        });
+        if (!res.success || !(res.reference || res.checkout_request_id)) {
+          setStkPushStatus("failed");
+          import("@/react-app/lib/toast").then(({ toastError }) =>
+            toastError(
+              `PayHero STK Push failed: ${res.error || "PayHero rejected the request"}`,
+            ),
+          );
+          return;
+        }
+        import("@/react-app/lib/toast").then(({ toastInfo }) =>
+          toastInfo(
+            "STK Push sent via PayHero — ask the customer to enter their M-PESA PIN on their phone.",
+          ),
+        );
+        const reference = String(res.reference || res.checkout_request_id);
+        let attempts = 0;
+        const pollPayhero = async (): Promise<void> => {
+          attempts++;
+          try {
+            const q = await payheroQueryStatus(phCfg, reference);
+            const status = String(q.status || "").toUpperCase();
+            if (q.success || status === "SUCCESS" || status === "COMPLETED") {
+              setStkPushStatus("success");
+              processPayment();
+              return;
+            }
+            const failed =
+              status === "FAILED" ||
+              status === "REJECTED" ||
+              status === "CANCELLED";
+            if (failed) {
+              setStkPushStatus("failed");
+              import("@/react-app/lib/toast").then(({ toastError }) =>
+                toastError(
+                  `M-PESA payment not completed via PayHero: ${String(q.result_desc || q.status || "failed")}`,
+                ),
+              );
+              return;
+            }
+          } catch {
+            /* transient — keep polling */
+          }
+          if (attempts >= 20) {
+            setStkPushStatus("failed");
+            import("@/react-app/lib/toast").then(({ toastError }) =>
+              toastError(
+                "M-PESA payment timed out waiting for the customer (PayHero). No sale was recorded.",
+              ),
+            );
+            return;
+          }
+          setTimeout(pollPayhero, 6000);
+        };
+        setTimeout(pollPayhero, 6000);
+        return;
+      }
+
+      // ── Daraja path ─────────────────────────────────────────────────────
       const res = await mpesaStkPush(cfg, {
         phoneNumber: customerPhone,
         amount: total,

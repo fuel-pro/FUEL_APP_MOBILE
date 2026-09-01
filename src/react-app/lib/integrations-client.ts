@@ -100,6 +100,38 @@ export async function kopokopoPull(
   return callIntegration("kopokopo-pull", { creds });
 }
 
+export interface PayheroCredsInput {
+  apiUsername: string;
+  apiPassword: string;
+  channelId: string;
+  accountReference?: string;
+}
+
+export function payheroConfigured(
+  c?: Partial<PayheroCredsInput> | null,
+): boolean {
+  return !!(c?.apiUsername && c?.apiPassword && c?.channelId);
+}
+
+export async function payheroStkPush(
+  creds: PayheroCredsInput,
+  req: {
+    phoneNumber: string;
+    amount: number;
+    customerName?: string;
+    transactionDesc?: string;
+  },
+): Promise<IntegrationResponse> {
+  return callIntegration("payhero-stk-push", { creds, ...req });
+}
+
+export async function payheroQueryStatus(
+  creds: PayheroCredsInput,
+  reference: string,
+): Promise<IntegrationResponse> {
+  return callIntegration("payhero-status", { creds, reference });
+}
+
 export interface EtimsCredsInput {
   tin: string;
   bhfId: string;

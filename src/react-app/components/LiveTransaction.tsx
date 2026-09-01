@@ -50,10 +50,12 @@ import {
   type CreditPrefill,
   getMpesaConfig,
   getKopokopoConfig,
+  getPayheroConfig,
   type UnifiedTransaction,
   type TransactionSummary,
   type MpesaIntegrationConfig,
   type KopokopoIntegrationConfig,
+  type PayheroIntegrationConfig,
 } from "@/react-app/lib/mpesa-integration-service";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 
@@ -260,6 +262,8 @@ export default function LiveTransaction() {
   );
   const [kopoConfig, setKopoConfig] =
     useState<KopokopoIntegrationConfig | null>(null);
+  const [payheroConfig, setPayheroConfig] =
+    useState<PayheroIntegrationConfig | null>(null);
   const mpesaConnected = !!(
     mpesaConfig?.enabled &&
     mpesaConfig?.consumerKey &&
@@ -270,6 +274,12 @@ export default function LiveTransaction() {
     kopoConfig?.enabled &&
     kopoConfig?.tillNumber &&
     kopoConfig?.apiKey
+  );
+  const payheroConnected = !!(
+    payheroConfig?.enabled &&
+    payheroConfig?.apiUsername &&
+    payheroConfig?.apiPassword &&
+    payheroConfig?.channelId
   );
 
   // Load data on component mount.
@@ -327,13 +337,15 @@ export default function LiveTransaction() {
     if (!user) return;
     let mounted = true;
     (async () => {
-      const [mpesa, kopo] = await Promise.all([
+      const [mpesa, kopo, payhero] = await Promise.all([
         getMpesaConfig(stationId),
         getKopokopoConfig(stationId),
+        getPayheroConfig(stationId),
       ]);
       if (!mounted) return;
       setMpesaConfig(mpesa);
       setKopoConfig(kopo);
+      setPayheroConfig(payhero);
     })();
     return () => {
       mounted = false;
@@ -816,13 +828,25 @@ export default function LiveTransaction() {
   // Import a payment source from the connected Integration Hub config
   // (M-PESA Daraja or Kopo Kopo) — wires the Live Transaction tab to the
   // Integration Hub so connected integrations are one-click usable here.
-  const importFromIntegrationHub = async (type: "mpesa" | "kopokopo") => {
+  const importFromIntegrationHub = async (
+    type: "mpesa" | "kopokopo" | "payhero",
+  ) => {
     try {
       setIsLoading(true);
       setError("");
-      const config = type === "mpesa" ? mpesaConfig : kopoConfig;
+      const config =
+        type === "mpesa"
+          ? mpesaConfig
+          : type === "kopokopo"
+            ? kopoConfig
+            : payheroConfig;
       if (!config || !config.enabled) {
-        const label = type === "mpesa" ? "M-PESA" : "Kopo Kopo";
+        const label =
+          type === "mpesa"
+            ? "M-PESA"
+            : type === "kopokopo"
+              ? "Kopo Kopo"
+              : "PayHero Kenya";
         setError(
           `${label} is not configured yet. Open the Integration Hub to set it up, then come back to import it as a payment source.`,
         );
@@ -830,12 +854,19 @@ export default function LiveTransaction() {
         return;
       }
       const source_name =
-        config.name || (type === "mpesa" ? "M-PESA Daraja" : "Kopo Kopo");
+        config.name ||
+        (type === "mpesa"
+          ? "M-PESA Daraja"
+          : type === "kopokopo"
+            ? "Kopo Kopo"
+            : "PayHero Kenya");
       // De-dupe by identifier
       const identifier =
         (type === "mpesa"
           ? (config as MpesaIntegrationConfig).shortcode
-          : (config as KopokopoIntegrationConfig).tillNumber) ||
+          : type === "kopokopo"
+            ? (config as KopokopoIntegrationConfig).tillNumber
+            : (config as PayheroIntegrationConfig).channelId) ||
         config.name ||
         "";
       if (
@@ -848,11 +879,18 @@ export default function LiveTransaction() {
       }
       const newRecord: PaymentSource = {
         id: Date.now(),
-        source_type: type === "mpesa" ? "mpesa_paybill" : "mpesa_buygoods",
+        source_type:
+          type === "mpesa"
+            ? "mpesa_paybill"
+            : type === "kopokopo"
+              ? "mpesa_buygoods"
+              : "mpesa_payhero",
         source_name,
         identifier,
         account_info: JSON.stringify({
-          environment: config.environment || "sandbox",
+          environment:
+            (config as MpesaIntegrationConfig | KopokopoIntegrationConfig)
+              .environment || "production",
           importedFrom: "integration-hub",
         }),
         is_active: true,
@@ -1233,6 +1271,33 @@ export default function LiveTransaction() {
               </div>
               <ArrowRight size={14} className="text-blue-400" />
             </button>
+            <button
+              onClick={() => switchToTab("integration")}
+              className="flex items-center gap-3 p-3 bg-violet-900/30 hover:bg-violet-900/50 border border-violet-700/50 rounded-lg transition-colors text-left"
+            >
+              <div className="w-9 h-9 bg-violet-500/20 rounded-lg flex items-center justify-center">
+                <Smartphone size={16} className="text-violet-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  PayHero Kenya Payment
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  STK Push via PayHero channel (till / paybill)
+                </p>
+                <span
+                  className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${payheroConnected ? "bg-green-500/20 text-green-300" : "bg-amber-500/20 text-amber-300"}`}
+                >
+                  {payheroConnected ? (
+                    <Link2 size={9} />
+                  ) : (
+                    <AlertTriangle size={9} />
+                  )}
+                  {payheroConnected ? "Connected" : "Not connected"}
+                </span>
+              </div>
+              <ArrowRight size={14} className="text-violet-400" />
+            </button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -1253,11 +1318,20 @@ export default function LiveTransaction() {
               <Wallet size={14} />
               Import Kopo Kopo
             </button>
+            <button
+              onClick={() => importFromIntegrationHub("payhero")}
+              disabled={isLoading}
+              className="bg-violet-700 hover:bg-violet-600 disabled:opacity-50 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex items-center gap-2 text-xs border border-violet-500/50"
+              title="Import the connected PayHero Kenya config as a payment source"
+            >
+              <Smartphone size={14} />
+              Import PayHero
+            </button>
           </div>
           <p className="mt-2 text-[11px] text-gray-500">
-            Tip: configure M-PESA Daraja or Kopo Kopo in the Integration Hub
-            (Payment Setup) to enable live STK Push and automatic transaction
-            import here.
+            Tip: configure M-PESA Daraja, PayHero Kenya, or Kopo Kopo in the
+            Integration Hub (Payment Setup) to enable live STK Push and
+            automatic transaction import here.
           </p>
         </div>
       </div>
@@ -1357,14 +1431,14 @@ export default function LiveTransaction() {
         </div>
 
         <div
-          className={`border p-3 rounded mb-3 ${mpesaConnected || kopoConnected ? "bg-blue-900/30 border-blue-600" : "bg-amber-900/30 border-amber-600"}`}
+          className={`border p-3 rounded mb-3 ${mpesaConnected || kopoConnected || payheroConnected ? "bg-blue-900/30 border-blue-600" : "bg-amber-900/30 border-amber-600"}`}
         >
           <p className="text-sm flex items-center gap-2">
             <div
-              className={`w-2 h-2 rounded-full animate-pulse ${mpesaConnected || kopoConnected ? "bg-green-500" : "bg-amber-500"}`}
+              className={`w-2 h-2 rounded-full animate-pulse ${mpesaConnected || kopoConnected || payheroConnected ? "bg-green-500" : "bg-amber-500"}`}
             ></div>
             <strong>
-              {mpesaConnected || kopoConnected
+              {mpesaConnected || kopoConnected || payheroConnected
                 ? "Payment Integration Connected"
                 : "No Payment Integration Connected"}
             </strong>
@@ -1377,6 +1451,10 @@ export default function LiveTransaction() {
             {kopoConnected
               ? "Kopo Kopo connected — webhook notifications enabled."
               : "Configure Kopo Kopo in the Integration Hub for webhook notifications."}
+            <br />
+            {payheroConnected
+              ? "PayHero Kenya connected — STK Push available via PayHero channel."
+              : "Configure PayHero Kenya in the Integration Hub as an STK Push gateway."}
             <br />
             Real-time cloud sync active — transactions sync instantly across all
             devices (no polling required).
@@ -1464,11 +1542,11 @@ export default function LiveTransaction() {
             </h3>
 
             {/* Integration Hub status banner — links STK Push to the
-                configured M-PESA Daraja integration. */}
+                configured M-PESA Daraja / PayHero Kenya integration. */}
             <div
-              className={`mb-4 rounded-lg p-3 border flex items-start gap-2 ${mpesaConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
+              className={`mb-4 rounded-lg p-3 border flex items-start gap-2 ${mpesaConnected || payheroConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
             >
-              {mpesaConnected ? (
+              {mpesaConnected || payheroConnected ? (
                 <Link2
                   className="text-green-400 mt-0.5 flex-shrink-0"
                   size={16}
@@ -1481,11 +1559,13 @@ export default function LiveTransaction() {
               )}
               <div className="flex-1">
                 <p
-                  className={`text-xs ${mpesaConnected ? "text-green-200" : "text-amber-200"}`}
+                  className={`text-xs ${mpesaConnected || payheroConnected ? "text-green-200" : "text-amber-200"}`}
                 >
                   {mpesaConnected
                     ? `Connected to M-PESA Daraja (${mpesaConfig?.environment === "production" ? "Production" : "Sandbox"}, shortcode ${mpesaConfig?.shortcode}).`
-                    : "M-PESA Daraja is not configured. STK Push requires a connected M-PESA payment source."}
+                    : payheroConnected
+                      ? `Connected to PayHero Kenya (channel ${payheroConfig?.channelId}). STK Push will route via PayHero.`
+                      : "No M-PESA gateway is configured (M-PESA Daraja / PayHero Kenya). STK Push requires a connected payment source."}
                 </p>
                 <button
                   onClick={() => switchToTab("integration")}

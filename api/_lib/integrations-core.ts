@@ -686,6 +686,135 @@ export async function fireWebhook(body: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PAYHERO KENYA — REAL M-PESA STK Push via PayHero API v2
+// (Reverse-engineered from payherokenya.com / developers.payhero.co.ke)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface PayheroCreds {
+  apiUsername: string;
+  apiPassword: string;
+  channelId: string;
+  accountReference?: string;
+}
+
+const PAYHERO_BASE = "https://backend.payhero.co.ke/api/v2";
+
+export async function payheroStkPush(body: {
+  creds: PayheroCreds;
+  phoneNumber: string;
+  amount: number;
+  customerName?: string;
+  transactionDesc?: string;
+  callbackUrl?: string;
+}): Promise<IntegrationResult> {
+  const { creds } = body;
+  if (!creds?.apiUsername || !creds?.apiPassword || !creds?.channelId) {
+    return err(
+      "PayHero credentials are incomplete (apiUsername, apiPassword, channelId required).",
+    );
+  }
+  const phone = String(body.phoneNumber || "").replace(/\D/g, "");
+  if (!/^254[17]\d{8}$/.test(phone)) {
+    return err("Invalid phone number. Use 2547XXXXXXXX or 2541XXXXXXXX.");
+  }
+  const amount = Math.round(Number(body.amount));
+  if (!Number.isFinite(amount) || amount < 1)
+    return err("Amount must be at least KES 1.");
+  const channelId = Number(creds.channelId);
+  if (!Number.isFinite(channelId) || channelId <= 0)
+    return err("PayHero channelId must be a positive number.");
+
+  const externalRef =
+    creds.accountReference ||
+    `FUELPRO-${Date.now().toString(36).toUpperCase()}`;
+  try {
+    const auth = toBase64(`${creds.apiUsername}:${creds.apiPassword}`);
+    const res = await fetch(`${PAYHERO_BASE}/payment/initiate`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, Authorization: `Basic ${auth}` },
+      body: JSON.stringify({
+        amount,
+        phone_number: phone,
+        channel_id: channelId,
+        provider: "m-pesa",
+        external_reference: externalRef,
+        customer_name: body.customerName || undefined,
+        callback_url:
+          body.callbackUrl ||
+          "https://fuel-app-mobile.vercel.app/api/integrations?action=payhero-callback",
+      }),
+    });
+    const data = await readJson(res);
+    const ok =
+      data.success === true ||
+      (data.status as string)?.toUpperCase() === "QUEUED";
+    return {
+      success: ok,
+      payhero: data,
+      reference: data.reference,
+      checkout_request_id: data.CheckoutRequestID || data.checkout_request_id,
+      status: data.status,
+      ...(ok
+        ? {}
+        : {
+            error:
+              (data.errorMessage as string) ||
+              (data.message as string) ||
+              (data.error as string) ||
+              `PayHero rejected the request (HTTP ${res.status})`,
+          }),
+    };
+  } catch (e) {
+    return err(`PayHero STK push failed: ${(e as Error).message}`);
+  }
+}
+
+export async function payheroStatus(body: {
+  creds: PayheroCreds;
+  reference: string;
+}): Promise<IntegrationResult> {
+  const { creds } = body;
+  if (!creds?.apiUsername || !creds?.apiPassword || !creds?.channelId) {
+    return err("PayHero credentials are incomplete.");
+  }
+  if (!body.reference) return err("reference is required.");
+  try {
+    const auth = toBase64(`${creds.apiUsername}:${creds.apiPassword}`);
+    const res = await fetch(
+      `${PAYHERO_BASE}/transaction-status?reference=${encodeURIComponent(body.reference)}`,
+      {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          Accept: "application/json",
+        },
+      },
+    );
+    const data = await readJson(res);
+    const status = String(
+      data.status || data.transaction_status || "",
+    ).toUpperCase();
+    const ok =
+      status === "SUCCESS" || status === "COMPLETED" || data.success === true;
+    return {
+      success: ok,
+      payhero: data,
+      status: status || "PENDING",
+      result_code: data.ResultCode,
+      result_desc: data.ResultDesc || data.message,
+      ...(ok || res.ok
+        ? {}
+        : {
+            error:
+              (data.message as string) ||
+              `PayHero status query failed (HTTP ${res.status})`,
+          }),
+    };
+  } catch (e) {
+    return err(`PayHero status query failed: ${(e as Error).message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KRA eTIMS (OSCU) — REAL tax-authority integration
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -909,6 +1038,10 @@ export async function dispatchIntegration(
       return mpesaStkQuery(body as never);
     case "kopokopo-pull":
       return kopokopoPull(body as never);
+    case "payhero-stk-push":
+      return payheroStkPush(body as never);
+    case "payhero-status":
+      return payheroStatus(body as never);
     case "sms-send":
       return sendSms(body as never);
     case "email-send":
