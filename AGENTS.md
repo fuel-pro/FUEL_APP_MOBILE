@@ -1,5 +1,23 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-01 — Attendant Performance sub-tab (DEPLOYED LIVE, commit 86a1ab3)
+
+Picked up "continue" after Round 2 sweep (Pesapal/Shell Fleet/eVMI competitor mining). Final
+remaining competitor-gap feature: attendant KPI tracker inside Team Manager.
+
+- `src/react-app/components/AttendantPerformance.tsx` (NEW, ~350 lines): KPI tracker for pump
+  attendants/cashiers. Employees loaded from `shift_employees` cloud KV. Tracks Sales ($)/
+  Volume (L)/Transactions/Variance (%), % achievement, revenue leaderboard, CSV export.
+  Persists via `useCloudKV` (`attendant_kpi` envelope).
+- `src/react-app/components/TeamManager.tsx`: new `performance` sub-tab (Activity icon).
+- Duplicate `TankTelemetry.tsx` deleted — `TankMonitor.tsx` (ATG/eVMI wet-stock) already
+  exists in Stock Management.
+
+Deploy: GitHub main `86a1ab3` (+352 insertions, 2 files). Cloudflare preview
+`https://dfb8eca7.fuel-app-mobile.pages.dev`. Remaining TS errors in CreditManagement /
+FuelSalesReport / LossControl are pre-existing. Live verified: Team Manager 5 sub-tabs OK,
+employee add/select OK, record guard OK, cleanup done. Lost-commit audit: no new lost work.
+
 ## Session 2026-08-31 — Competitor forecourt reverse-engineering (DEPLOYED LIVE)
 
 **Task**: reverse-engineer ~10 competitor forecourt/fuel-management products
