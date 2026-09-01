@@ -1,4 +1,37 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Forecourt competitor reverse-engineering round 2 (TankTelemetry)
+
+Reverse-engineered telematics/ATG competitor sites (codelab, telematicafrica,
+karooooo, uffizio, fama, sicuro, uffizio-telematics, blackboxgps,
+gilbarco, dover, meps, oropak, invenco, tsg-solutions.com, doms.dk,
+scheidt-bachmann.de, hectronic.com, veeder.com, pergamoungroup, peruzautomation,
+telematicsholding, softwarekenya, totalsolutions). After comparison:
+
+Confirmed all baseline forecourt pillars were integrated; deeper audit found a
+genuine missing feature — **Telemetry Ingest** (ATG/GPS JSON payload → Tank
+Monitor cloud list). Implemented as a new sub-tab inside Stock Management:
+
+- `src/react-app/components/TankTelemetry.tsx` (NEW, ~300 lines): client-side
+  ingest of ATG/GPS telemetry JSON payloads. Paste JSON (array or single
+  object); accepting `product/fuelType`, `level_liters/level/measuredLevel`,
+  `expected/expectedLevel`, `temperature/temp_c/temp`, `water_mm/water`,
+  `source`. Persists into `CLOUD_KEYS.tankReadings` via `useCloudKV` so Tank
+  Monitor sees the rows (one unified feature — no duplicate widget). Rows tagged
+  `source="telemetry-ingest"` so they're distinguishable. Export CSV; delete
+  per row; collapsible help section. Sample payload helper button included.
+- `InventoryManagement.tsx`: added `telemetry` sub-tab between `tankmonitor`
+  and `calibration` (label "Telemetry Ingest").
+
+Verified: tsc -b 0 errors, vitest 49/49 pass, production build success, eslint
+clean (0 errors). Pushed to GitHub main as commit b2c546f.
+
+**Deploy status**: pushed to GitHub main. Cloudflare Pages + Vercel
+deployment requires the CLOUDFLARE_API_TOKEN / VERCEL_TOKEN secrets — Vercel
+auto-deploys via Git integration, and pages.dev will catch up once the
+token is added. The CI workflow includes a Cloudflare Pages deploy job
+(graceful skip when missing).
+
+
 ## Session 2026-09-01 — Full forecourt feature-set inventory (COMPLETE, no gaps)
 
 Comprehensive audit of the forecourt feature ecosystem confirmed every
