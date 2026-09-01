@@ -1,4 +1,20 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Post-sweep POS fix + lost-commit re-audit (commit 31e2dab)
+
+- Browser sweep verified ALL 31+ top-level tabs render; POS test data entry
+  (25L Super Petrol quick-sale, $35.50 Cash, INV20260901000010DITT) saved +
+  cloud-synced.
+- Fix 1: POS receipt band 'TAX INVOICE' hardcoded → conditional
+  `{kenyaStation ? 'TAX INVOICE' : 'RECEIPT'}` (non-Kenya → 'RECEIPT').
+- Fix 2: KRA PIN fallback for Tax ID no longer leaks the Kenya placeholder
+  'P000000000X' on non-Kenya stations (renders empty).
+- Lost-commit re-audit: no new lost work. worldwide-features-sync-test
+  (0/544 contained); founder-username-login (7 ahead), identifying-
+  security-vulnerabilities-8d289 (3 ahead), qwen-code-6a328546 (2 ahead,
+  deletion risk) remain as documented. Cloudflare/Vercel tokens unavailable
+  in this sandbox; GitHub integration carries Vercel.
+
+
 
 ## Session 2026-09-01 — Attendant Performance sub-tab (DEPLOYED LIVE, commit 86a1ab3)
 
