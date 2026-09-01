@@ -1,4 +1,28 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 (cont.) — Deployment parity diagnosis + CF auto-deploy CI
+
+**User report**: "i can't see the change/update" after the Movies WebAudio
+boost (57827bf). Root cause: the fix WAS live on Vercel (News chunk served
+`Boost audio` + `createMediaElementSource`) but Cloudflare Pages still served
+the pre-fix bundle — the repo had NO Cloudflare deploy step and this sandbox
+has no CLOUDFLARE_API_TOKEN.
+
+**Fixes**:
+- `.github/workflows/deploy.yml`: NEW `deploy-cloudflare` job — builds
+  (`npm run build`) and deploys `dist/` via
+  `npx wrangler pages deploy --project-name=fuel-app-mobile --branch=main`
+  on every push to main, using `secrets.CLOUDFLARE_API_TOKEN`. Gracefully
+  skips with an Actions notice when the secret is absent (workflow stays
+  green). Once the user adds the secret under Settings → Secrets → Actions,
+  every push deploys to BOTH Vercel and Cloudflare (permanent parity fix).
+- `MoviesEmbed.tsx`: boost toggle now carries a visible "BOOST"/"BOOST ON"
+  label next to the gear icon (was icon-only; easy to miss).
+- Verified Vercel production serves index-BeFL-Uy5.js with the labeled
+  toggle; Cloudflare pages.dev still serves the older bundle until the
+  secret is added.
+
+Deploy state: main cdef70a (label) on top of 59ef221 (CI skip-guard) +
+73b68c4 (CI CF job). tsc 49/49 tests pass.
 ## Session 2026-09-01 — Movies player WebAudio boost + A/V sync guard (DEPLOYED LIVE, commit 57827bf)
 
 - Movies player (`MoviesEmbed.tsx`): <video> element now routes through a
