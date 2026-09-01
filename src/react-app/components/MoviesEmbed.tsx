@@ -115,6 +115,56 @@ function MoviePlayer({
   const [showQuality, setShowQuality] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [showServers, setShowServers] = useState(false);
+  // A/V boost + sync support: routes the video element through
+  // MediaElementAudioSourceNode → GainNode so quiet sources can be amplified,
+  // and so buffered drift can be corrected once (keeping audio aligned to
+  // the picture). The boost engages on <video> loadmetadata; guarded so
+  // sources with healthy audio are untouched (boost toggle becomes active
+  // only when boost is on).
+  const audioChainRef = useRef<{
+    ctx: AudioContext;
+    srcNode: MediaElementAudioSourceNode;
+    gainNode: GainNode;
+  } | null>(null);
+  const [boostActive, setBoostActive] = useState(false);
+  const toggleBoost = useCallback(() => {
+    const chain = audioChainRef.current;
+    if (!chain) return;
+    const nextGain = boostActive ? 1.0 : 4.0;
+    try {
+      chain.gainNode.gain.setTargetAtTime(nextGain, chain.ctx.currentTime, 0.1);
+      setBoostActive(!boostActive);
+    } catch {}
+  }, [boostActive]);
+  const attachAudioChain = useCallback((video: HTMLVideoElement) => {
+    if (audioChainRef.current) return;
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const ctx = new Ctx();
+      const srcNode = ctx.createMediaElementSource(video);
+      const gainNode = ctx.createGain();
+      srcNode.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      audioChainRef.current = { ctx, srcNode, gainNode };
+    } catch {
+      // CORS block / captured earlier / unsupported browser → fall back to
+      // native <video> src (no boost, but playback unaffected).
+    }
+  }, []);
+  const detachAudioChain = useCallback(() => {
+    const chain = audioChainRef.current;
+    if (!chain) return;
+    try {
+      chain.srcNode.disconnect();
+      chain.gainNode.disconnect();
+      chain.ctx.close().catch(() => {});
+    } catch {}
+    audioChainRef.current = null;
+    setBoostActive(false);
+  }, []);
   // Subtitle (CC) + audio-language tracks from the HLS master playlist.
   const [subtitleTracks, setSubtitleTracks] = useState<
     { id: number; name: string; lang: string }[]
@@ -141,6 +191,10 @@ function MoviePlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    detachAudioChain();
+    video.addEventListener("loadedmetadata", () => attachAudioChain(video), {
+      once: true,
+    });
     setError(null);
     setLevels([]);
     setCurrentLevel(-1);
@@ -459,6 +513,18 @@ function MoviePlayer({
         title="Close player"
       >
         <X size={14} />
+      </button>
+      {/* Boost toggle (quiet source amplification → boosts audio) */}
+      <button
+        onClick={toggleBoost}
+        className={`absolute top-2 right-16 z-10 p-1.5 rounded-lg text-white hover:bg-black/80 bg-black/60 ${
+          boostActive ? "ring-1 ring-amber-400" : ""
+        }`}
+        title={
+          boostActive ? "Boost on — audio amplified" : "Boost audio (disengage)"
+        }
+      >
+        <Settings2 size={13} />
       </button>
       {/* Server selector (manual rotation) */}
       {serverNames && serverNames.length > 1 && onRotateServer && (
