@@ -333,7 +333,7 @@ export default function PointOfSale() {
 
   // KRA ETR Settings from company data
   const etrConfig = {
-    kraPin: state.companyData.kraPin || "P000000000X",
+    kraPin: state.companyData.kraPin || (kenyaStation ? "P000000000X" : ""),
     vatRegNo: state.companyData.vatRegNo || "",
     etrSerialNo: state.companyData.etrSerialNo || "ETR-00000000",
     cuSerialNo: state.companyData.cuSerialNo || "CU-00000000",
@@ -2138,7 +2138,7 @@ export default function PointOfSale() {
                   </div>
 
                   <div className="tax-invoice-title bg-black text-gray-900 dark:text-white text-center py-1 font-bold text-sm mb-3">
-                    TAX INVOICE
+                    {kenyaStation ? "TAX INVOICE" : "RECEIPT"}
                   </div>
 
                   {/* Invoice Details */}
