@@ -32,6 +32,31 @@ token is added. The CI workflow includes a Cloudflare Pages deploy job
 (graceful skip when missing).
 
 
+## Session 2026-09-01 — Competitor reverse-engineering round 3 (FleetTelemetry alarms)
+
+Re-mined all 30 listed competitor domains. Beyond telemetry-ingest (done),
+the still-missing gap was driver/vehicle alarm intelligence: fuel theft drain,
+harsh braking/acceleration/cornering, geofence enter/exit, overspeed, route
+deviation, battery disconnect, engine idle.
+
+- `FleetTelemetry.tsx` (NEW, ~430 lines): cloud-KV `fleet_telemetry` alarm
+  registry with severity (info/warning/critical), vehicleReg, driver,
+  detail, resolved flag. Stats (total/unresolved/critical/theft), record
+  form, per-row Resolve/Reopen + Delete, CSV export. Wired under
+  Credit → Fleet & Cards alongside FleetCards.
+
+Verified: tsc -b 0 errors, vitest 49/49, eslint 0 errors, production
+build success. Commit ebdfdab pushed to GitHub main. Cloudflare/Vercel
+deploy requires the API tokens; Git integration auto-deploys Vercel,
+Cloudflare pages.dev via CI when token is added.
+
+Forecourt inventory otherwise complete — 15 components total (TankMonitor
++ TankTelemetry + TankCalibration + FleetCards + FleetTelemetry +
+NozzleAnalysis + CustomerSegments + Promotions + DayBook + LossControl +
+DeliveryReconciliation + Commissions + PriceScheduler +
+AttendantPerformance + ForecourtHardware).
+
+
 ## Session 2026-09-01 — Full forecourt feature-set inventory (COMPLETE, no gaps)
 
 Comprehensive audit of the forecourt feature ecosystem confirmed every
