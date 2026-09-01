@@ -65,6 +65,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
+import AttendantPerformance from "@/react-app/components/AttendantPerformance";
 import {
   getAccessCodes,
   createAccessCode,
@@ -415,7 +416,7 @@ export default function TeamManager() {
   // "Roles & Permissions" vs "Shifts" (the formerly-standalone ShiftManagement
   // module, now hosted here) vs "Activity" (new: team activity + health).
   const [activeView, setActiveView] = useState<
-    "team" | "shifts" | "roles" | "activity"
+    "team" | "shifts" | "roles" | "activity" | "performance"
   >("team");
 
   // ── Search + filter for the team members roster ──
@@ -1397,11 +1398,14 @@ export default function TeamManager() {
           { id: "team", label: "Team Access", icon: Users },
           { id: "roles", label: "Roles & Permissions", icon: KeyRound },
           { id: "shifts", label: "Shifts", icon: Calendar },
+          { id: "performance", label: "Performance", icon: Activity },
           { id: "activity", label: "Activity & Health", icon: Activity },
         ]}
         active={activeView}
         onChange={(id) =>
-          setActiveView(id as "team" | "shifts" | "roles" | "activity")
+          setActiveView(
+            id as "team" | "shifts" | "roles" | "activity" | "performance",
+          )
         }
       />
 
@@ -1437,6 +1441,8 @@ export default function TeamManager() {
           newRoleBase={newRoleBase}
           setNewRoleBase={setNewRoleBase}
         />
+      ) : activeView === "performance" ? (
+        <AttendantPerformance />
       ) : activeView === "activity" ? (
         <ActivityHealthView
           teamHealth={teamHealth}
