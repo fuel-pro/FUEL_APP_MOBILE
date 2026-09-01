@@ -74,6 +74,12 @@ export default function PriceScheduler() {
   const [price, setPrice] = useState("");
   const [date, setDate] = useState("");
 
+  // Default the fuel select to a real option once fuelTypes load.
+  useEffect(() => {
+    if (fuelOptions.length > 0 && !fuelOptions.includes(fuel))
+      setFuel(fuelOptions[0]);
+  }, [fuelOptions, fuel]);
+
   const fuelOptions = useMemo(() => {
     const fts = (fuelTypeApi.fuelTypes ?? []).filter(
       (f): f is { fuelName?: string } => typeof f !== "boolean",

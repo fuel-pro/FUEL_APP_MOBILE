@@ -4,7 +4,7 @@
  * concept). Per-fuel tank geometry → dip-to-volume + ullage conversion.
  * Saved to cloud key tank_calibration via useCloudKV (cross-device).
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Gauge, Plus, Trash2, Ruler, Download, Fuel } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
@@ -44,6 +44,13 @@ export default function TankCalibration() {
     const uniq = [...new Set(opts)];
     return uniq.length > 0 ? uniq : ["Super Petrol", "Diesel"];
   }, [fuelTypeApi]);
+
+  // Default the fuel select to the first option once fuelTypes load (so
+  // Add is never silently rejected by an empty value).
+  useEffect(() => {
+    if (fuelOptions.length > 0 && !fuelOptions.includes(fuel))
+      setFuel(fuelOptions[0]);
+  }, [fuelOptions, fuel]);
 
   const addCalibration = () => {
     const cap = Number(capacity);
