@@ -17,6 +17,7 @@ import {
   Truck,
 } from "lucide-react";
 import FleetCards from "@/react-app/components/FleetCards";
+import FleetTelemetry from "@/react-app/components/FleetTelemetry";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DebtReminder from "@/react-app/components/DebtReminder";
@@ -475,7 +476,10 @@ export default function CreditManagement() {
       />
 
       {activeView === "fleet" ? (
-        <FleetCards accounts={accounts} />
+        <div className="space-y-4">
+          <FleetCards accounts={accounts} />
+          <FleetTelemetry />
+        </div>
       ) : activeView === "reminders" ? (
         <DebtReminder />
       ) : (
