@@ -729,7 +729,11 @@ export async function payheroStkPush(body: {
     `FUELPRO-${Date.now().toString(36).toUpperCase()}`;
   try {
     const auth = toBase64(`${creds.apiUsername}:${creds.apiPassword}`);
-    const res = await fetch(`${PAYHERO_BASE}/payment/initiate`, {
+    // Official PayHero API v2 (verified against the PayHero PHP package +
+    // docs.payhero.co.ke): POST /api/v2/payments with
+    // {amount, phone_number, channel_id, provider:"m-pesa", external_reference,
+    //  callback_url}. Basic auth: base64(apiUsername:apiPassword).
+    const res = await fetch(`${PAYHERO_BASE}/payments`, {
       method: "POST",
       headers: { ...JSON_HEADERS, Authorization: `Basic ${auth}` },
       body: JSON.stringify({
