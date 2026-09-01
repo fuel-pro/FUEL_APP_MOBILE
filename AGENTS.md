@@ -1,18 +1,17 @@
 # FuelPro Mobile — Repository Knowledge
-## Session 2026-09-01 — Post-sweep POS fix + lost-commit re-audit (commit 31e2dab)
+## Session 2026-09-01 — post-sweep fixes + CI unblock (commits 31e2dab + 3347725)
 
-- Browser sweep verified ALL 31+ top-level tabs render; POS test data entry
-  (25L Super Petrol quick-sale, $35.50 Cash, INV20260901000010DITT) saved +
-  cloud-synced.
-- Fix 1: POS receipt band 'TAX INVOICE' hardcoded → conditional
-  `{kenyaStation ? 'TAX INVOICE' : 'RECEIPT'}` (non-Kenya → 'RECEIPT').
-- Fix 2: KRA PIN fallback for Tax ID no longer leaks the Kenya placeholder
-  'P000000000X' on non-Kenya stations (renders empty).
-- Lost-commit re-audit: no new lost work. worldwide-features-sync-test
-  (0/544 contained); founder-username-login (7 ahead), identifying-
-  security-vulnerabilities-8d289 (3 ahead), qwen-code-6a328546 (2 ahead,
-  deletion risk) remain as documented. Cloudflare/Vercel tokens unavailable
-  in this sandbox; GitHub integration carries Vercel.
+- POS receipt band now country-aware; Kenya placeholder Tax ID removed on
+  non-Kenya stations (pushed 31e2dab).
+- CI re-established: fixed all 17 pre-existing `tsc -b` errors (LossControl,
+  Promotions, PriceScheduler, TankCalibration, FleetCards, FuelSalesReport,
+  automation-engine). CI now passes; Deploy workflow succeeded (dpl via
+  Vercel GitHub integration at 33494412132).
+- Vercel production (fuel-app-mobile.vercel.app) now serves index-BQBKusMf
+  with the POS fix markers (RECEIPT + kenyaStation conditional confirmed).
+- Cloudflare main alias still serves older index-D6199Qfz (older main) —
+  sandbox has no CLOUDFLARE_API_TOKEN; local wrangler deploy required.
+- Lost-commit re-audit done post-task: no new lost work.
 
 
 
