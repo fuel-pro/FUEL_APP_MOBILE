@@ -1,4 +1,34 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Full forecourt feature-set inventory (COMPLETE, no gaps)
+
+Comprehensive audit of the forecourt feature ecosystem confirmed every
+competitor-inspired feature is integrated and live — no duplicates created,
+no gaps found:
+
+Unified helper lib `forecourt-features.ts` (436 lines).
+
+Components wired into host tabs (sub-tabs/inner views, live on pages.dev):
+- TankMonitor → Stock Management → Tank Monitor (ATG + water/temp alerts,
+  variance, re-order CTA to Suppliers)
+- TankCalibration → Stock Management → Calibration
+- NozzleAnalysis → Fuel Sales Report (dispenser-performance/nozzle totals)
+- FleetCards → Credit → Fleet & Cards (prepaid + daily limits)
+- CustomerSegments → Customers → Segments & Events
+- Promotions → Customers → Promotions
+- DayBook → Reports Center → Day Book
+- LossControl → Reports Center → Loss Control
+- DeliveryReconciliation → Fuel Offloading
+- Commissions → Payroll System
+- PriceScheduler → Fuel Type Manager → Price Scheduler
+- AttendantPerformance (sales/volume/tx/variance KPIs vs targets) →
+  TeamManager → Performance
+- ForecourtHardware registry → Integration Hub → Hardware
+- TankTelemetry → consolidated into TankMonitor (duplicate removed)
+
+Browser-verified on Cloudflare pages.dev (founder QA), tsc clean, 49/49
+vitest pass. The system is fully reverse-engineered; adding a new component
+here would have created a duplicate — not a feature.
+
 ## Session 2026-09-01 (cont.) — Deployment parity diagnosis + CF auto-deploy CI
 
 **User report**: "i can't see the change/update" after the Movies WebAudio
