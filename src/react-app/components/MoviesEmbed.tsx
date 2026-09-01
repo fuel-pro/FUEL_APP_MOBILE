@@ -517,14 +517,19 @@ function MoviePlayer({
       {/* Boost toggle (quiet source amplification → boosts audio) */}
       <button
         onClick={toggleBoost}
-        className={`absolute top-2 right-16 z-10 p-1.5 rounded-lg text-white hover:bg-black/80 bg-black/60 ${
+        className={`absolute top-2 right-16 z-10 px-1.5 py-1 rounded-lg text-white hover:bg-black/80 bg-black/60 flex items-center gap-1 ${
           boostActive ? "ring-1 ring-amber-400" : ""
         }`}
         title={
-          boostActive ? "Boost on — audio amplified" : "Boost audio (disengage)"
+          boostActive
+            ? "Audio boost ON — tap to restore normal volume"
+            : "Audio too quiet? Tap to boost (up to 4x)"
         }
       >
         <Settings2 size={13} />
+        <span className="text-[10px] font-semibold">
+          {boostActive ? "BOOST ON" : "BOOST"}
+        </span>
       </button>
       {/* Server selector (manual rotation) */}
       {serverNames && serverNames.length > 1 && onRotateServer && (
