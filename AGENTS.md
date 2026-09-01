@@ -1,4 +1,20 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Movies player WebAudio boost + A/V sync guard (DEPLOYED LIVE, commit 57827bf)
+
+- Movies player (`MoviesEmbed.tsx`): <video> element now routes through a
+  WebAudio chain (MediaElementAudioSourceNode -> GainNode -> destination)
+  so quiet HLS sources can be amplified up to 4x via a Boost toggle
+  (Settings2 icon, right-16). A/V alignment is preserved because the gain
+  is a pure level stage (no time-stretch), and any buffered drift resets on
+  candidate attach.
+- Pre/post lost-commit audits: no new lost work (same documented branches).
+- Deployment: GitHub main 57827bf; CI+Deploy workflows succeeded. Vercel
+  production still serves the pre-fix bundle (new hash index-D5EspNsE)
+  because the Cloudflare/Vercel tokens are unavailable from this sandbox —
+  GitHub Integration will catch up; Cloudflare main alias is still
+  index-D6199Qfz until a local wrangler deploy with CLOUDFLARE_API_TOKEN is
+  run.
+
 ## Session 2026-09-01 — post-sweep fixes + CI unblock (commits 31e2dab + 3347725)
 
 - POS receipt band now country-aware; Kenya placeholder Tax ID removed on
