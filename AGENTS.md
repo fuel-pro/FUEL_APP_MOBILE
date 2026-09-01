@@ -1,4 +1,44 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Forecourt batch of 5 additional integrated vectors (commit 8d17713)
+
+Responding to the "deliver more integrated features" request — after
+auditing and finding them genuinely missing (no duplicates):
+
+1. **PumpControlBoard** (telematicafrica service-station-management /
+   Pesapal): authorize / idle / lock per nozzle over the station's pumps,
+   lock-all toggle. Cloud KV `pump_control`. Wired into **Integration
+   Hub → Hardware**.
+2. **TheftAnomalyDetector** (telematics vector): scans `tank_readings`
+   for sudden expected-level drops above a tunable % threshold.
+   `src/react-app/lib/theft-anomaly.ts` computes the anomaly list;
+   cloud KV `theft_anomaly_threshold_pct`. Wired into **Stock Management
+   → Tank Monitor** (below TankMonitor).
+3. **GeneratorFuelTracker** (pergamongroup power): register backup
+   generators (KVA, fuel type, tank capacity, runtime hours), refill,
+   +1h runtime, fuel burn ~0.8 L/h. Cloud KV `generator_fuel_tracker`.
+   Wired into **Maintenance**.
+4. **FarmFuelEquipment** (fama.co.ke): tractors/harvesters/sprayers/pumps
+   fuel usage by season (planting/harvest/year-round).
+   Cloud KV `farm_equipment`. Wired into **Credit → Fleet & Cards** (below
+   FleetCards + FleetTelemetry).
+5. **HardwareFirmwareTracker** (gilbarco/dover/meps/doms/etc.): firmware
+   version + calibration certificate + expiry per forecourt device;
+   expired-cert banner. Cloud KV `forecourt_firmware`. Wired into
+   **Integration Hub → Hardware** (below ForecourtHardware).
+
+All five are self-contained sub-components INSIDE existing host tabs (no
+new top-level tabs, no duplicates). tsc -b 0 errors, vitest 49/49,
+eslint 0 errors, clean build. Cloud KV keys: `pump_control`,
+`theft_anomaly_threshold_pct`, `generator_fuel_tracker`,
+`farm_equipment`, `forecourt_firmware`. Sync strategy: one-shot
+cross-device via `useCloudKV` (no realtime).
+
+Forecourt inventory now has 20 vectors (15 prior + 5 here).
+
+**Deploy status**: pushed to GitHub main (commit 8d17713). Vercel deploys
+via Git integration; pages.dev requires the CLOUDFLARE_API_TOKEN secret.
+
+
 ## Session 2026-09-01 — Forecourt competitor reverse-engineering round 2 (TankTelemetry)
 
 Reverse-engineered telematics/ATG competitor sites (codelab, telematicafrica,
