@@ -55,6 +55,7 @@ import {
 } from "@/react-app/lib/automation-engine";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import TankMonitor from "@/react-app/components/TankMonitor";
+import TheftAnomalyDetector from "@/react-app/components/TheftAnomalyDetector";
 import TankTelemetry from "@/react-app/components/TankTelemetry";
 import TankCalibration from "@/react-app/components/TankCalibration";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -2149,7 +2150,12 @@ export default function InventoryManagement() {
             : "max-w-2xl"
         }
       >
-        {activeTab === "tankmonitor" && <TankMonitor />}
+        {activeTab === "tankmonitor" && (
+          <div className="space-y-4">
+            <TankMonitor />
+            <TheftAnomalyDetector />
+          </div>
+        )}
         {activeTab === "telemetry" && <TankTelemetry />}
         {activeTab === "calibration" && <TankCalibration />}
         {activeTab === "products" && (

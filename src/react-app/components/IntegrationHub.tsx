@@ -50,6 +50,8 @@ import {
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import IntegrationsSettings from "@/react-app/components/IntegrationsSettings";
 import ForecourtHardware from "@/react-app/components/ForecourtHardware";
+import PumpControlBoard from "@/react-app/components/PumpControlBoard";
+import HardwareFirmwareTracker from "@/react-app/components/HardwareFirmwareTracker";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -2633,7 +2635,13 @@ export default function IntegrationHub() {
       )}
 
       {/* ===== WEBHOOKS TAB ===== */}
-      {activeTab === "hardware" && <ForecourtHardware />}
+      {activeTab === "hardware" && (
+        <div className="space-y-4">
+          <PumpControlBoard />
+          <ForecourtHardware />
+          <HardwareFirmwareTracker />
+        </div>
+      )}
 
       {activeTab === "webhooks" && (
         <div className="space-y-4">
