@@ -84,7 +84,9 @@ export default function PriceScheduler() {
     const fts = (fuelTypeApi.fuelTypes ?? []).filter(
       (f): f is { fuelName?: string } => typeof f !== "boolean",
     );
-    const opts = fts.map((f) => fuelTypeApi.labelOf(f.fuelName ?? ""));
+    const opts = fts
+      .map((f) => fuelTypeApi.labelOf(f.fuelName ?? ""))
+      .filter(Boolean);
     const uniq = [...new Set(opts)];
     return uniq.length > 0 ? uniq : ["Super Petrol", "Diesel"];
   }, [fuelTypeApi]);
