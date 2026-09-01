@@ -37,7 +37,10 @@ export default function TankCalibration() {
   const [dip, setDip] = useState("");
 
   const fuelOptions = useMemo(() => {
-    const opts = fuelTypeApi.listFuelTypes().map((f) => f.raw ?? f.canonical);
+    const fts = (fuelTypeApi.fuelTypes ?? []).filter(
+      (f): f is { fuelName?: string } => typeof f !== "boolean",
+    );
+    const opts = fts.map((f) => fuelTypeApi.labelOf(f.fuelName ?? ""));
     const uniq = [...new Set(opts)];
     return uniq.length > 0 ? uniq : ["Super Petrol", "Diesel"];
   }, [fuelTypeApi]);
