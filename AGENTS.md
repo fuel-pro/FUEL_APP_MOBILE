@@ -1,4 +1,56 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — PayHero Kenya payment gateway integration (commits fe9b8b3 + dadc59a)
+
+Reverse-engineered payherokenya.com (M-PESA aggregator, works like Kopo
+Kopo/Daraja) into the existing REAL integration layer — no new serverless
+functions (dispatcher actions inside the existing `api/integrations.ts`).
+
+**API contract (verified against the official PayHero PHP package
+`PAY-HERO-KENYA/payhero-php-package` + docs.payhero.co.ke + live 401 probe):**
+- Base: `https://backend.payhero.co.ke/api/v2`
+- Auth: HTTP Basic = base64(apiUsername:apiPassword)
+- STK Push: `POST /payments` body `{amount, phone_number, channel_id,
+  provider:"m-pesa", external_reference, callback_url}`
+- Status: `GET /transaction-status?reference=` → `{success, status:
+  QUEUED|SUCCESS|FAILED, reference, CheckoutRequestID, provider_reference}`
+
+**Files:**
+- `api/_lib/integrations-core.ts`: `payheroStkPush` + `payheroStatus`
+  handlers + `PayheroCreds` + dispatcher cases `payhero-stk-push` /
+  `payhero-status`. Phone validation `^254[17]\d{8}$`, amount ≥ 1,
+  numeric channelId.
+- `src/react-app/lib/integrations-client.ts`: `PayheroCredsInput`,
+  `payheroConfigured()`, `payheroStkPush()`, `payheroQueryStatus()`.
+- `src/react-app/lib/mpesa-integration-service.ts`:
+  `PayheroIntegrationConfig` + `DEFAULT_PAYHERO_CONFIG` + cloud key
+  `payhero_config` (station-scoped) + `getPayheroConfig`/`savePayheroConfig`.
+- `IntegrationsSettings.tsx` (Integration Hub → Payment Setup): PayHero
+  Kenya catalog card (Connected badge) + full `PayheroSetup` form (API
+  Username/Password with eye toggle, Channel ID, Account Reference, enable
+  toggle). Kenya-gated like M-PESA/Kopo Kopo.
+- `LiveTransaction.tsx`: PayHero card in "Live Payment Integrations" with
+  live Connected/Not-connected badge + "Import PayHero" payment-source
+  import (source_type `mpesa_payhero`) + STK Push modal + live-feed banner
+  now reflect all THREE gateways (mpesa || kopo || payhero).
+- `PointOfSale.tsx`: `initiateSTKPush` is now gateway-agnostic — Daraja
+  first, automatic PayHero fallback when Daraja unconfigured, honest error
+  when neither. PayHero polling via `transaction-status` (SUCCESS/COMPLETED
+  → processPayment; FAILED/REJECTED/CANCELLED → failed; 20 × 6s timeout).
+
+**Verification:** tsc -b 0 errors, vitest 49/49, eslint 0 errors (5
+pre-existing warnings), clean build. Dispatcher smoke test: both actions
+return the correct incomplete-credentials error (registered, not unknown).
+Live endpoint probe: `POST /api/v2/payments` with dummy creds →
+`{"status":401,...}` (endpoint exists + Basic auth enforced).
+
+**Deploy state:** pushed to GitHub main (fe9b8b3 + dadc59a). Vercel
+auto-deploys via Git integration. Cloudflare Pages relays
+`/api/integrations` to Vercel — no CF change needed.
+
+**Lost-commit audit 2026-09-01:** 68 unmerged branches re-audited — same
+documented state, no new lost work.
+
+
 ## Session 2026-09-01 — Forecourt batch of 5 additional integrated vectors (commit 8d17713)
 
 Responding to the "deliver more integrated features" request — after
