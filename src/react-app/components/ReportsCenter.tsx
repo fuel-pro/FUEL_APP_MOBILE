@@ -14,9 +14,11 @@ import {
   ShoppingCart,
   Package,
   BookOpen,
+  Landmark,
 } from "lucide-react";
 import DayBook from "@/react-app/components/DayBook";
 import LossControl from "@/react-app/components/LossControl";
+import BankLedger from "@/react-app/components/BankLedger";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -44,6 +46,7 @@ type ReportType =
   | "overall"
   | "daybook"
   | "losscontrol"
+  | "bankledger"
   | "profit-loss"
   | "expenses"
   | "vat-return"
@@ -1264,6 +1267,7 @@ export default function ReportsCenter() {
     const titles: Record<ReportType, string> = {
       daybook: "Day Book",
       losscontrol: "Loss Control (Shrinkage)",
+      bankledger: "Bank & Cash Ledger",
       overall: "Overall Financial Report",
       "profit-loss": "Profit & Loss Statement",
       expenses: "Expenses Report",
@@ -2440,6 +2444,7 @@ export default function ReportsCenter() {
             { id: "overall", label: "Overall Report", icon: BarChart3 },
             { id: "daybook", label: "Day Book", icon: BookOpen },
             { id: "losscontrol", label: "Loss Control", icon: TrendingDown },
+            { id: "bankledger", label: "Bank & Cash Ledger", icon: Landmark },
             { id: "profit-loss", label: "Profit & Loss", icon: TrendingUp },
             { id: "expenses", label: "Expenses Report", icon: TrendingDown },
             { id: "vat-return", label: "VAT Return", icon: Receipt },
@@ -2532,6 +2537,8 @@ export default function ReportsCenter() {
             <DayBook />
           ) : activeReport === "losscontrol" ? (
             <LossControl />
+          ) : activeReport === "bankledger" ? (
+            <BankLedger />
           ) : (
             <>
               {activeReport === "expenses" && renderExpensesReport()}

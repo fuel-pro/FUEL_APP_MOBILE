@@ -1,4 +1,55 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-02 — Competitor forecourt reverse-engineering round (Pesapal/Codelab/Crone/Livetrac/Shell/eVMI/Veira/Maratech/Advatech)
+
+Re-mined the 10 competitor sites the user listed (same set as the 2026-08-31
+round, fetched live again to check for feature drift). Existing 20-vector
+inventory was confirmed complete for most items; TWO genuine gaps found and
+implemented (no duplicates):
+
+1. **AutoReplenishment** (Shell eVMI reverse-engineered) — NEW
+   `src/react-app/components/AutoReplenishment.tsx` + pure lib
+   `src/react-app/lib/auto-replenishment.ts`. Continuously derives average
+   daily usage per fuel from `CLOUD_KEYS.tankReadings` expected-level
+   draw-downs, computes days-to-empty, and queues a suggested order
+   (fuel, stock, L/day, days left, suggested qty, critical/reorder status)
+   whenever cover drops below the configurable target days (cloud KV
+   `auto_replenishment_target_days`, default 7). Dismiss queue (cloud KV
+   `auto_replenishment_dismissed`); "Create PO" deep-links to Suppliers.
+   Wired into Stock Management → Tank Monitor (below TheftAnomalyDetector).
+   This is distinct from TankMonitor's manual "Create re-order" CTA — eVMI
+   computes the order quantity/timing automatically (the "no manual
+   orders" workflow Shell advertises).
+2. **BankLedger** (Codelab FMS financial accounts reverse-engineered) — NEW
+   `src/react-app/components/BankLedger.tsx`. Cash/bank account register
+   (name, type, opening balance), in/out entries with reference+note,
+   matched/unmatched status, book balance + unmatched count, one-click
+   "Import Day Book deposits" (dedupes by reference, imports
+   `CLOUD_KEYS.daybook` entries as matched cash-ins). Cloud KV
+   `bank_ledger_accounts` + `bank_ledger_entries`. Wired into Reports
+   Center as a new report type "Bank & Cash Ledger" (ReportType union +
+   selector button + title + render branch; Landmark icon).
+
+Confirmed already-present (no action): Pesapal wet/dry stock, loyalty,
+fleet, eTIMS; Codelab nozzle reports, day book, pump/tank automation,
+GPRS fuel monitoring (FleetTelemetry), SMS reminders (scheduled-reminder-
+service); Crone restock prompts + station alarms (TankMonitor classify),
+generator (GeneratorFuelTracker); Livetrac peripherals (ForecourtHardware
+catalog already lists price boards, pole displays, car-wash, OPT);
+Shell Fleet Hub cards (FleetCards), site locator (FuelPriceLocator),
+decarbonisation; Veira customer history/segments/loyalty/birthdays
+(CustomerLoyalty, CustomerSegments); Maratech wet stock/shift/forecourt/
+purchases/accounts (all exist); Advatech dispenser/ATG/convenience/shift/
+AI loss detection (TheftAnomalyDetector).
+
+**Verification:** tsc -b 0 errors, vitest 62/62 (7 new eVMI cases in
+`src/test/auto-replenishment.test.ts`), eslint 0 errors, prettier clean,
+clean build; chunk markers verified (AutoReplenishment in
+InventoryManagement chunk, BankLedger in reports chunk).
+
+**Deploy state:** pushed to GitHub main; Cloudflare Pages deployed via
+wrangler (token from /workspace/API KEYS.txt); Vercel auto-deploys via
+Git integration.
+
 ## Session 2026-09-02 — Vercel ↔ Cloudflare parity restored (user report)
 
 **Symptom**: features existed on one host but not the other. Root cause: the

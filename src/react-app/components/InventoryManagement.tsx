@@ -56,6 +56,7 @@ import {
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import TankMonitor from "@/react-app/components/TankMonitor";
 import TheftAnomalyDetector from "@/react-app/components/TheftAnomalyDetector";
+import AutoReplenishment from "@/react-app/components/AutoReplenishment";
 import TankTelemetry from "@/react-app/components/TankTelemetry";
 import TankCalibration from "@/react-app/components/TankCalibration";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -2154,6 +2155,7 @@ export default function InventoryManagement() {
           <div className="space-y-4">
             <TankMonitor />
             <TheftAnomalyDetector />
+            <AutoReplenishment />
           </div>
         )}
         {activeTab === "telemetry" && <TankTelemetry />}
