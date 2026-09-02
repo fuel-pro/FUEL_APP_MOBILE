@@ -10804,3 +10804,38 @@ batch after the first successful entry.
   hovering shows the exact failure reason for each employee.
 
 Verified: tsc 0 errors, 38/38 tests pass, build success.
+
+## Session 2026-09-02 — Site-wide QuickSearch + AI Chatbot (search anything, incl. movies)
+
+QuickSearch + AIChatbot can now search/access ANYTHING in the entire site — no
+restrictions. Deep-link payloads route through the existing navigateToTab/
+onTabPayload bus.
+
+- QuickSearch (Ctrl+K): new live "Movies & TV" section — 300ms-debounced
+  search of the full streaming catalog (posters, year, Series/Movie type);
+  result click → navigateToTab("news", { movieTitle }) → Movies tab opens
+  with the title pre-searched. Sequence ref guards stale async results.
+- News.tsx: onTabPayload("news", ...) listener accepts { movieTitle |
+  searchQuery | subTab } — switches sub-tab and seeds MoviesEmbed search;
+  seed stored as { q, ts } so identical repeat queries re-fire.
+- MoviesEmbed.tsx: new searchSeed/searchSeedKey props — external seeds run
+  the real catalog search automatically (runSearch).
+- AIChatbot.tsx: answers about Movies/Live TV/Live Radio (entertainment
+  branch); site-wide feature search matches the query against EVERY
+  registered tab (label/id/description) — nothing restricted; "open/go to/
+  show me <tab>" executes switchToTab; "watch/play <movie>" deep-links into
+  the Movies tab with the title search (navNote appended to the response).
+- Security: movie search goes through the existing same-origin /api/movies
+  proxy; navigation uses the existing tab registry + payload bus — no new
+  permissions, no raw data exposure.
+
+Verified: tsc 0 errors, vitest 67/67, eslint 0 errors (1 pre-existing
+warning), prettier clean, build success. Deployed to Cloudflare Pages
+(preview 214f582e + main alias) and Vercel production (prebuilt deploy,
+chunks index-CFYYv9if.js + News-mRo_SiX7.js). Markers confirmed live on
+BOTH hosts ("Movies & TV", "Entertainment & Live Broadcasts",
+"searchSeedKey", "movieTitle"). Commit 4044597.
+
+Deploy notes: CF token extraction — grep "API Token:" from API KEYS.txt
+(same line, CRLF). Vercel token is line 26 of API KEYS.txt (sed -n '26p').
+vercel build --prod takes ~5 min; run in background.
