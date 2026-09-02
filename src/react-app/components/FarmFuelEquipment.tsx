@@ -26,7 +26,13 @@ interface FarmEquipment {
   notes?: string;
 }
 
-const TYPE_ORDER = ["tractor", "harvester", "sprayer", "pump", "other"] as const;
+const TYPE_ORDER = [
+  "tractor",
+  "harvester",
+  "sprayer",
+  "pump",
+  "other",
+] as const;
 const KEY = "farm_equipment";
 
 export default function FarmFuelEquipment() {

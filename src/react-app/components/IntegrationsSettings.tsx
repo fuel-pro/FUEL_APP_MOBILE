@@ -873,7 +873,9 @@ function PayheroSetup({
       return;
     }
     if (!config.channelId.trim() || isNaN(Number(config.channelId))) {
-      setError("Channel ID must be a valid number (from your PayHero dashboard).");
+      setError(
+        "Channel ID must be a valid number (from your PayHero dashboard).",
+      );
       return;
     }
     setSaving(true);
@@ -904,7 +906,10 @@ function PayheroSetup({
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 rounded-xl flex items-center justify-center">
-          <Smartphone className="text-violet-600 dark:text-violet-400" size={24} />
+          <Smartphone
+            className="text-violet-600 dark:text-violet-400"
+            size={24}
+          />
         </div>
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -927,9 +932,9 @@ function PayheroSetup({
               PayHero is available in Kenya only
             </h3>
             <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
-              PayHero Kenya processes M-PESA mobile money payments and cannot
-              be configured for the detected station country. Switch your
-              station to Kenya to configure PayHero.
+              PayHero Kenya processes M-PESA mobile money payments and cannot be
+              configured for the detected station country. Switch your station
+              to Kenya to configure PayHero.
             </p>
           </div>
         </div>

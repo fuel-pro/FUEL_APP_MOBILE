@@ -10,7 +10,10 @@ import { AlertTriangle, Gauge } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
-import { CLOUD_KEYS, type TankReading } from "@/react-app/lib/forecourt-features";
+import {
+  CLOUD_KEYS,
+  type TankReading,
+} from "@/react-app/lib/forecourt-features";
 import { computeAnomalies } from "@/react-app/lib/theft-anomaly";
 import { toastSuccess } from "@/react-app/lib/toast";
 
@@ -57,8 +60,8 @@ export default function TheftAnomalyDetector() {
             </h4>
             <p className="text-xs text-gray-500">
               Flags sudden drops in tank readings (telematics fuel-theft
-              vector). Tunable threshold, scores against consecutive
-              per-fuel readings.
+              vector). Tunable threshold, scores against consecutive per-fuel
+              readings.
             </p>
           </div>
         </div>
@@ -79,8 +82,8 @@ export default function TheftAnomalyDetector() {
       </div>
       {readings.length < 2 ? (
         <p className="text-xs text-gray-500">
-          At least 2 readings per fuel needed to detect anomalies. Add
-          readings in Tank Monitor / Telemetry Ingest.
+          At least 2 readings per fuel needed to detect anomalies. Add readings
+          in Tank Monitor / Telemetry Ingest.
         </p>
       ) : anomalies.length === 0 ? (
         <p className="text-xs text-gray-500 rounded border p-2">

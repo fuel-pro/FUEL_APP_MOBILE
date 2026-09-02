@@ -21,14 +21,18 @@ describe("seo.ts", () => {
     expect(
       document.querySelector('link[rel="canonical"]')?.getAttribute("href"),
     ).toBe(`${SITE_URL}/sign-in`);
-    expect(document.querySelector('meta[name="robots"]')?.getAttribute("content")).toBe(
-      "index, follow",
-    );
     expect(
-      document.querySelector('meta[property="og:url"]')?.getAttribute("content"),
+      document.querySelector('meta[name="robots"]')?.getAttribute("content"),
+    ).toBe("index, follow");
+    expect(
+      document
+        .querySelector('meta[property="og:url"]')
+        ?.getAttribute("content"),
     ).toBe(`${SITE_URL}/sign-in`);
     expect(
-      document.querySelector('meta[name="twitter:image"]')?.getAttribute("content"),
+      document
+        .querySelector('meta[name="twitter:image"]')
+        ?.getAttribute("content"),
     ).toBe(`${SITE_URL}/og-image.png`);
   });
 

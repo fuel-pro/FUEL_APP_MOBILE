@@ -120,8 +120,8 @@ export default function HardwareFirmwareTracker() {
         <>
           {expired.length > 0 && (
             <div className="rounded border border-rose-300 bg-rose-50 dark:bg-rose-900/20 p-2 text-xs text-rose-700 dark:text-rose-300">
-              {expired.length} certificate(s) expired — renew to pass
-              metrology inspection.
+              {expired.length} certificate(s) expired — renew to pass metrology
+              inspection.
             </div>
           )}
           <div className="flex gap-2">

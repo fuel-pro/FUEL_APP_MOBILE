@@ -52,9 +52,7 @@ export default function TankTelemetry() {
 
   const ingested = useMemo(
     () =>
-      (readings as TelemetryReading[]).filter(
-        (r) => r.source === SOURCE_LABEL,
-      ),
+      (readings as TelemetryReading[]).filter((r) => r.source === SOURCE_LABEL),
     [readings],
   );
 
@@ -94,9 +92,7 @@ export default function TankTelemetry() {
           ? Number(waterRaw)
           : undefined;
       const temp =
-        tempRaw !== undefined && tempRaw !== null
-          ? Number(tempRaw)
-          : undefined;
+        tempRaw !== undefined && tempRaw !== null ? Number(tempRaw) : undefined;
       const cls = classifyReading(measured, expected, water);
       const reading: TelemetryReading = {
         id: `tel_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${out.length}`,
@@ -142,7 +138,9 @@ export default function TankTelemetry() {
   };
 
   const handleDelete = (id: string) => {
-    setReadings((prev) => (prev as TelemetryReading[]).filter((r) => r.id !== id));
+    setReadings((prev) =>
+      (prev as TelemetryReading[]).filter((r) => r.id !== id),
+    );
     toastSuccess("Telemetry reading deleted.");
   };
 

@@ -623,9 +623,7 @@ export default function PointOfSale() {
 
       // ── PayHero Kenya path ──────────────────────────────────────────────
       if (!darajaReady && phReady) {
-        const ref =
-          phCfg.accountReference ||
-          `POS-${generateInvoiceNumber()}`;
+        const ref = phCfg.accountReference || `POS-${generateInvoiceNumber()}`;
         const res = await payheroStkPush(phCfg, {
           phoneNumber: customerPhone,
           amount: total,

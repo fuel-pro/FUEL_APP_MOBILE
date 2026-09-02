@@ -68,10 +68,11 @@ const KEY = "fleet_telemetry";
 export default function FleetTelemetry() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const {
-    data: alarms,
-    setData: setAlarms,
-  } = useCloudKV<TelemetryAlarm[]>(KEY, stationId, []);
+  const { data: alarms, setData: setAlarms } = useCloudKV<TelemetryAlarm[]>(
+    KEY,
+    stationId,
+    [],
+  );
 
   const [open, setOpen] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -90,10 +91,7 @@ export default function FleetTelemetry() {
     detail: "",
   });
 
-  const unresolved = useMemo(
-    () => alarms.filter((a) => !a.resolved),
-    [alarms],
-  );
+  const unresolved = useMemo(() => alarms.filter((a) => !a.resolved), [alarms]);
 
   const summary = useMemo(() => {
     const s = {
@@ -409,9 +407,8 @@ export default function FleetTelemetry() {
             <p>
               Client-side alarm registry (persisted to cloud KV
               `fleet_telemetry`). Integrates with telematics devices by
-              pasting/loading their JSON records here — this is the
-              telematics vector in reversed format (route/geofence/harsh
-              driving/theft).
+              pasting/loading their JSON records here — this is the telematics
+              vector in reversed format (route/geofence/harsh driving/theft).
             </p>
           </div>
         </>

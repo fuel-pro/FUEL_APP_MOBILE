@@ -93,9 +93,7 @@ export default function GeneratorFuelTracker() {
   const handleRefill = (id: string) => {
     setUnits((p) =>
       p.map((u) =>
-        u.id === id
-          ? { ...u, currentLevelL: u.tankCapacityL }
-          : u,
+        u.id === id ? { ...u, currentLevelL: u.tankCapacityL } : u,
       ),
     );
     toastSuccess("Generator refilled (full tank logged).");
@@ -113,10 +111,7 @@ export default function GeneratorFuelTracker() {
               ...u,
               runtimeHours: (u.runtimeHours || 0) + hours,
               // burn ~0.8 L/h for small gensets, scale up by tank capacity
-              currentLevelL: Math.max(
-                0,
-                (u.currentLevelL || 0) - hours * 0.8,
-              ),
+              currentLevelL: Math.max(0, (u.currentLevelL || 0) - hours * 0.8),
             }
           : u,
       ),

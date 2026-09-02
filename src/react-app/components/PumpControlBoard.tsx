@@ -44,7 +44,9 @@ export default function PumpControlBoard() {
       );
     }
     const seen = new Set<string>();
-    return out.filter((n) => (seen.has(n.name) ? false : (seen.add(n.name), true)));
+    return out.filter((n) =>
+      seen.has(n.name) ? false : (seen.add(n.name), true),
+    );
   }, [state.pmsPumps, state.agoPumps, state.fuelPumpsByType]);
 
   const statusOf = (name: string): NozzleStatus => map[name] || "idle";
