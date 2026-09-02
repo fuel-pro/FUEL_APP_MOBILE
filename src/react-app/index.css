@@ -3493,3 +3493,65 @@ html[data-color-theme] .fp-btn-primary:hover {
     transition: none;
   }
 }
+
+/* ============================================================
+   Large-screen / zoomed-out layout: fill the viewport width
+   instead of leaving blank margins on the sides.
+   The base layout caps .container at 1400px — on wide monitors
+   (or when the user zooms out, which enlarges the CSS viewport)
+   that cap leaves big empty bands left & right. Scale the cap
+   fluidly with the viewport so the app always fills the screen.
+   ============================================================ */
+
+/* Large laptops / small desktops (1440px+) */
+@media (min-width: 1440px) {
+  .container {
+    max-width: min(1600px, 94vw);
+  }
+}
+
+/* Full-HD desktops (1600px+) */
+@media (min-width: 1600px) {
+  .container {
+    max-width: min(1800px, 94vw);
+  }
+}
+
+/* Large monitors / zoomed-out (1920px+) */
+@media (min-width: 1920px) {
+  .container {
+    max-width: min(2200px, 92vw);
+  }
+}
+
+/* Ultra-wide / TV / heavy zoom-out (2560px+) */
+@media (min-width: 2560px) {
+  .container {
+    max-width: min(3000px, 90vw);
+  }
+}
+
+/* Page-level centered wrappers also breathe on very wide screens
+   so content is not crushed into a narrow central column. */
+@media (min-width: 1920px) {
+  .max-w-5xl {
+    max-width: 64rem;
+  }
+  .max-w-6xl {
+    max-width: 80rem;
+  }
+  .max-w-7xl {
+    max-width: 96rem;
+  }
+}
+@media (min-width: 2560px) {
+  .max-w-5xl {
+    max-width: 72rem;
+  }
+  .max-w-6xl {
+    max-width: 92rem;
+  }
+  .max-w-7xl {
+    max-width: 110rem;
+  }
+}
