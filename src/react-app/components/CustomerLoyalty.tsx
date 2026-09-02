@@ -22,12 +22,15 @@ import {
   Download,
   FileText,
   CreditCard,
+  History,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { navigateToTab } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import CustomerSegments from "@/react-app/components/CustomerSegments";
 import Promotions from "@/react-app/components/Promotions";
+import PunchCardLoyalty from "@/react-app/components/PunchCardLoyalty";
+import CustomerPurchaseHistory from "@/react-app/components/CustomerPurchaseHistory";
 
 interface Customer {
   id: string;
@@ -158,7 +161,7 @@ function normalizeLoyaltyCustomers(arr: unknown): Customer[] {
 
 export default function CustomerLoyalty() {
   const [innerView, setInnerView] = useState<
-    "customers" | "segments" | "promos"
+    "customers" | "segments" | "promos" | "punchcards" | "history"
   >("customers");
   const location = useLocation();
   const { user } = useAuth();
@@ -533,23 +536,27 @@ export default function CustomerLoyalty() {
         </div>
       </div>
 
-      {/* Inner sub-tabs: Customers list vs Segments & Events vs Promotions */}
+      {/* Inner sub-tabs */}
       <SubTabBar
         tabs={[
           { id: "customers", label: "Customers", icon: Users },
           { id: "segments", label: "Segments & Events", icon: Star },
           { id: "promos", label: "Promotions", icon: Sparkles },
+          { id: "punchcards", label: "Punch Cards", icon: Gift },
+          { id: "history", label: "Purchase History", icon: History },
         ]}
         active={innerView}
-        onChange={(id) =>
-          setInnerView(id as "customers" | "segments" | "promos")
-        }
+        onChange={(id) => setInnerView(id as typeof innerView)}
       />
 
       {innerView === "segments" ? (
         <CustomerSegments customers={customers} />
       ) : innerView === "promos" ? (
         <Promotions />
+      ) : innerView === "punchcards" ? (
+        <PunchCardLoyalty />
+      ) : innerView === "history" ? (
+        <CustomerPurchaseHistory />
       ) : (
         <>
           {/* KPIs */}

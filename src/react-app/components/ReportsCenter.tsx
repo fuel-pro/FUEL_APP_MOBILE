@@ -19,6 +19,7 @@ import {
 import DayBook from "@/react-app/components/DayBook";
 import LossControl from "@/react-app/components/LossControl";
 import BankLedger from "@/react-app/components/BankLedger";
+import CashFlowReport from "@/react-app/components/CashFlowReport";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -47,6 +48,7 @@ type ReportType =
   | "daybook"
   | "losscontrol"
   | "bankledger"
+  | "cashflow"
   | "profit-loss"
   | "expenses"
   | "vat-return"
@@ -1268,6 +1270,7 @@ export default function ReportsCenter() {
       daybook: "Day Book",
       losscontrol: "Loss Control (Shrinkage)",
       bankledger: "Bank & Cash Ledger",
+      cashflow: "Cash Flow",
       overall: "Overall Financial Report",
       "profit-loss": "Profit & Loss Statement",
       expenses: "Expenses Report",
@@ -2445,6 +2448,7 @@ export default function ReportsCenter() {
             { id: "daybook", label: "Day Book", icon: BookOpen },
             { id: "losscontrol", label: "Loss Control", icon: TrendingDown },
             { id: "bankledger", label: "Bank & Cash Ledger", icon: Landmark },
+            { id: "cashflow", label: "Cash Flow", icon: TrendingUp },
             { id: "profit-loss", label: "Profit & Loss", icon: TrendingUp },
             { id: "expenses", label: "Expenses Report", icon: TrendingDown },
             { id: "vat-return", label: "VAT Return", icon: Receipt },
@@ -2539,6 +2543,8 @@ export default function ReportsCenter() {
             <LossControl />
           ) : activeReport === "bankledger" ? (
             <BankLedger />
+          ) : activeReport === "cashflow" ? (
+            <CashFlowReport />
           ) : (
             <>
               {activeReport === "expenses" && renderExpensesReport()}

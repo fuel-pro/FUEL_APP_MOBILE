@@ -15,10 +15,14 @@ import {
   History,
   CheckCircle2,
   Truck,
+  Share,
 } from "lucide-react";
 import FleetCards from "@/react-app/components/FleetCards";
 import FleetTelemetry from "@/react-app/components/FleetTelemetry";
 import FarmFuelEquipment from "@/react-app/components/FarmFuelEquipment";
+import FleetEmissionsTracker from "@/react-app/components/FleetEmissionsTracker";
+import CustomerStatement from "@/react-app/components/CustomerStatement";
+import CreditCustomerPortal from "@/react-app/components/CreditCustomerPortal";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DebtReminder from "@/react-app/components/DebtReminder";
@@ -143,7 +147,7 @@ export default function CreditManagement() {
   // (debt payment reminders — formerly the standalone "Fuel Debt Payment
   // Reminder" tab; fleet/corporate fuel cards from Shell Fleet / Pesapal).
   const [activeView, setActiveView] = useState<
-    "accounts" | "fleet" | "reminders"
+    "accounts" | "fleet" | "reminders" | "statements" | "portal"
   >("accounts");
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
@@ -469,10 +473,14 @@ export default function CreditManagement() {
           { id: "accounts", label: "Credit Accounts", icon: CreditCard },
           { id: "fleet", label: "Fleet & Cards", icon: Truck },
           { id: "reminders", label: "Debt Payment Reminders", icon: BellRing },
+          { id: "statements", label: "Statements", icon: FileText },
+          { id: "portal", label: "Customer Portal", icon: Share },
         ]}
         active={activeView}
         onChange={(id) =>
-          setActiveView(id as "accounts" | "fleet" | "reminders")
+          setActiveView(
+            id as "accounts" | "fleet" | "reminders" | "statements" | "portal",
+          )
         }
       />
 
@@ -481,9 +489,14 @@ export default function CreditManagement() {
           <FleetCards accounts={accounts} />
           <FleetTelemetry />
           <FarmFuelEquipment />
+          <FleetEmissionsTracker />
         </div>
       ) : activeView === "reminders" ? (
         <DebtReminder />
+      ) : activeView === "statements" ? (
+        <CustomerStatement />
+      ) : activeView === "portal" ? (
+        <CreditCustomerPortal />
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -17,8 +17,11 @@ import {
 } from "@/react-app/config/pricing";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import VehicleSalesTracker from "@/react-app/components/VehicleSalesTracker";
+import CarWashServices from "@/react-app/components/CarWashServices";
+import PaymentReconByPump from "@/react-app/components/PaymentReconByPump";
 import NozzleAnalysis from "@/react-app/components/NozzleAnalysis";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Coins, Banknote } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -34,7 +37,9 @@ interface SalesEntry {
 export default function FuelSalesReport() {
   const { state } = useFuel();
   const fuelTypeApi = useStationFuelTypes();
-  const [innerView, setInnerView] = useState<"report" | "analysis">("report");
+  const [innerView, setInnerView] = useState<
+    "report" | "analysis" | "vehicles" | "services" | "payrecon"
+  >("report");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reportData, setReportData] = useState<SalesEntry[]>([]);
@@ -502,12 +507,21 @@ export default function FuelSalesReport() {
         tabs={[
           { id: "report", label: "Monthly Report", icon: FileText },
           { id: "analysis", label: "Nozzle & Attendant", icon: TrendingUp },
+          { id: "vehicles", label: "Vehicle Sales", icon: ShoppingCart },
+          { id: "services", label: "Services", icon: Coins },
+          { id: "payrecon", label: "Payment Recon", icon: Banknote },
         ]}
         active={innerView}
-        onChange={(id) => setInnerView(id as "report" | "analysis")}
+        onChange={(id) => setInnerView(id as typeof innerView)}
       />
       {innerView === "analysis" ? (
         <NozzleAnalysis />
+      ) : innerView === "vehicles" ? (
+        <VehicleSalesTracker />
+      ) : innerView === "services" ? (
+        <CarWashServices />
+      ) : innerView === "payrecon" ? (
+        <PaymentReconByPump />
       ) : (
         <>
           {/* Controls */}

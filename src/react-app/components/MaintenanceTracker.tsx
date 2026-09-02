@@ -31,6 +31,7 @@ import {
   type ExpensePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import GeneratorFuelTracker from "@/react-app/components/GeneratorFuelTracker";
+import UtilityTracker from "@/react-app/components/UtilityTracker";
 
 interface MaintenanceRecord {
   id: string;
@@ -561,6 +562,7 @@ export default function MaintenanceTracker() {
       )}
 
       <GeneratorFuelTracker />
+      <UtilityTracker />
 
       {/* Stats */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">

@@ -58,6 +58,7 @@ import {
   type PayheroIntegrationConfig,
 } from "@/react-app/lib/mpesa-integration-service";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import MobileMoneyFloat from "@/react-app/components/MobileMoneyFloat";
 
 // Country ISO code → international dialing code. Covers every country where
 // M-PESA-equivalent STK Push / mobile money is commonly used, plus all major
@@ -1335,6 +1336,9 @@ export default function LiveTransaction() {
           </p>
         </div>
       </div>
+
+      {/* Mobile money agent float management */}
+      <MobileMoneyFloat />
 
       {/* Time Range Search */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">

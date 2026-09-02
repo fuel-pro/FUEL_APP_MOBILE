@@ -24,6 +24,7 @@ import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
 import StorageEgressPanel from "@/react-app/components/StorageEgressPanel";
+import ErpExport from "@/react-app/components/ErpExport";
 import CloudDiagnosticsPanel from "@/react-app/components/CloudDiagnosticsPanel";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
@@ -995,6 +996,9 @@ export default function DataManager() {
                 )}
               </div>
             </div>
+
+            {/* ERP integration export (Crone-style) */}
+            <ErpExport />
           </div>
         )}
 

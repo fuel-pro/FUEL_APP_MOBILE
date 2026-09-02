@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import DeliveryReconciliation from "@/react-app/components/DeliveryReconciliation";
+import TankerRegistry from "@/react-app/components/TankerRegistry";
 import { PackageCheck } from "lucide-react";
 import {
   Plus,
@@ -474,7 +475,7 @@ export default function FuelOffloading() {
 
   // Simple two-view toggle inside this tab (keeps sub-tab-less component
   // while adding the Delivery Audit / Reconciliation view).
-  const [view, setView] = useState<"records" | "recon">("records");
+  const [view, setView] = useState<"records" | "recon" | "tankers">("records");
 
   return (
     <div className="p-6 space-y-6">
@@ -501,9 +502,21 @@ export default function FuelOffloading() {
         >
           <PackageCheck className="w-4 h-4" /> Delivery Audit
         </button>
+        <button
+          onClick={() => setView("tankers")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
+            view === "tankers"
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600"
+          }`}
+        >
+          <Truck className="w-4 h-4" /> Tankers
+        </button>
       </div>
       {view === "recon" ? (
         <DeliveryReconciliation />
+      ) : view === "tankers" ? (
+        <TankerRegistry />
       ) : (
         <>
           {/* Header */}

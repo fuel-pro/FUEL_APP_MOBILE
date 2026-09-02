@@ -57,6 +57,11 @@ import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import TankMonitor from "@/react-app/components/TankMonitor";
 import TheftAnomalyDetector from "@/react-app/components/TheftAnomalyDetector";
 import AutoReplenishment from "@/react-app/components/AutoReplenishment";
+import EvaporationDriftDetector from "@/react-app/components/EvaporationDriftDetector";
+import ThresholdAlertRules from "@/react-app/components/ThresholdAlertRules";
+import TamperAlarmLog from "@/react-app/components/TamperAlarmLog";
+import ItemMovementLedger from "@/react-app/components/ItemMovementLedger";
+import StockValuationReport from "@/react-app/components/StockValuationReport";
 import TankTelemetry from "@/react-app/components/TankTelemetry";
 import TankCalibration from "@/react-app/components/TankCalibration";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -122,7 +127,9 @@ type InventoryTab =
   | "wastage"
   | "history"
   | "reorders"
-  | "enhanced";
+  | "enhanced"
+  | "movement"
+  | "valuation";
 
 const TABS = [
   { id: "products", label: "Products" },
@@ -135,6 +142,8 @@ const TABS = [
   { id: "wastage", label: "Wastage" },
   { id: "reorders", label: "Auto-Reorders" },
   { id: "history", label: "History" },
+  { id: "movement", label: "Item Ledger" },
+  { id: "valuation", label: "Valuation" },
   { id: "enhanced", label: "Pro Inventory" },
 ] as const;
 
@@ -2156,10 +2165,17 @@ export default function InventoryManagement() {
             <TankMonitor />
             <TheftAnomalyDetector />
             <AutoReplenishment />
+            <EvaporationDriftDetector />
+            <ThresholdAlertRules />
+            <TamperAlarmLog />
           </div>
         )}
         {activeTab === "telemetry" && <TankTelemetry />}
         {activeTab === "calibration" && <TankCalibration />}
+        {activeTab === "movement" && <ItemMovementLedger />}
+        {activeTab === "valuation" && (
+          <StockValuationReport products={products} />
+        )}
         {activeTab === "products" && (
           <ProductsPanel
             products={products}

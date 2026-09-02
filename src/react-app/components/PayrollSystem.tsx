@@ -22,6 +22,7 @@ import {
   Coins,
 } from "lucide-react";
 import Commissions from "@/react-app/components/Commissions";
+import StaffAdvanceLoans from "@/react-app/components/StaffAdvanceLoans";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -3904,12 +3905,24 @@ export default function PayrollSystem() {
             <span className="hidden sm:inline">Settings</span>
             <span className="sm:hidden">Set</span>
           </button>
+          <button
+            onClick={() => setActiveTab("advances")}
+            className={`px-2 md:px-6 py-1 md:py-3 font-medium text-xs md:text-base flex-shrink-0 ${
+              activeTab === "advances"
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            <span className="hidden sm:inline">Advances</span>
+            <span className="sm:hidden">Adv</span>
+          </button>
         </div>
 
         {/* Tab Content */}
         {activeTab === "employees" && renderEmployeesTab()}
         {activeTab === "payslip" && renderPayslipTab()}
         {activeTab === "commissions" && <Commissions />}
+        {activeTab === "advances" && <StaffAdvanceLoans />}
         {activeTab === "settings" && renderSettingsTab()}
       </div>
 
