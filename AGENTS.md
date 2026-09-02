@@ -1,5 +1,43 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Payroll Import Excel rewrite (commit 309771d)
+
+User report: Payroll System → Employees → "Import Excel" not working and
+not extracting necessary data.
+
+**Root cause (verified)**: the header-row detector matched the TITLE row of
+the app's own exports ("ACME EMPLOYEES LIST…" contains "employee";
+"ACME SALARY MARCH 2026 PAYMENT" contains "salary"), so importing an
+exported file always failed with "No valid employee data found". Plus:
+substring matching let the "employee id" lookup steal the "ID NO." column;
+TOTALS footer rows imported as employees; Excel serial dates imported as
+raw numbers; numeric Kenyan phones lost their leading zero; CSV rejected;
+only the first sheet scanned; dedup only matched employee_id (ID-less
+files duplicated on re-import); "SHA"/"NSSF" amount columns imported as
+member numbers; import toggled the global `saving` flag (spun unrelated
+buttons).
+
+**Fix**: new `src/react-app/lib/payroll-import.ts` — scores EVERY sheet
+for the real header row (min 2 cells + 2 mapped fields + an identity
+field), word-boundary column matching with one-column-per-field conflict
+resolution + exclusion lists ("Bank Charges" ≠ bank name), footer/title
+skipping, Excel serial + Date-object conversion, phone leading-zero
+restore, in-file dedup, multi-sheet best-match, SHA/NSSF/NET amount
+fields, CSV support, `buildTemplateWorkbook()`. `handleImportExcel`
+rewritten; dedup matches employee_id OR national ID OR name; accurate
+added/skipped counts; confirm dialog previews names found. New "Template"
+button. Custom column renames (SHA/NSSF/Advance/Bank/Bank Code) now
+persist to cloud key `payroll_column_names` (were "local only").
+
+**Verification**: 12 new vitest cases incl. round-trips of the app's own
+Employees export AND the 4-sheet PAYROLL export (91/91 total pass). tsc 0
+errors, eslint 0 errors, prettier clean, build success. Live markers in
+PayrollSystem-CNQTbCUP.js (payroll_column_names, Employee_Import_Template,
+xlsx,.xls,.csv). Playwright E2E blocked by sandbox (Supabase DNS
+unreachable from this env) — unit tests cover the parser end-to-end.
+Deployed: GitHub main 309771d; Cloudflare Pages LIVE (339dc7b7 + main
+alias); Vercel production LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Default Landing Tab preview fix (commit dc7d6b6)
 
 User reported the Settings → General → "Default Landing Tab" section was
