@@ -1,5 +1,19 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Mobile missing tabs fixed (commit 6f75778)
+
+User reported (with screenshot) that on mobile the "All Features" sheet was
+missing Live Transaction, Suppliers, Pump Mapping, Automation, and Fuel Price
+Finder. Root cause: `MobileBottomNav.tsx` used a hardcoded secondary list
+(24 entries) instead of the tab registry. Fix: the nav is now derived from
+`FuelContext.tabConfigurations` (sorted by `order`, filtered by `visible` +
+permission + feature flag) with a short-label/icon fallback map — desktop
+parity and future-proof (new tabs appear automatically). tsc 0 errors,
+vitest 67/67, eslint 0 errors, prettier clean. Deployed: GitHub main
+6f75778; Cloudflare preview 478ead4e; Vercel prod aliased
+iqssa16rm→fuel-app-mobile.vercel.app. Verified registry markers (3) on
+both hosts.
+
 ## Session 2026-09-02 — Navigation map + architecture boundaries (commit 0b683ae)
 
 User asked: navigate the entire site, determine what's wired into the existing
