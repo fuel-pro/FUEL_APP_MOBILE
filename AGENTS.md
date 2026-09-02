@@ -1,5 +1,33 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Header professional restructure (commit f7ba137)
+
+User screenshot showed a vibe-coded header: station name rendered 3×
+(brand + center pill + account dropdown), "Auto-detected" placeholder
+subtitle, redundant standalone "Add Station" button, mixed control
+heights (h-10 pills vs h-8 buttons), amber-300-on-light unreadable
+station pill, and a permanent `dark:bg-white/5` dropdown hover bug.
+
+**Fixes (Header.tsx + QuickSearch.tsx + NotificationCenter.tsx):**
+- Brand block: real location subtitle ("Auto-detected" → "Fuel Station
+  Management" fallback), constrained width `max-w-44 xl:max-w-60`.
+- Station switcher: ONE consolidated dropdown (STATIONS label + station
+  list + Combined View + Add / Manage Stations) replaces the pill +
+  standalone Add Station button. Amber pill now `amber-700` on
+  `amber-500/10` (light) / `amber-300` on `amber-500/20` (dark).
+- ALL bar controls unified to `h-9` with `font-medium` + consistent
+  light/dark pairs: station pill, Customize, account button,
+  QuickSearch trigger (was dark-only slate), NotificationCenter bell
+  (was bare p-2, now themed h-9 w-9).
+- Dropdown hover bug fixed (`dark:bg-white/5` → `dark:hover:bg-white/5`).
+- Avatar gradient text white in both themes.
+
+Verified live (Cloudflare preview 3a0837c3): dark + light mode both
+clean; station dropdown shows section label + check + Combined View +
+Add / Manage Stations. tsc 0 errors, eslint 0 errors, prettier clean,
+build success. Deployed: GitHub main f7ba137; Cloudflare Pages LIVE
+(3a0837c3 + main alias); Vercel production LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 — AIChatbot all-rounded upgrade (commits 30a0b0e + 17b4681)
 
 Upgraded the AIChatbot from a Q&A-only assistant into an all-rounded,
