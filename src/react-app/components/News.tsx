@@ -25,7 +25,10 @@ import {
   Radio,
   Tv,
 } from "lucide-react";
-import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import {
+  switchToTab,
+  onTabPayload,
+} from "@/react-app/lib/mpesa-integration-service";
 import NewsService, {
   ExternalNewsItem,
 } from "@/react-app/services/NewsService";
@@ -281,6 +284,36 @@ export default function News() {
   const [activeSubTab, setActiveSubTab] = useState<
     "articles" | "movies" | "live-tv" | "live-radio"
   >("articles");
+
+  // External deep-link payload listeners (QuickSearch site-wide search +
+  // AI Chatbot movie answers). Payloads: { subTab?: string; searchQuery?:
+  // string; movieTitle?: string }.
+  const [movieSeedQuery, setMovieSeedQuery] = useState<{
+    q: string;
+    ts: number;
+  }>({ q: "", ts: 0 });
+  useEffect(() => {
+    const unsub = onTabPayload("news", (payload: unknown) => {
+      const p = (payload || {}) as {
+        subTab?: string;
+        searchQuery?: string;
+        movieTitle?: string;
+      };
+      if (p.movieTitle || p.searchQuery) {
+        setActiveSubTab("movies");
+        setMovieSeedQuery({
+          q: String(p.movieTitle || p.searchQuery || ""),
+          ts: Date.now(),
+        });
+      } else if (
+        p.subTab &&
+        ["articles", "movies", "live-tv", "live-radio"].includes(p.subTab)
+      ) {
+        setActiveSubTab(p.subTab as typeof activeSubTab);
+      }
+    });
+    return unsub;
+  }, []);
 
   // Live feed embed state — country filter for TV / Radio sub-tabs
   const [tvCountry, setTvCountry] = useState<string>(currentCountry.id);
@@ -735,7 +768,11 @@ export default function News() {
         <div className="space-y-4">
           {/* Global movie catalog — full search + genre + favorites/watchlist
               + continue-watching + embedded player. Silently integrated. */}
-          <MoviesEmbed accent="amber" />
+          <MoviesEmbed
+            accent="amber"
+            searchSeed={movieSeedQuery.q}
+            searchSeedKey={movieSeedQuery.ts}
+          />
         </div>
       )}
 
