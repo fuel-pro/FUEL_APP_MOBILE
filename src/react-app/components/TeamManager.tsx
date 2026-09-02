@@ -84,6 +84,7 @@ import {
   getFuelCode,
 } from "@/react-app/config/pricing";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 
 const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
 
@@ -3761,6 +3762,17 @@ function ActivityHealthView({
   getRoleLabel,
   exportMembersCSV,
 }: ActivityHealthViewProps) {
+  // Shift handovers (Terminal Sessions) — management gets the same live feed
+  // so unacknowledged handovers are visible to the incoming team.
+  const { data: handovers } = useCloudKV<
+    {
+      id: string;
+      note: string;
+      fromShift: string;
+      toShift: string;
+      acknowledged: boolean;
+    }[]
+  >("shift_handovers", undefined, []);
   const roleDistribution = useMemo(() => {
     const roles: Record<string, number> = {};
     for (const m of combinedMembers) {
@@ -4120,6 +4132,43 @@ function ActivityHealthView({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Shift Handovers (from Terminal Sessions) */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <ClipboardList size={16} className="text-indigo-600" />
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+            Shift Handovers
+          </h3>
+        </div>
+        {(handovers || []).length === 0 ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
+            No handovers yet (Terminal Sessions → Shift Handover).
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {[...(handovers || [])]
+              .reverse()
+              .slice(0, 8)
+              .map((h) => (
+                <div
+                  key={h.id}
+                  className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 px-3 py-2"
+                >
+                  <input type="checkbox" checked={h.acknowledged} readOnly />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white truncate">
+                      {h.note}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {h.fromShift} → {h.toShift}
+                    </p>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* Invite Activity Summary */}

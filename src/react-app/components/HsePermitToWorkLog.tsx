@@ -6,6 +6,7 @@ import { FileSignature, Plus } from "lucide-react";
 import { useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface Permit {
   id: string;
@@ -30,26 +31,44 @@ export default function HsePermitToWorkLog() {
 
   const issuePermit = () => {
     if (!work.trim() || !contractor.trim() || !issuer.trim()) return;
-    setPermits((prev) => [
-      ...(prev || []),
-      {
-        id: `ptw_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        issued: new Date().toISOString().slice(0, 10),
-        work: work.trim(),
-        contractor: contractor.trim(),
-        issuer: issuer.trim(),
-        closed: false,
+    const permit: Permit = {
+      id: `ptw_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      issued: new Date().toISOString().slice(0, 10),
+      work: work.trim(),
+      contractor: contractor.trim(),
+      issuer: issuer.trim(),
+      closed: false,
+    };
+    setPermits((prev) => [...(prev || []), permit]);
+    emitFeatureEvent({
+      type: "permit.issued",
+      payload: {
+        permitId: permit.id,
+        work: permit.work,
+        contractor: permit.contractor,
       },
-    ]);
+    });
     setWork("");
     setContractor("");
     setIssuer("");
   };
 
-  const closePermit = (id: string) =>
+  const closePermit = (id: string) => {
+    const found = (permits || []).find((p) => p.id === id);
     setPermits((prev) =>
       (prev || []).map((p) => (p.id === id ? { ...p, closed: !p.closed } : p)),
     );
+    if (found) {
+      emitFeatureEvent({
+        type: !found.closed ? "permit.closed" : "permit.issued",
+        payload: {
+          permitId: id,
+          work: found.work,
+          contractor: found.contractor,
+        },
+      });
+    }
+  };
 
   const openCount = (permits || []).filter((p) => !p.closed).length;
 

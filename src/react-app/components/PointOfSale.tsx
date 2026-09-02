@@ -60,6 +60,8 @@ import {
 } from "@/react-app/lib/integrations-client";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
+import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { resolveContractPrice } from "@/react-app/lib/contract-pricing";
 import { lazy, Suspense } from "react";
 
 const EnhancedPOSView = lazy(() =>
@@ -153,6 +155,12 @@ export default function PointOfSale() {
   >("cash");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
+  // Customer Price Lists (Credit tab → Price Lists) — a contract-priced
+  // customer gets their agreed price instead of the station's standard
+  // price. Subscribing here keeps POS in sync without prop drilling.
+  const { data: customerPriceRules } = useCloudKV<
+    { id: string; customer: string; fuelType: string; price: number }[]
+  >("customer_price_lists", stationId, []);
   const [customerPin, setCustomerPin] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
   // Success celebration overlay (Peak-End rule, design spec file 7)
@@ -480,12 +488,18 @@ export default function PointOfSale() {
     // Use the unified bus-fresh price (falls back to legacy state field if the
     // station has no matching fuel_types_config entry) so the charged total
     // always matches the displayed per-litre price.
-    const price =
+    let price =
       fuelTypeApi.getPriceFor(label) ??
       (fuelTypeApi.canonicalOf(label) === "diesel"
         ? state.dieselPrice
         : state.petrolPrice) ??
       0;
+    // Contract price override: a standing Customer Price List (Credit tab →
+    // Price Lists) takes precedence over the station-wide fuel price when a
+    // customer is attached to the sale.
+    price =
+      resolveContractPrice(customerName, label, price, customerPriceRules) ??
+      price;
     const total = litres * price;
     const fuelName = label;
     // Resolve the fuel code (PMS/AGO/IK/LPG…) from the configured entry if

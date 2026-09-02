@@ -6,6 +6,7 @@ import { MessageSquareWarning, Check, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface Complaint {
   id: string;
@@ -46,12 +47,24 @@ export default function CustomerComplaintsLog() {
     setSubject("");
   };
 
-  const toggleResolve = (id: string) =>
+  const toggleResolve = (id: string) => {
+    const found = (items || []).find((c) => c.id === id);
     setItems((prev) =>
       (prev || []).map((c) =>
         c.id === id ? { ...c, resolved: !c.resolved } : c,
       ),
     );
+    if (found) {
+      emitFeatureEvent({
+        type: !found.resolved ? "complaint.resolved" : "complaint.opened",
+        payload: {
+          complaintId: id,
+          customer: found.customer,
+          severity: found.severity,
+        },
+      });
+    }
+  };
 
   const visible = useMemo(
     () =>

@@ -18,10 +18,13 @@ import {
   Star,
   Download,
   Settings as SettingsIcon,
+  MessageSquareWarning,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import ComplaintsPanel from "@/react-app/components/ComplaintsPanel";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { resolveCurrencySymbol } from "@/react-app/lib/currency";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
@@ -148,8 +151,20 @@ export default function Communication() {
   // render shows data instantly (no blank flash while the async cloud get
   // resolves).
   const [activeTab, setActiveTab] = useState<
-    "contacts" | "messages" | "templates" | "settings"
+    "contacts" | "messages" | "templates" | "settings" | "complaints"
   >("contacts");
+  // Open complaints from CustomerLoyalty so the comms team can act on them
+  // immediately (send an SMS/email or route to the right person).
+  const { data: openComplaints } = useCloudKV<
+    {
+      id: string;
+      date: string;
+      customer: string;
+      subject: string;
+      severity: "low" | "medium" | "high";
+      resolved: boolean;
+    }[]
+  >("customer_complaints", stationId, []);
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const cached = cloudStorageService.getCached<unknown[]>(
       "comm_contacts",
@@ -1240,6 +1255,17 @@ export default function Communication() {
           Templates ({templates.length})
         </button>
         <button
+          onClick={() => setActiveTab("complaints")}
+          className={`px-6 py-3 font-medium ${
+            activeTab === "complaints"
+              ? "border-b-2 border-blue-600 text-blue-600"
+              : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
+          }`}
+        >
+          <MessageSquareWarning size={20} className="inline mr-2" />
+          Complaints ({openComplaints.filter((c) => !c.resolved).length})
+        </button>
+        <button
           onClick={() => setActiveTab("settings")}
           className={`px-6 py-3 font-medium ${
             activeTab === "settings"
@@ -1285,6 +1311,9 @@ export default function Communication() {
       {activeTab === "messages" && renderMessagesTab()}
       {activeTab === "templates" && renderTemplatesTab()}
       {activeTab === "settings" && <CommSettingsTab stationId={stationId} />}
+      {activeTab === "complaints" && (
+        <ComplaintsPanel complaints={openComplaints} stationId={stationId} />
+      )}
 
       {/* Contact Modal */}
       {showContactModal && (

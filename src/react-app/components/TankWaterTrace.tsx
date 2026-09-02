@@ -5,13 +5,14 @@
  * sparkline so ingress can be spotted early.
  */
 import { Droplets } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import {
   CLOUD_KEYS,
   type TankReading,
 } from "@/react-app/lib/forecourt-features";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 const WATER_ALERT_MM = 5;
 
@@ -45,6 +46,25 @@ export default function TankWaterTrace() {
     }
     return out.sort((a, b) => b.currentMm - a.currentMm);
   }, [readings]);
+
+  // Emit one alert per fuel when the current reading crosses the 5 mm
+  // threshold. Re-fires if it goes below and rises again.
+  const lastEmittedRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    for (const t of trends) {
+      const last = lastEmittedRef.current.get(t.fuelType) ?? 0;
+      if (t.currentMm > WATER_ALERT_MM && t.currentMm !== last) {
+        lastEmittedRef.current.set(t.fuelType, t.currentMm);
+        emitFeatureEvent({
+          type: "tank-water.alert",
+          payload: { fuelType: t.fuelType, waterMm: t.currentMm },
+        });
+      }
+      if (t.currentMm <= WATER_ALERT_MM) {
+        lastEmittedRef.current.delete(t.fuelType);
+      }
+    }
+  }, [trends]);
 
   const spark = (pts: { date: string; mm: number }[]) => {
     const w = 160;

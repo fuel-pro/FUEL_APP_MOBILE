@@ -7,6 +7,7 @@ import { ClipboardList, Plus } from "lucide-react";
 import { useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface HandoverItem {
   id: string;
@@ -45,12 +46,25 @@ export default function ShiftHandoverChecklist() {
     setToShift("");
   };
 
-  const toggleAck = (id: string) =>
+  const toggleAck = (id: string) => {
+    const found = (items || []).find((i) => i.id === id);
     setItems((prev) =>
       (prev || []).map((i) =>
         i.id === id ? { ...i, acknowledged: !i.acknowledged } : i,
       ),
     );
+    if (found) {
+      emitFeatureEvent({
+        type: !found.acknowledged ? "handover.acknowledged" : "handover.added",
+        payload: {
+          handoverId: id,
+          fromShift: found.fromShift,
+          toShift: found.toShift,
+          note: found.note,
+        },
+      });
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">

@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface Voucher {
   id: string;
@@ -32,27 +33,45 @@ export default function GiftVoucherRegister() {
   const issue = () => {
     const a = Number(amount);
     if (!code.trim() || !a || a <= 0) return;
-    setVouchers((prev) => [
-      ...(prev || []),
-      {
-        id: `gv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        code: code.trim().toUpperCase(),
-        amount: a,
-        buyer: buyer.trim(),
-        redeemed: false,
+    const voucher: Voucher = {
+      id: `gv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      code: code.trim().toUpperCase(),
+      amount: a,
+      buyer: buyer.trim(),
+      redeemed: false,
+    };
+    setVouchers((prev) => [...(prev || []), voucher]);
+    emitFeatureEvent({
+      type: "voucher.issued",
+      payload: {
+        code: voucher.code,
+        amount: voucher.amount,
+        buyer: voucher.buyer || undefined,
       },
-    ]);
+    });
     setCode("");
     setAmount("");
     setBuyer("");
   };
 
-  const toggleRedeem = (id: string) =>
+  const toggleRedeem = (id: string) => {
+    const found = (vouchers || []).find((v) => v.id === id);
     setVouchers((prev) =>
       (prev || []).map((v) =>
         v.id === id ? { ...v, redeemed: !v.redeemed } : v,
       ),
     );
+    if (found) {
+      emitFeatureEvent({
+        type: !found.redeemed ? "voucher.redeemed" : "voucher.issued",
+        payload: {
+          code: found.code,
+          amount: found.amount,
+          buyer: found.buyer || undefined,
+        },
+      });
+    }
+  };
 
   const outstanding = useMemo(
     () =>

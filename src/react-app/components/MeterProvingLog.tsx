@@ -7,6 +7,7 @@ import { FlaskConical, Plus } from "lucide-react";
 import { useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface ProvingEntry {
   id: string;
@@ -46,6 +47,10 @@ export default function MeterProvingLog() {
       passed,
     };
     setEntries((prev) => [...(prev || []), entry]);
+    emitFeatureEvent({
+      type: passed ? "meter-proving.pass" : "meter-proving.fail",
+      payload: { nozzle: entry.nozzle, driftPct },
+    });
     setNozzle("");
     setActual("");
   };

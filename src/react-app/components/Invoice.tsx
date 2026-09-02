@@ -38,6 +38,8 @@ import {
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { resolveContractPrice } from "@/react-app/lib/contract-pricing";
 import { useStations } from "@/react-app/context/StationContext";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
@@ -45,6 +47,12 @@ export default function Invoice() {
   const { state, dispatch } = useFuel();
   const { currentStation } = useStations();
   const fuelTypeApi = useStationFuelTypes(currentStation?.id);
+  // Customer Price Lists (Credit tab → Price Lists) — the "use fuel price"
+  // action falls back to the customer's contract price if one matches the
+  // attached customer + the item description.
+  const { data: customerPriceRules } = useCloudKV<
+    { id: string; customer: string; fuelType: string; price: number }[]
+  >("customer_price_lists", currentStation?.id, []);
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -816,13 +824,17 @@ export default function Invoice() {
                                 index,
                                 "price",
                                 String(
-                                  fuelTypeApi.getPriceFor(item.desc) ??
-                                    item.price,
+                                  resolveContractPrice(
+                                    customerName,
+                                    item.desc,
+                                    fuelTypeApi.getPriceFor(item.desc),
+                                    customerPriceRules,
+                                  ) ?? item.price,
                                 ),
                               )
                             }
                             className="text-[9px] text-indigo-600 hover:underline mt-0.5"
-                            title="Use the station's configured fuel price"
+                            title="Use the station's configured fuel price (or your customer's contract price if set)"
                           >
                             use fuel price
                           </button>

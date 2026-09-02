@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { emitFeatureEvent } from "@/react-app/lib/feature-events";
 
 interface Request {
   id: string;
@@ -49,10 +50,22 @@ export default function DiscountApprovalQueue() {
     setReason("");
   };
 
-  const decide = (id: string, decision: boolean) =>
+  const decide = (id: string, decision: boolean) => {
+    const found = (requests || []).find((r) => r.id === id);
     setRequests((prev) =>
       (prev || []).map((r) => (r.id === id ? { ...r, approved: decision } : r)),
     );
+    if (found) {
+      emitFeatureEvent({
+        type: decision ? "discount.approved" : "discount.rejected",
+        payload: {
+          discountId: id,
+          amount: found.amount,
+          cash: found.cash,
+        },
+      });
+    }
+  };
 
   const pending = (requests || []).filter((r) => r.approved === null);
 
