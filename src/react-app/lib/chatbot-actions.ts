@@ -524,17 +524,77 @@ export async function sendSummaryWhatsApp(
 // General questions (small, safe, local)
 // ---------------------------------------------------------------------------
 
-/** Safely evaluate a plain arithmetic expression (digits and operators only). */
+/**
+ * Safe arithmetic evaluator — only digits and + - * / ( ) % allowed.
+ * Hand-written recursive-descent parser (no eval/Function — the site CSP
+ * forbids unsafe-eval).
+ */
 export function evalArithmetic(expr: string): number | null {
   const cleaned = expr
     .replace(/x/gi, "*")
+    .replace(/×/g, "*")
     .replace(/÷/g, "/")
     .replace(/%/g, "/100");
   if (!/^[\d\s+\-*/().]+$/.test(cleaned)) return null;
-  try {
-    const val = Function(`"use strict"; return (${cleaned})`)();
-    return typeof val === "number" && Number.isFinite(val) ? val : null;
-  } catch {
-    return null;
-  }
+
+  let pos = 0;
+  const peek = () => cleaned[pos];
+  const skipWs = () => {
+    while (pos < cleaned.length && cleaned[pos] === " ") pos++;
+  };
+
+  const parsePrimary = (): number | null => {
+    skipWs();
+    if (peek() === "(") {
+      pos++;
+      const val = parseExpr();
+      skipWs();
+      if (peek() !== ")") return null;
+      pos++;
+      return val;
+    }
+    if (peek() === "-" || peek() === "+") {
+      const sign = peek() === "-" ? -1 : 1;
+      pos++;
+      const val = parsePrimary();
+      return val === null ? null : sign * val;
+    }
+    const m = /^(\d+(?:\.\d+)?)/.exec(cleaned.slice(pos));
+    if (!m) return null;
+    pos += m[1].length;
+    return parseFloat(m[1]);
+  };
+
+  const parseTerm = (): number | null => {
+    let left = parsePrimary();
+    if (left === null) return null;
+    for (;;) {
+      skipWs();
+      const op = peek();
+      if (op !== "*" && op !== "/") return left;
+      pos++;
+      const right = parsePrimary();
+      if (right === null) return null;
+      left = op === "*" ? left * right : left / right;
+    }
+  };
+
+  const parseExpr = (): number | null => {
+    let left = parseTerm();
+    if (left === null) return null;
+    for (;;) {
+      skipWs();
+      const op = peek();
+      if (op !== "+" && op !== "-") return left;
+      pos++;
+      const right = parseTerm();
+      if (right === null) return null;
+      left = op === "+" ? left + right : left - right;
+    }
+  };
+
+  const result = parseExpr();
+  skipWs();
+  if (result === null || pos !== cleaned.length) return null;
+  return Number.isFinite(result) ? result : null;
 }
