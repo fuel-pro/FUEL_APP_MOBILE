@@ -863,37 +863,9 @@ function HomeContent() {
           </Suspense>
         </div>
 
-        {/* Site footer with internal links */}
+        {/* Site footer */}
         <footer className="mt-4 mb-16 md:mb-2 border-t border-gray-200 dark:border-gray-700 pt-3 pb-2 px-1">
-          <nav aria-label="Site sections">
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "pos", label: "Point of Sale" },
-                { id: "sales", label: "Sales Tracking" },
-                { id: "invoice", label: "Invoice" },
-                { id: "inventory", label: "Stock Management" },
-                { id: "reports", label: "Reports Center" },
-                { id: "price-finder", label: "Fuel Price Finder" },
-                { id: "news", label: "News & Live TV" },
-                { id: "settings", label: "Settings" },
-              ].map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      broadcast("tab_change", item.id);
-                    }}
-                    className="text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
             FuelPro — Fuel Station Management System
             {currentStation?.name ? ` · ${currentStation.name}` : ""}
           </p>
