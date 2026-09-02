@@ -10846,3 +10846,18 @@ The feature (commit 4044597) was reverted per user request (revert commit
 business-data-only answers; News/MoviesEmbed deep-link seed props removed.
 Verified: tsc 0 errors, vitest 67/67, build success. Deployed to BOTH hosts
 (pages.dev 368137cd, vercel prebuilt) — feature markers return 0 counts.
+
+
+## Session 2026-09-02 — Universal site search (QuickSearch + AIChatbot re-enabled, commit 25b16d9)
+
+Re-enabled the reverted QuickSearch/AIChatbot (had been reverted in 9a3645d) with universal site-wide search: tabs, sub-tabs, settings, quick actions, and the live movie catalog.
+
+- `src/react-app/lib/site-search-index.ts`: SITE_SUBTABS (every registered sub-tab across 13+ host components with keywords), SITE_ACTIONS (deep-linkable quick actions), searchSubTabs(), searchActions().
+- `src/react-app/hooks/useSubTabDeepLink.ts`: SubTabPayload {subTab}; hosts register via useSubTabDeepLink(tabId, setSubTab) — receives payloads delivered by navigateToTab's pending-payload store (mpesa-integration-service.ts switchToTab/navigateToTab/onTabPayload).
+- QuickSearch (Ctrl+K): sections — Sub-tabs & Settings, Do it now (quick actions), Navigation, Movies & TV (debounced /api/movies proxy search). Selecting a movie navigates to News -> Movies with the query seeded; sub-tab results deep-link into the host tab.
+- AIChatbot: site-wide feature answers from SITE_SUBTABS/SITE_ACTIONS + business context; "open X" / "watch X" execution (sub-tab aware deep-links; entertainment queries search the movie catalog and open News -> Movies with the title seeded).
+- Wired useSubTabDeepLink into 13 sub-tab hosts (GeneralSettings, CreditManagement, CustomerLoyalty, DocumentCenter, FuelPriceLocator, FuelSalesReport, FuelTypesManager, Invoice, PointOfSale, TeamManager, InventoryManagement, AdvancedAnalytics, News) + MoviesEmbed search-seed effect.
+- Gates: tsc 0 errors, vitest 67/67, eslint 0 errors, prettier clean, clean Vite-cache build.
+- Deployed: GitHub main 25b16d9; Cloudflare Pages preview b3c0ed14 + main alias (index-DiJtyisX.js); Vercel production READY + aliased (index-DJuBeFpp.js) — prebuilt method.
+- Cloudflare token location note: API KEYS.txt line 68 ("API Token: cfat_..." — strip prefix + \r); line 67 is the Account ID. Extract with `sed -n '68p' "/workspace/API KEYS.txt" | sed 's/API Token: //' | tr -d '\r\n'`.
+- Verified live (pages.dev): QuickSearch "security" shows SUB-TABS & SETTINGS (Security -> 2fa/session/password) + MOVIES & TV + Navigation; sub-tab click deep-links to Settings -> Security; "avatar" movie click opens News -> Movies seeded; AIChatbot "watch avatar" opens News -> Movies with Avatar catalog; "open security" replies "Opening **Security** now..." and lands on Settings -> Security sub-tab.
