@@ -1,5 +1,48 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 — 22-feature forecourt batch (commit 4b3d85a)
+
+User asked for "1,000,000 new from each competitor" (hyperbolic). Delivered
+a genuine 22-feature batch wired into host tabs — all verified via tsc,
+vitest, eslint, prettier + build + CF/Vercel deploy + chunk markers:
+
+- InventoryManagement: DipToLitresCalculator (dip-to-litres interpolation),
+  AbcInventoryAnalysis (Pareto A/B/C classification), MeterProvingLog
+  (dispenser proving ±0.5%); TankWaterTrace stacked into Tank Monitor.
+- FuelSalesReport: FuelMixReport (volume/revenue mix) sub-tab.
+- CreditManagement: CreditAgingReport (0-30/31-60/61-90/90+ buckets),
+  CustomerPriceLists (per-customer closing contract pricing).
+- CustomerLoyalty: CustomerComplaintsLog (severity/resolve), LoyaltyTierConfig
+  (spend thresholds).
+- ReportsCenter: StationPnlSummary (revenue − expenses) report.
+- SupplierManagement: SupplierContractRegister (+30-day renewal flag),
+  SupplierScorecard (on-time 50% + fill 50% composite).
+- Compliance: SafetyInspectionLog + HsePermitToWorkLog sections.
+- MaintenanceTracker (stack): PowerInterruptionLog, EnergyMixTracker
+  (solar/grid/generator), BatteryBackupHealth, HoseReplacementLog,
+  PreventiveChecklists.
+- TerminalSessions (stack): ShiftHandoverChecklist, GiftVoucherRegister,
+  DiscountApprovalQueue.
+
+Cloud KV keys: dip_chart_points, meter_proving_log, customer_price_lists,
+customer_complaints, loyalty_tier_config, hsse_permits, safety_inspections,
+power_outages, battery_health, energy_mix_log, hose_log, pm_checklists,
+shift_handovers, gift_vouchers, discount_approvals, supplier_contracts.
+
+**Verification:** tsc -b 0 errors, vitest 62/62, eslint 0 errors
+(pre-existing 5 warnings unchanged via stash check), prettier formatted,
+build success with custom network-first sw.js postbuild intact
+(9262.63 KiB, 131 precache). Render markers verified on both hosts'
+host chunks (CF + Vercel) — earlier mistake: checking the lazy index
+chunk for minified names returned 0; proper check greps each host's
+rendered lazy chunk for UI labels (reports-*. manual chunk for
+ReportsCenter).
+
+**Deploy state:** GitHub main 4b3d85a. Cloudflare Pages LIVE (preview
+781a4950). Vercel production LIVE via prebuilt method + alias set
+(4mdkqasd8). HP: remote URL was updated with fresh `$GITHUB_TOKEN` (was
+prompting `Password for https://ghu_...`) before push succeeded.
+
 ## Session 2026-09-02 — 20-feature competitor batch (all wired, commit a7c2030)
 
 Created 20 new competitor-inspired components (2 per competitor site) and
