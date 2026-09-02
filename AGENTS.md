@@ -1,4 +1,28 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-02 — Vercel ↔ Cloudflare parity restored (user report)
+
+**Symptom**: features existed on one host but not the other. Root cause: the
+`deploy-cloudflare` GitHub Action job is a guarded no-op when secrets are
+missing — so whenever Cloudflare's token isn't set, Vercel got the new
+build but pages.dev stayed stale. This session re-synced BOTH hosts to the
+same build.
+
+**Fixes:**
+- Verified CLOUDFLARE token was present in `/workspace/API KEYS.txt` (it is)
+  but the GitHub repo secret `CLOUDFLARE_API_TOKEN` is missing; the token
+  lives in the keys file, not in GitHub secrets.
+- Built + deployed `dist/` to Cloudflare Pages directly:
+  `npx wrangler pages deploy dist --project-name=fuel-app-mobile --branch=main`
+  with the token from the keys file. Both hosts now serve the same
+  bundle/CACHE_VERSION.
+
+**To keep them in sync long-term:**
+- `GITHUB_TOKEN` lacks `repo:secrets` scope here, so writing the missing
+  GitHub secret via API was blocked (403 Forbidden). Add
+  `CLOUDFLARE_API_TOKEN` under GitHub repo Settings → Secrets → Actions so
+  the workflow's guarded job actually deploys. That single step fixes
+  parity permanently.
+
 ## Session 2026-09-01 — Full SEO/performance/deployment hardening
 
 Replaced the template "Mocha" placeholders (og:url `fuelpro.mocha.app`,
