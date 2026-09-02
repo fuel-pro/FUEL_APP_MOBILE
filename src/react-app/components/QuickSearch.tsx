@@ -6,21 +6,14 @@
  * Linear, Notion, etc.
  */
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Search, X, ArrowRight, Layout, Zap, Film } from "lucide-react";
-import {
-  switchToTab,
-  navigateToTab,
-} from "@/react-app/lib/mpesa-integration-service";
-import {
-  searchMovies,
-  type MovieItem,
-} from "@/react-app/services/MovieService";
+import { Search, X, ArrowRight, Layout, Zap } from "lucide-react";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 interface SearchEntry {
   id: string;
   label: string;
   description?: string;
-  category: "Navigation" | "Quick Action" | "Movies";
+  category: "Navigation" | "Quick Action";
   tabId?: string;
   action?: () => void;
   keywords?: string;
@@ -36,33 +29,6 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  // Live movie search — site-wide search includes the streaming catalog so
-  // users can find + jump to any movie from anywhere in the app.
-  const [movieResults, setMovieResults] = useState<MovieItem[]>([]);
-  const [movieSearching, setMovieSearching] = useState(false);
-  const movieSeqRef = useRef(0);
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setMovieResults([]);
-      setMovieSearching(false);
-      return;
-    }
-    setMovieSearching(true);
-    const seq = ++movieSeqRef.current;
-    const t = setTimeout(async () => {
-      try {
-        const res = await searchMovies(q);
-        if (movieSeqRef.current === seq) setMovieResults(res.slice(0, 6));
-      } catch {
-        if (movieSeqRef.current === seq) setMovieResults([]);
-      } finally {
-        if (movieSeqRef.current === seq) setMovieSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
 
   // Global keyboard shortcut: Ctrl+K / Cmd+K to toggle.
   useEffect(() => {
@@ -103,12 +69,6 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
   }, [query, entries]);
 
   const results = filtered();
-
-  const openMovie = useCallback((movie: MovieItem) => {
-    // Deep-link into the News > Movies tab with the title pre-searched.
-    navigateToTab("news", { movieTitle: movie.name });
-    setOpen(false);
-  }, []);
 
   const execute = useCallback((entry: SearchEntry) => {
     if (entry.action) {
@@ -193,50 +153,6 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
 
           {/* Results */}
           <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">
-            {(movieResults.length > 0 || movieSearching) && (
-              <div className="mb-2">
-                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Movies & TV
-                </p>
-                {movieSearching && movieResults.length === 0 ? (
-                  <p className="px-4 py-2 text-xs text-slate-500">
-                    Searching the movie catalog…
-                  </p>
-                ) : (
-                  movieResults.map((m) => (
-                    <button
-                      key={`movie-${m.id}`}
-                      onClick={() => openMovie(m)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-700/60 transition-colors group"
-                    >
-                      <div className="w-8 h-10 rounded bg-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                        {m.poster ? (
-                          <img
-                            src={m.poster}
-                            alt={m.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <Film size={14} className="text-slate-500" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{m.name}</p>
-                        <p className="text-xs text-slate-400 truncate">
-                          {m.year ? `${m.year} · ` : ""}
-                          {m.type === "tv" ? "Series" : "Movie"}
-                        </p>
-                      </div>
-                      <ArrowRight
-                        size={14}
-                        className="text-slate-600 group-hover:text-slate-400 shrink-0"
-                      />
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
             {results.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-500">
                 <Search size={32} className="mx-auto mb-2 opacity-40" />

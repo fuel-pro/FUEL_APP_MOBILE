@@ -77,10 +77,6 @@ type TypeFilter = "all" | "movie" | "tv";
 
 interface Props {
   accent?: "blue" | "purple" | "amber";
-  /** External search seed (QuickSearch / AI Chatbot deep links). */
-  searchSeed?: string;
-  /** Changes on every new seed (even for identical queries) to re-fire. */
-  searchSeedKey?: number;
 }
 
 // ─── MoviePlayer — native hls.js player for the reverse-engineered stream ─────
@@ -1214,11 +1210,7 @@ function EmbedFallbackPlayer({
   );
 }
 
-export default function MoviesEmbed({
-  accent = "amber",
-  searchSeed,
-  searchSeedKey,
-}: Props) {
+export default function MoviesEmbed({ accent = "amber" }: Props) {
   const { user } = useAuth();
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -1412,16 +1404,6 @@ export default function MoviesEmbed({
     const results = await searchMovies(q);
     setSearchResults(results);
   }, []);
-
-  // External search seed (QuickSearch / AI Chatbot deep links): run the
-  // search whenever a new seed arrives.
-  useEffect(() => {
-    const q = (searchSeed || "").trim();
-    if (!q || !searchSeedKey) return;
-    setSearchQuery(q);
-    runSearch(q);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchSeedKey]);
 
   // In classics view, filter the already-loaded classics list client-side.
   const filteredClassics =
