@@ -1,5 +1,30 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Default Landing Tab preview fix (commit dc7d6b6)
+
+User reported the Settings → General → "Default Landing Tab" section was
+"not fully working": "Apply & preview now" navigated away from Settings
+(losing your place) AND — the real bug — because Home.tsx persists every
+tab switch to `fuelpro_last_active_tab`, the PREVIEWED tab became the
+owner's "last used tab", silently defeating "Resume where I left off".
+The hint then showed the circular/confusing "Next login opens: Settings
+— resuming last-used tab".
+
+**Fixes (GeneralSettings.tsx + lib/landing-tab.ts):**
+- Preview now uses the same `resolveLandingTab()` the router uses on
+  login, then auto-returns to Settings after 1.8s (no lost place).
+- New `beginLandingPreview()`/`endLandingPreview()` set a sessionStorage
+  flag (`fuelpro_landing_preview`); `persistLastActiveTab()` skips
+  persistence while a preview is in progress, so the previewed tab never
+  overwrites the real last-used tab.
+
+Checked for other "apply & preview" patterns — this was the only one.
+
+tsc 0 errors, eslint 0 errors (6 pre-existing warnings), prettier clean,
+79/79 tests pass, build success. Deployed: GitHub main dc7d6b6;
+Cloudflare Pages LIVE (529567ae + main alias); Vercel production LIVE
+(prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Zoom-out blank-sides layout fix (commit c1a3ee9)
 
 User reported blank bands on both sides when zooming the browser out.
