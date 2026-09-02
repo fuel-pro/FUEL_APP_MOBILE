@@ -1,5 +1,44 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Fuel Type Manager data-sharing matrix (commit 16300be)
+
+User asked for a data-sharing matrix across the Fuel Type Manager sub-tabs
+(Fuel Types / Price Board / Price Scheduler / Rate History / Fuel Quality)
+plus one more tab with the same problem.
+
+**Gaps found + fixed (Fuel Type Manager):**
+1. **Rate History only saw PriceBoard edits** — `price_history_data` was
+   written ONLY by PriceBoard. New `lib/price-history.ts`
+   (`recordPriceChange`, 10s in-memory + cloud dedup, 500-entry cap,
+   legacy field aliases) is now called from:
+   - `FuelContext.syncPriceToFuelTypes` (choke point for Price Board,
+     Dashboard, Fuel Price Finder, Price Scheduler) — signature extended
+     with optional `changedBy`.
+   - `FuelTypesManager.persist` (diffs old vs new per fuel id).
+2. **Price Scheduler fired only when the tab was open** — due schedules now
+   apply APP-WIDE on login via a FuelContext effect
+   (`schedulesAppliedRef` per user:station scope, marks rows applied,
+   flows through syncPriceToFuelTypes → history records
+   "Price Scheduler (auto)"). Tab-level check kept as fallback.
+3. **Fuel Quality results invisible in Fuel Types** — FuelTypesManager now
+   reads `fuel_quality_tests` (real-time) and shows a Quality ✓/✗ badge per
+   fuel row (latest test, click → Quality sub-tab).
+4. Rate History rows now show the source (`changedBy` chip + reason
+   tooltip) and proper formatted dates.
+
+**Second matrix (Stock Management):** Item Movement Ledger was a
+DISCONNECTED manual ledger (own `item_movement_entries` key) while real
+movements lived in `inventory_transactions`. It now merges real movements
+(fetchInventoryTransactions → auto badge, read-only) with manual entries;
+running balances over the unified set.
+
+**Verification**: 6 new vitest cases for the recorder (97/97 total). tsc 0
+errors, eslint 0 errors (19 pre-existing warnings), prettier clean, build
+success. Live markers confirmed: reports chunk has "Price Scheduler (auto)"
++ price_schedules; FuelTypesManager chunk has fuel_quality_tests + Quality ✓.
+Deployed: GitHub main 16300be; Cloudflare Pages LIVE (b1be25df + main
+alias); Vercel production LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Payroll Import Excel rewrite (commit 309771d)
 
 User report: Payroll System → Employees → "Import Excel" not working and
