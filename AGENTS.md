@@ -1,4 +1,49 @@
 # FuelPro Mobile — Repository Knowledge
+
+## Session 2026-09-02 — 20-feature competitor batch (all wired, commit a7c2030)
+
+Created 20 new competitor-inspired components (2 per competitor site) and
+wired EVERY one into an existing host tab — no new top-level tabs, no
+floating un-wired components:
+
+- ItemMovementLedger → Stock Management "Item Ledger" sub-tab
+- StockValuationReport (FIFO val) → Stock Management "Valuation" sub-tab
+- CashFlowReport → Reports Center "Cash Flow" type
+- VehicleSalesTracker → Fuel Sales Report "Vehicle Sales"
+- CarWashServices → Fuel Sales Report "Services"
+- PaymentReconByPump → Fuel Sales Report "Payment Recon"
+- FleetEmissionsTracker (CO2e) → Credit → Fleet & Cards stack
+- CustomerStatement + CreditCustomerPortal → Credit sub-tabs
+- PunchCardLoyalty + CustomerPurchaseHistory → Customers sub-tabs
+- UtilityTracker (water/electricity meters) → Maintenance stack
+- ErpExport (ERP bundle export) → Data Manager → Backup
+- TamperAlarmLog + ThresholdAlertRules + EvaporationDriftDetector →
+  Tank Monitor stack
+- StaffAdvanceLoans → Payroll "Advances" tab
+- TankerRegistry → Fuel Offloading "Tankers" view
+- FuelRateHistory → Fuel Types "Rate History" sub-tab
+- MobileMoneyFloat (agent float mgmt) → Live Transaction panel
+
+Cloud KV keys: `utility_readings`, `tamper_alarms`,
+`alert_threshold_rules`, `staff_loans`, `tankers`,
+`mobile_money_agents`, plus existing `fleet_emissions`, `vehicle_sales`,
+`carwash_services`, `punch_cards`, `credit_accounts`.
+
+**Verification:** tsc -b 0 errors, vitest 62/62, eslint 0 errors
+(portal fmt useCallback fix), prettier clean, build success with custom
+network-first sw.js postbuild intact (CACHE_VERSION bumped). Lost-commit
+audit: fix/team-manager-cloud-race-condition (+1) checked — main already
+has cloudLoadCompleteRef in ShiftManagement (5) + PermissionContext (8),
+superseded, no lost work.
+
+**Deploy state:** GitHub main a7c2030. Cloudflare Pages LIVE (preview
+fa929f7c). Vercel production LIVE via prebuilt method — `vercel build
+--prod` then `vercel deploy --prebuilt --prod`, alias set manually to
+fuel-app-mobile.vercel.app (note: `--yes` flag handles npx vercel@59
+interactive install prompt in non-TTY; without it the build hangs).
+Chunk markers verified live on www: mobile_money_agents, Item Ledger,
+utility_readings, Tankers, staff_loans.
+
 ## Session 2026-09-02 — Competitor forecourt reverse-engineering round (Pesapal/Codelab/Crone/Livetrac/Shell/eVMI/Veira/Maratech/Advatech)
 
 Re-mined the 10 competitor sites the user listed (same set as the 2026-08-31
