@@ -10,7 +10,7 @@
  * host's active-sub-tab setter; extras are forwarded to the optional handler.
  */
 
-import { useEffect } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { onTabPayload } from "@/react-app/lib/mpesa-integration-service";
 
 export interface SubTabPayload {
@@ -20,7 +20,7 @@ export interface SubTabPayload {
 
 export function useSubTabDeepLink<T extends string>(
   tabId: string,
-  setSubTab: (id: T) => void,
+  setSubTab: Dispatch<SetStateAction<T>>,
   onExtra?: (payload: SubTabPayload) => void,
 ): void {
   useEffect(

@@ -37,7 +37,6 @@ import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import LiveFeedEmbed from "@/react-app/components/LiveFeedEmbed";
 import MoviesEmbed from "@/react-app/components/MoviesEmbed";
 import { Film } from "lucide-react";
-import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 interface DisplayNewsItem extends ExternalNewsItem {
   bookmarked: boolean;

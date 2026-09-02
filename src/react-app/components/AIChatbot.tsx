@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { getCurrencySymbol, isKenyaStation } from "@/react-app/lib/currency";
+import { formatNumber } from "@/react-app/utils/formatUtils";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import {
   switchToTab,
@@ -28,6 +29,32 @@ import {
   type SubTabEntry,
   type QuickActionEntry,
 } from "@/react-app/lib/site-search-index";
+import { useStations } from "@/react-app/context/StationContext";
+import {
+  listUserDocuments,
+  describeDocuments,
+  findDocuments,
+  downloadDocumentByName,
+  exportAllUserData,
+  analyzeSalesTrend,
+  forecastSales,
+  buildSummaryText,
+  printTextDocument,
+  sendSummaryEmail,
+  sendSummaryWhatsApp,
+  evalArithmetic,
+} from "@/react-app/lib/chatbot-actions";
+import {
+  exportSalesPDF,
+  exportSalesExcel,
+  exportSalesTXT,
+  exportDeliveryPDF,
+  exportDeliveryExcel,
+  exportDeliveryTXT,
+  exportDebtPDF,
+  exportDebtExcel,
+  exportDebtTXT,
+} from "@/react-app/utils/exportUtils";
 
 // Declare Speech Recognition types
 declare global {
@@ -52,6 +79,11 @@ interface SpeechRecognitionEvent {
   };
 }
 
+interface MessageAction {
+  label: string;
+  run: () => Promise<void>;
+}
+
 interface Message {
   id: string;
   type: "user" | "assistant";
@@ -61,10 +93,15 @@ interface Message {
   canRetry?: boolean;
   suggestions?: string[];
   isError?: boolean;
+  /** One-shot executable action rendered as a button under the message. */
+  action?: MessageAction;
+  actionDone?: boolean;
 }
 
 export default function AIChatbot() {
   const { state } = useFuel();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id ?? null;
   // Unified fuel types so the AI assistant knows about ALL the station's
   // configured fuels (and their live prices), not just petrol/diesel.
   const fuelTypeApi = useStationFuelTypes();
@@ -75,7 +112,7 @@ export default function AIChatbot() {
     {
       id: "1",
       type: "assistant",
-      content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
+      content: `Hello! I'm your FuelPro AI Assistant — wired into all your real station data. I can answer questions, analyze & forecast sales, list and download your documents, export reports and full data backups, print summaries, and send them by email or WhatsApp. Say "help" for the full list!`,
       timestamp: new Date(),
     },
   ]);
@@ -624,7 +661,18 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
 
     // Help
     if (lowerMsg.includes("help") || lowerMsg.includes("what can you do")) {
-      return `**I'm your FuelPro AI Assistant!**\n\nI can help you with:\n\n**Sales Analysis** - Today's sales, revenue trends, pump performance\n💰 **Debt Tracking** - Outstanding balances, customer debts\n📄 **Invoices** - Current invoice status and totals\n**Fuel Management** - Prices, tank levels, consumption\n👥 **Payroll** - Employee info, salary summaries\n🚛 **Offloading** - Fuel received from suppliers\n📱 **M-PESA** - Mobile payment analysis\n**Business Overview** - Complete business health check\n\n**Example questions:**\n• "What are today's sales?"\n• "Show outstanding debts"\n• "What are my fuel prices?"\n• "Business overview"\n• "Payroll summary"\n\nI'm running in **local mode** - all responses are generated from your actual business data stored in this device.`;
+      return `**I'm your FuelPro AI Assistant!** Here's everything I can do:
+
+📊 **Answer & Analyze** — today's sales, debts, invoices, prices, tank levels, payroll, offloading, ${mobilePayTerm}, business overview
+📈 **Analyze & Forecast** — "analyze sales", "forecast sales" (real trend + projection from your history)
+📁 **Documents** — "list my documents", "find document <name>", "download document <name>"
+⬇️ **Reports & Data** — "download sales report" (PDF/Excel/TXT), "export all my data" (full backup)
+🖨️ **Print** — "print summary"
+✉️ **Send** — "send summary to name@email.com" or "send summary via whatsapp to 254712345678"
+🧭 **Navigate** — "open <any tab or sub-tab>", "watch <movie>"
+🧮 **General** — arithmetic, date/time, and more
+
+Everything runs securely on your own data — sends use only the gateways YOU configured, and I always ask before sending.`;
     }
 
     // Site-wide feature search — the query is matched against EVERY tab,
@@ -672,6 +720,252 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
     return `I analyzed your business data for "${message}".\n\n${todaySales?.totalRevenue ? `Today's revenue is ${currency} ${todaySales.totalRevenue.toLocaleString()}.\n` : ""}${deliveryTracker?.totalDebt ? `Outstanding debt: ${currency} ${deliveryTracker.totalDebt.toLocaleString()}.\n` : ""}\n💡 Try asking me about:\n• Today's sales\n• Outstanding debts\n• Fuel prices\n• Business overview\n• Payroll summary\n\nI'm running in **local mode** using your actual business data.`;
   };
 
+  // ------------------------------------------------------------------
+  // Action intents — documents, data extraction, downloads, print, send,
+  // analyze, forecast, and general questions. All run through the secure
+  // owner-scoped action layer (chatbot-actions.ts). Returns null when the
+  // message is NOT an action command so the normal Q&A flow continues.
+  // ------------------------------------------------------------------
+  const tryActionIntents = async (
+    raw: string,
+  ): Promise<{ text: string; action?: MessageAction } | null> => {
+    const msg = raw.trim();
+    const lower = msg.toLowerCase();
+
+    // ---- Documents: list / find / download ----
+    if (
+      /(list|show|display)\s+(all\s+)?(my\s+)?(documents|files|docs)\b/.test(
+        lower,
+      ) ||
+      /^(my\s+)?(documents|files|docs)$/.test(lower)
+    ) {
+      const docs = await listUserDocuments(stationId);
+      return { text: describeDocuments(docs) };
+    }
+
+    const findDocMatch = lower.match(
+      /(?:find|search(?:\s+for)?|look for)\s+(?:a\s+)?(?:document|doc|file)\s+(.+)/,
+    );
+    if (findDocMatch) {
+      const q = findDocMatch[1].replace(/[.!?]+$/, "");
+      const matches = await findDocuments(q, stationId);
+      if (matches.length === 0) {
+        return {
+          text: `No documents match "${q}". Say "list my documents" to see everything you have stored.`,
+        };
+      }
+      const lines = matches
+        .slice(0, 10)
+        .map((d) => `• **${d.name}** — ${d.category}`)
+        .join("\n");
+      return {
+        text: `**Found ${matches.length} document${matches.length > 1 ? "s" : ""} matching "${q}":**\n\n${lines}\n\nSay "download document <name>" to fetch one.`,
+      };
+    }
+
+    const dlDocMatch = lower.match(
+      /(?:download|get|fetch|open|retrieve)\s+(?:the\s+)?(?:document|doc|file)\s+(.+)/,
+    );
+    if (dlDocMatch) {
+      const name = dlDocMatch[1].replace(/[.!?]+$/, "");
+      const res = await downloadDocumentByName(name, stationId);
+      return { text: res.message };
+    }
+
+    // ---- Full data extraction ----
+    if (
+      /(export|download|backup|extract)\s+(all\s+)?(my\s+)?(data|everything|collections)/.test(
+        lower,
+      ) ||
+      /^(export|backup)\s*(all)?\s*data$/.test(lower)
+    ) {
+      const res = await exportAllUserData();
+      return { text: res.message };
+    }
+
+    // ---- Report downloads (sales / delivery / debt) ----
+    const reportMatch = lower.match(
+      /(?:download|export|generate)\s+(?:the\s+)?(sales|delivery|deliveries|debt)\s*(?:report)?\s*(pdf|excel|xlsx|csv|txt|text)?/,
+    );
+    if (reportMatch) {
+      const kind = reportMatch[1];
+      const fmt = (reportMatch[2] || "txt").toLowerCase();
+      try {
+        if (kind === "sales") {
+          if (fmt === "pdf") await exportSalesPDF(state);
+          else if (fmt === "excel" || fmt === "xlsx" || fmt === "csv")
+            await exportSalesExcel(state);
+          else await exportSalesTXT(state);
+        } else if (kind === "debt") {
+          if (fmt === "pdf") await exportDebtPDF(state);
+          else if (fmt === "excel" || fmt === "xlsx" || fmt === "csv")
+            exportDebtExcel(state);
+          else exportDebtTXT(state);
+        } else {
+          if (fmt === "pdf") await exportDeliveryPDF(state);
+          else if (fmt === "excel" || fmt === "xlsx" || fmt === "csv")
+            await exportDeliveryExcel(state);
+          else await exportDeliveryTXT(state);
+        }
+        return {
+          text: `Your **${kind} report** (${fmt.toUpperCase()}) has been generated and downloaded — built from your live station data (fuel types, prices, pumps, expenses, tank readings).`,
+        };
+      } catch (e) {
+        return {
+          text: `The ${kind} report could not be generated: ${(e as Error).message}`,
+        };
+      }
+    }
+
+    // ---- Print ----
+    if (
+      /^print\b/.test(lower) ||
+      /\bprint\s+(the\s+)?(summary|report)/.test(lower)
+    ) {
+      const text = buildSummaryText(state);
+      printTextDocument(
+        `${state.companyData?.name || "Fuel Station"} — Business Summary`,
+        text,
+      );
+      return {
+        text: 'Sent your **business summary** to the printer (the print dialog should be open). Say "print" again anytime — or ask me to print after any analysis.',
+      };
+    }
+
+    // ---- Send (email / WhatsApp) — always confirm before sending ----
+    const emailMatch = msg.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    if (
+      emailMatch &&
+      /(send|email|mail|share|forward)/.test(lower) &&
+      !/whatsapp/.test(lower)
+    ) {
+      const to = emailMatch[0];
+      const text = buildSummaryText(state);
+      return {
+        text: `Ready to email your **business summary** to **${to}**.\n\nIt includes: days recorded, total revenue, fuel sold, expenses, net, outstanding debt, invoices, and employees — all from your live data.\n\nConfirm below and I'll send it${""} (via your configured email gateway, or your mail app if none is set up).`,
+        action: {
+          label: `Send email to ${to}`,
+          run: async () => {
+            const res = await sendSummaryEmail(to, text, stationId);
+            appendAssistantMessage(
+              res.message,
+              res.fallbackUrl
+                ? {
+                    label: res.fallbackLabel || "Open fallback",
+                    run: async () => {
+                      window.open(res.fallbackUrl, "_blank");
+                    },
+                  }
+                : undefined,
+            );
+          },
+        },
+      };
+    }
+
+    const waPhoneMatch = msg.match(/\+?\d[\d\s-]{6,}\d/);
+    if (
+      waPhoneMatch &&
+      /whatsapp|whats app|wa\b/.test(lower) &&
+      /(send|share|forward|message)/.test(lower)
+    ) {
+      const phone = waPhoneMatch[0].replace(/[\s-]/g, "");
+      const text = buildSummaryText(state);
+      return {
+        text: `Ready to send your **business summary** via WhatsApp to **${phone}**.\n\nConfirm below and I'll send it (via your WhatsApp Business gateway, or WhatsApp Web if none is set up).`,
+        action: {
+          label: `Send WhatsApp to ${phone}`,
+          run: async () => {
+            const res = await sendSummaryWhatsApp(phone, text, stationId);
+            appendAssistantMessage(
+              res.message,
+              res.fallbackUrl
+                ? {
+                    label: res.fallbackLabel || "Open fallback",
+                    run: async () => {
+                      window.open(res.fallbackUrl, "_blank");
+                    },
+                  }
+                : undefined,
+            );
+          },
+        },
+      };
+    }
+
+    // ---- Forecast ----
+    if (/forecast|predict|projection|project sales/.test(lower)) {
+      const daysMatch = lower.match(/(\d+)\s*(?:days?|day)/);
+      const days = daysMatch
+        ? Math.min(90, Math.max(1, Number(daysMatch[1])))
+        : 7;
+      return { text: forecastSales(state, days) };
+    }
+
+    // ---- Analyze (sales/business trend; M-PESA analysis stays in the Q&A flow) ----
+    if (
+      /(analyz|analyse|trend|performance review)/.test(lower) &&
+      !/mpesa|m-pesa|mobile money/.test(lower)
+    ) {
+      return { text: analyzeSalesTrend(state) };
+    }
+
+    // ---- General questions: arithmetic, date/time, identity ----
+    const mathMatch = msg.match(
+      /(?:what(?:'s| is)\s+|calculate\s+|compute\s+)?([\d][\d\s+\-*/().xX÷%]*[\d)])\s*\??\s*$/,
+    );
+    if (
+      mathMatch &&
+      /[+\-*/xX÷%]/.test(mathMatch[1]) &&
+      !/(sale|price|revenue|debt|expense|litre|liter|fuel)/.test(lower)
+    ) {
+      const val = evalArithmetic(mathMatch[1]);
+      if (val !== null) {
+        return {
+          text: `**${mathMatch[1].trim()} = ${formatNumber(val, 4).replace(/\.?0+$/, "")}**\n\nNeed business math? Ask things like "what's my average daily revenue" or "forecast sales".`,
+        };
+      }
+    }
+    if (/^(what|what's)\s+(the\s+)?(date|day|time|today)/.test(lower)) {
+      const now = new Date();
+      return {
+        text: `It's **${now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}**, ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
+      };
+    }
+    if (/who are you|what are you|your name/.test(lower)) {
+      return {
+        text: "I'm your **FuelPro AI Assistant** — a secure, on-device assistant wired into your station's real data. I can answer questions, analyze and forecast sales, list and download your documents, export reports and full data backups, print summaries, and send them by email or WhatsApp. Say \"help\" for the full list.",
+      };
+    }
+
+    return null;
+  };
+
+  const appendAssistantMessage = (content: string, action?: MessageAction) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        type: "assistant",
+        content,
+        timestamp: new Date(),
+        action,
+      },
+    ]);
+  };
+
+  const runMessageAction = async (message: Message) => {
+    if (!message.action || message.actionDone) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === message.id ? { ...m, actionDone: true } : m)),
+    );
+    try {
+      await message.action.run();
+    } catch (e) {
+      appendAssistantMessage(`Action failed: ${(e as Error).message}`);
+    }
+  };
+
   const sendMessage = async (message: string, isRetry = false) => {
     if (!message.trim() || isLoading) return;
 
@@ -693,56 +987,69 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
       // Build comprehensive context from all business data
       const businessContext = buildBusinessContext();
 
-      // Generate local AI response — no artificial delay
-      const response = generateLocalResponse(message, businessContext);
+      // Action intents first — documents, data export, downloads, print,
+      // send, analyze, forecast, and general questions. If one matched, its
+      // response IS the answer (no generic Q&A fallback).
+      const actionResult = await tryActionIntents(message);
 
-      let navNote = "";
-      const lower = message.toLowerCase();
-      const openMatch = lower.match(
-        /(?:open|go to|goto|show me|take me to|launch)\s+(.+)/,
-      );
-      const watchMatch = lower.match(/(?:watch|play|stream)\s+(.+)/);
-      const tabs: { id: string; name: string }[] =
-        businessContext.availableTabs || [];
-      const subTargets: SubTabEntry[] = SITE_SUBTABS;
-      if (watchMatch && !openMatch) {
-        const title = watchMatch[1].trim();
-        navigateToTab("news", { subTab: "movies", movieTitle: title });
-        navNote = `\n\n🎬 Opening the **Movies** tab and searching for "${title}"…`;
-      } else if (openMatch) {
-        const target = openMatch[1].trim().replace(/[.!?]+$/, "");
-        // Sub-tab match first (more specific), then top-level tab match.
-        const sub = subTargets.find(
-          (e) =>
-            e.label.toLowerCase() === target ||
-            e.subId.toLowerCase() === target ||
-            e.label.toLowerCase().includes(target) ||
-            target.includes(e.label.toLowerCase()),
+      // Generate local AI response — no artificial delay
+      let finalResponse: string;
+      let actionForMessage: MessageAction | undefined;
+      if (actionResult) {
+        finalResponse = actionResult.text;
+        actionForMessage = actionResult.action;
+      } else {
+        const response = generateLocalResponse(message, businessContext);
+
+        let navNote = "";
+        const lower = message.toLowerCase();
+        const openMatch = lower.match(
+          /(?:open|go to|goto|show me|take me to|launch)\s+(.+)/,
         );
-        if (sub) {
-          navigateToTab(sub.hostTab, { subTab: sub.subId });
-          navNote = `\n\n↗️ Opening **${sub.label}** now…`;
-        } else {
-          const hit = tabs.find(
-            (t) =>
-              t.name?.toLowerCase() === target ||
-              t.id.toLowerCase() === target ||
-              t.name?.toLowerCase().includes(target) ||
-              target.includes(t.name?.toLowerCase() || "~~~"),
+        const watchMatch = lower.match(/(?:watch|play|stream)\s+(.+)/);
+        const tabs: { id: string; name: string }[] =
+          businessContext.availableTabs || [];
+        const subTargets: SubTabEntry[] = SITE_SUBTABS;
+        if (watchMatch && !openMatch) {
+          const title = watchMatch[1].trim();
+          navigateToTab("news", { subTab: "movies", movieTitle: title });
+          navNote = `\n\n🎬 Opening the **Movies** tab and searching for "${title}"…`;
+        } else if (openMatch) {
+          const target = openMatch[1].trim().replace(/[.!?]+$/, "");
+          // Sub-tab match first (more specific), then top-level tab match.
+          const sub = subTargets.find(
+            (e) =>
+              e.label.toLowerCase() === target ||
+              e.subId.toLowerCase() === target ||
+              e.label.toLowerCase().includes(target) ||
+              target.includes(e.label.toLowerCase()),
           );
-          if (hit) {
-            switchToTab(hit.id);
-            navNote = `\n\n↗️ Opening **${hit.name}** now…`;
+          if (sub) {
+            navigateToTab(sub.hostTab, { subTab: sub.subId });
+            navNote = `\n\n↗️ Opening **${sub.label}** now…`;
+          } else {
+            const hit = tabs.find(
+              (t) =>
+                t.name?.toLowerCase() === target ||
+                t.id.toLowerCase() === target ||
+                t.name?.toLowerCase().includes(target) ||
+                target.includes(t.name?.toLowerCase() || "~~~"),
+            );
+            if (hit) {
+              switchToTab(hit.id);
+              navNote = `\n\n↗️ Opening **${hit.name}** now…`;
+            }
           }
         }
+        finalResponse = response + navNote;
       }
-      const finalResponse = response + navNote;
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
         content: finalResponse,
         timestamp: new Date(),
+        action: actionForMessage,
         suggestions: [
           "Today's Sales",
           "Outstanding Debts",
@@ -871,6 +1178,18 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
       label: "M-PESA Summary",
       query: "Summarize my recent M-PESA transactions",
     },
+    {
+      label: "Forecast Sales",
+      query: "Forecast my sales for the next 7 days",
+    },
+    {
+      label: "My Documents",
+      query: "List my documents",
+    },
+    {
+      label: "Analyze Sales",
+      query: "Analyze my sales trend",
+    },
   ];
 
   if (!isOpen) {
@@ -958,7 +1277,7 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
                 {
                   id: "1",
                   type: "assistant",
-                  content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
+                  content: `Hello! I'm your FuelPro AI Assistant — wired into all your real station data. I can answer questions, analyze & forecast sales, list and download your documents, export reports and full data backups, print summaries, and send them by email or WhatsApp. Say "help" for the full list!`,
                   timestamp: new Date(),
                 },
               ]);
@@ -1044,6 +1363,19 @@ Say "watch <title>" and I'll open the Movies tab and search it for you. Or use *
                           className={isLoading ? "animate-spin" : ""}
                         />
                         {retryCount >= 3 ? "Max retries reached" : "Try Again"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* One-shot action button (e.g. confirm a send) */}
+                  {message.action && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => runMessageAction(message)}
+                        disabled={message.actionDone || isLoading}
+                        className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-full disabled:opacity-50 transition-colors"
+                      >
+                        {message.actionDone ? "✓ Done" : message.action.label}
                       </button>
                     </div>
                   )}
