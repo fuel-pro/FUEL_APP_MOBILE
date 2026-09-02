@@ -50,6 +50,12 @@ import {
   type ExpensePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import * as XLSX from "xlsx";
+import {
+  parseEmployeeWorkbook,
+  readWorkbookFile,
+  employeeDedupKey,
+  buildTemplateWorkbook,
+} from "@/react-app/lib/payroll-import";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -571,6 +577,16 @@ export default function PayrollSystem() {
   useEffect(() => {
     if (user) {
       cloudLoadCompleteRef.current = false;
+      // Custom column names (station-scoped cloud key — was "local only",
+      // so renames were lost on refresh/other devices).
+      cloudStorageService
+        .get<ColumnNames>("payroll_column_names", stationId)
+        .then((cn) => {
+          if (cn && typeof cn === "object" && !Array.isArray(cn)) {
+            setColumnNames((prev) => ({ ...prev, ...cn }));
+          }
+        })
+        .catch(() => {});
       Promise.all([fetchEmployees(), fetchSettings()]).finally(() => {
         cloudLoadCompleteRef.current = true;
       });
@@ -929,10 +945,17 @@ export default function PayrollSystem() {
 
   const saveColumnName = () => {
     if (columnName.trim()) {
-      setColumnNames({
+      const updated = {
         ...columnNames,
         [columnType]: columnName.trim(),
-      });
+      };
+      setColumnNames(updated);
+      // Persist to cloud so custom column names survive refresh/devices.
+      if (cloudLoadCompleteRef.current) {
+        cloudStorageService
+          .set("payroll_column_names", updated, stationId)
+          .catch(() => {});
+      }
       setShowColumnModal(false);
     }
   };
@@ -1152,7 +1175,7 @@ export default function PayrollSystem() {
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
     XLSX.writeFile(
       wb,
-      `${settings.organizationName.replace(/\s/g, "_")}_Employees_${monthName}_${settings.payrollYear}.xlsx`,
+      `${(settings.organizationName || "Organization").replace(/\s/g, "_")}_Employees_${monthName}_${settings.payrollYear}.xlsx`,
     );
   };
 
@@ -2036,344 +2059,133 @@ export default function PayrollSystem() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, employees.length]);
 
-  // Excel import functionality
+  // Excel/CSV import functionality — uses the robust shared parser
+  // (lib/payroll-import.ts) which scores every sheet for the real header row
+  // (the app's own exports have title rows that fooled the old detector),
+  // maps columns with word-boundary matching + conflict resolution, skips
+  // TOTALS footers, converts Excel serial dates, and dedupes in-file.
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       setImporting(true);
-      setSaving(true);
 
-      // Read the Excel file
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-      }) as any[][];
+      const workbook = await readWorkbookFile(file);
+      const result = parseEmployeeWorkbook(workbook);
 
-      // Skip empty rows and find header row
-      const nonEmptyRows = jsonData.filter((row) =>
-        row.some((cell) => cell !== undefined && cell !== ""),
-      );
-      if (nonEmptyRows.length < 2) {
+      if (result.employees.length === 0) {
         toastError(
-          "Please ensure your Excel file has headers and employee data.",
+          result.sheetName === null
+            ? "Could not find an employee table (header row + data rows) in any sheet. Please check the file format or download the template."
+            : "No valid employee data found below the header row. Please check the file and try again.",
         );
         return;
       }
 
-      // Find the header row (look for common column names)
-      let headerRowIndex = -1;
-      let headers: string[] = [];
-
-      for (let i = 0; i < nonEmptyRows.length; i++) {
-        const row = nonEmptyRows[i];
-        const rowString = row.join("").toLowerCase();
-
-        // Look for key employee data indicators
-        if (
-          rowString.includes("name") ||
-          rowString.includes("employee") ||
-          rowString.includes("first") ||
-          rowString.includes("salary")
-        ) {
-          headerRowIndex = i;
-          headers = row.map((cell) => String(cell || "").trim());
-          break;
-        }
-      }
-
-      if (headerRowIndex === -1) {
-        toastError(
-          "Could not find header row. Please ensure your Excel file has column headers.",
-        );
-        return;
-      }
-
-      // Process employee data rows
-      const employeeRows = nonEmptyRows.slice(headerRowIndex + 1);
-      const importedEmployees: any[] = [];
-
-      // Create mapping for common column variations
-      const columnMapping: Record<string, string[]> = {
-        firstName: ["first name", "fname", "first_name", "firstname"],
-        lastName: ["last name", "lname", "last_name", "lastname", "surname"],
-        fullName: [
-          "full name",
-          "name",
-          "employee name",
-          "full_name",
-          "fullname",
-        ],
-        employeeId: [
-          "employee id",
-          "emp id",
-          "id",
-          "employee_id",
-          "empid",
-          "staff id",
-        ],
-        role: ["role", "position", "job title", "designation", "title"],
-        department: ["department", "dept", "division", "section"],
-        basicSalary: [
-          "basic salary",
-          "salary",
-          "basic_salary",
-          "basicsalary",
-          "gross salary",
-          "amount",
-        ],
-        idNo: ["id number", "id no", "national id", "id_number", "idno", "nin"],
-        kraPin: ["kra pin", "pin", "kra_pin", "krapin", "tax pin"],
-        shaNo: ["sha no", "sha number", "sha_no", "shanumber", "sha_number"],
-        nssfNo: [
-          "nssf no",
-          "nssf number",
-          "nssf_no",
-          "nssfnumber",
-          "nssf_number",
-        ],
-        bankAccount: [
-          "bank account",
-          "account",
-          "account no",
-          "bank_account",
-          "accountno",
-          "account_number",
-        ],
-        bankName: ["bank name", "bank", "bank_name", "bankname"],
-        bankCode: ["bank code", "code", "bank_code", "bankcode"],
-        phone: ["phone", "mobile", "contact", "telephone", "phone number"],
-        email: ["email", "mail", "email address"],
-        employmentDate: [
-          "employment date",
-          "date joined",
-          "start date",
-          "employment_date",
-          "hire date",
-        ],
-        advance: ["advance", "loan", "advance amount", "deduction"],
-        notes: ["notes", "remarks", "comments", "description"],
-      };
-
-      // Find column indices
-      const getColumnIndex = (field: string): number => {
-        const variations = columnMapping[field] || [field];
-        for (const variation of variations) {
-          const index = headers.findIndex((header) =>
-            header.toLowerCase().includes(variation.toLowerCase()),
-          );
-          if (index !== -1) return index;
-        }
-        return -1;
-      };
-
-      // Process each employee row
-      employeeRows.forEach((row) => {
-        if (!row || row.length === 0) return;
-
-        // Extract data using column mapping
-        const firstName = String(row[getColumnIndex("firstName")] || "").trim();
-        const lastName = String(row[getColumnIndex("lastName")] || "").trim();
-        const fullName = String(
-          row[getColumnIndex("fullName")] || `${firstName} ${lastName}`,
-        ).trim();
-
-        // Skip rows without essential data
-        if (!firstName && !lastName && !fullName) return;
-
-        const employeeData = {
-          first_name: firstName || fullName.split(" ")[0] || "",
-          last_name: lastName || fullName.split(" ").slice(1).join(" ") || "",
-          employee_id: String(row[getColumnIndex("employeeId")] || "").trim(),
-          role: String(row[getColumnIndex("role")] || "").trim(),
-          department: String(row[getColumnIndex("department")] || "").trim(),
-          basic_salary:
-            parseFloat(
-              String(row[getColumnIndex("basicSalary")] || "0").replace(
-                /[^\d.-]/g,
-                "",
-              ),
-            ) || 0,
-          id_number: String(row[getColumnIndex("idNo")] || "").trim(),
-          kra_pin: String(row[getColumnIndex("kraPin")] || "").trim(),
-          sha_number: String(row[getColumnIndex("shaNo")] || "").trim(),
-          nssf_number: String(row[getColumnIndex("nssfNo")] || "").trim(),
-          bank_account: String(row[getColumnIndex("bankAccount")] || "").trim(),
-          bank_name: String(row[getColumnIndex("bankName")] || "").trim(),
-          bank_code: String(row[getColumnIndex("bankCode")] || "").trim(),
-          phone: String(row[getColumnIndex("phone")] || "").trim(),
-          email: String(row[getColumnIndex("email")] || "").trim(),
-          employment_date: String(
-            row[getColumnIndex("employmentDate")] ||
-              new Date().toISOString().split("T")[0],
-          ).trim(),
-          advance_amount:
-            parseFloat(
-              String(row[getColumnIndex("advance")] || "0").replace(
-                /[^\d.-]/g,
-                "",
-              ),
-            ) || 0,
-          notes: String(row[getColumnIndex("notes")] || "").trim(),
-        };
-
-        // Only add if we have basic required data
-        if (employeeData.first_name || employeeData.last_name) {
-          importedEmployees.push(employeeData);
-        }
-      });
-
-      if (importedEmployees.length === 0) {
-        toastError(
-          "No valid employee data found in the Excel file. Please check the format and try again.",
-        );
-        return;
-      }
-
-      // Confirm before importing
+      // Confirm before importing (with a small preview of who was found).
+      const preview = result.employees
+        .slice(0, 3)
+        .map((emp) => `${emp.first_name} ${emp.last_name}`.trim())
+        .join(", ");
       const confirmImport = confirm(
-        `Found ${importedEmployees.length} employees to import. This will add them to your existing employee list. Continue?`,
+        `Found ${result.employees.length} employee(s) in sheet "${result.sheetName}"` +
+          (preview
+            ? `: ${preview}${result.employees.length > 3 ? ", …" : ""}`
+            : "") +
+          `.\n\nThis will add them to your existing employee list. Continue?`,
       );
-
       if (!confirmImport) return;
 
-      // Import employees directly to cloud storage + localStorage
-      let successCount = 0;
-      let errorCount = 0;
-      const localImported: any[] = [];
+      // Dedup against existing cloud records (employee_id, national ID, or
+      // full name — the old code only matched employee_id, so files without
+      // IDs duplicated on every re-import).
+      const cloudData =
+        (await cloudStorageService.get<any[]>(
+          "payroll_employees",
+          stationId,
+        )) || [];
+      const existingKeys = new Set(
+        cloudData.map((emp) => employeeDedupKey(emp)),
+      );
+      const toAdd = result.employees.filter(
+        (emp) => !existingKeys.has(employeeDedupKey(emp)),
+      );
+      const skippedDupes = result.employees.length - toAdd.length;
 
-      for (const employeeData of importedEmployees) {
-        // Assign a stable employee_id if missing (was `Date.now() + Math.random()`
-        // which produced a FLOAT id — breaks cloud lookups that compare with ===).
-        const empId =
-          employeeData.employee_id ||
-          `EMP-${Date.now().toString(36).toUpperCase()}-${successCount}`;
-        localImported.push({
-          id: Date.now() + successCount, // integer, not float
-          ...employeeData,
-          employee_id: empId,
-          sha_amount: 0,
-          nssf_amount: 0,
-          advance_amount: employeeData.advance_amount || 0,
-          basic_salary: employeeData.basic_salary || 0,
-          net_pay: calcNetPay({
-            basicSalary: employeeData.basic_salary || 0,
-            advance: employeeData.advance_amount || 0,
-            sha: 0,
-            nssf: 0,
-          }),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        successCount++;
-      }
-
-      // Save imported employees to cloud + localStorage
-      if (localImported.length > 0) {
-        try {
-          const cloudData =
-            (await cloudStorageService.get<any[]>(
-              "payroll_employees",
-              stationId,
-            )) || [];
-          // De-duplicate: skip imported employees whose employee_id already
-          // exists in cloud (was missing — re-importing the same file
-          // created duplicates every time).
-          const existingIds = new Set(
-            cloudData.map((e: any) => e.employee_id).filter(Boolean),
-          );
-          const toAdd = localImported.filter(
-            (emp) => !existingIds.has(emp.employee_id),
-          );
-          const skippedDupes = localImported.length - toAdd.length;
-          if (toAdd.length === 0) {
-            toastError(
-              `All ${localImported.length} imported employees already exist (matched by Employee ID). No duplicates added.`,
-            );
-            return;
-          }
-          const updated = [...toAdd, ...cloudData];
-          await cloudStorageService.set(
-            "payroll_employees",
-            updated,
-            stationId,
-          );
-          localStorage.setItem(
-            "fuelpro_payroll_employees",
-            JSON.stringify(updated),
-          );
-          // Update local state
-          setEmployees((prev) => [
-            ...toAdd.map((emp, i) => ({
-              id: emp.id,
-              no: String(prev.length + i + 1),
-              firstName: emp.first_name || "",
-              lastName: emp.last_name || "",
-              fullName: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(),
-              employeeId: emp.employee_id || "",
-              role: emp.role || "",
-              department: emp.department || "",
-              basicSalary: emp.basic_salary || 0,
-              sha: 0,
-              nssf: 0,
-              advance: emp.advance_amount || 0,
-              netPay: emp.net_pay || 0,
-              bank: emp.bank_name || "",
-              bankCode: emp.bank_code || "",
-              idNo: emp.id_number || "",
-              kraPin: emp.kra_pin || "",
-              shaNo: emp.sha_number || "",
-              nssfNo: emp.nssf_number || "",
-              bankAccount: emp.bank_account || "",
-              phone: emp.phone || "",
-              email: emp.email || "",
-              employmentDate: emp.employment_date || "",
-              notes: emp.notes || "",
-            })),
-            ...prev,
-          ]);
-          if (skippedDupes > 0) {
-            toastSuccess(
-              `Imported ${toAdd.length} employees. ${skippedDupes} duplicate(s) skipped (already exist by Employee ID).`,
-            );
-          }
-        } catch (importErr) {
-          // Was `catch { /* */ }` — silently swallowed, so the user saw
-          // "Successfully imported" even when the cloud write failed.
-          errorCount = localImported.length;
-          console.error("Error saving imported employees to cloud:", importErr);
-          toastError(
-            "Failed to save imported employees to cloud: " +
-              (importErr as Error).message,
-          );
-        }
-      }
-
-      // Show results
-      if (successCount > 0 && errorCount === 0) {
-        toastSuccess(`Successfully imported ${successCount} employees.`);
-        await fetchEmployees(); // Refresh from cloud
-      } else if (errorCount > 0) {
+      if (toAdd.length === 0) {
         toastError(
-          `Import partially failed: ${errorCount} employee(s) could not be saved.`,
+          `All ${result.employees.length} imported employee(s) already exist (matched by Employee ID / ID No. / name). No duplicates added.`,
         );
+        return;
       }
+
+      const now = new Date().toISOString();
+      const localImported = toAdd.map((emp, i) => {
+        const basicSalary = emp.basic_salary || 0;
+        const sha = emp.sha_amount || 0;
+        const nssf = emp.nssf_amount || 0;
+        const advance = emp.advance_amount || 0;
+        return {
+          id: Date.now() + i, // integer, not float
+          ...emp,
+          employee_id:
+            emp.employee_id ||
+            `EMP-${Date.now().toString(36).toUpperCase()}-${i + 1}`,
+          sha_amount: sha,
+          nssf_amount: nssf,
+          advance_amount: advance,
+          basic_salary: basicSalary,
+          net_pay:
+            emp.net_pay > 0
+              ? emp.net_pay
+              : calcNetPay({ basicSalary, advance, sha, nssf }),
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
+
+      try {
+        const updated = [...localImported, ...cloudData];
+        await cloudStorageService.set("payroll_employees", updated, stationId);
+        localStorage.setItem(
+          "fuelpro_payroll_employees",
+          JSON.stringify(updated),
+        );
+      } catch (importErr) {
+        console.error("Error saving imported employees to cloud:", importErr);
+        toastError(
+          "Failed to save imported employees to cloud: " +
+            (importErr as Error).message,
+        );
+        return;
+      }
+
+      await fetchEmployees(); // Refresh from cloud (source of truth)
+      toastSuccess(
+        skippedDupes > 0
+          ? `Imported ${toAdd.length} employee(s). ${skippedDupes} duplicate(s) skipped (already exist).`
+          : `Successfully imported ${toAdd.length} employee(s).`,
+      );
     } catch (error) {
       console.error("Error importing Excel file:", error);
       toastError(
-        "Error reading Excel file. Please ensure it is a valid .xlsx file and try again.",
+        "Error reading the file. Please ensure it is a valid .xlsx, .xls or .csv file and try again.",
       );
     } finally {
       setImporting(false);
-      setSaving(false);
       // Reset the file input
       if (importInputRef.current) {
         importInputRef.current.value = "";
       }
     }
+  };
+
+  // Download a blank import template (headers + one sample row) so users
+  // know exactly which columns the importer understands.
+  const downloadImportTemplate = () => {
+    const wb = buildTemplateWorkbook();
+    XLSX.writeFile(wb, "Employee_Import_Template.xlsx");
   };
 
   // Other export functions (SHA, NSSF, Payroll lists)
@@ -2642,6 +2454,15 @@ export default function PayrollSystem() {
             <span className="sm:hidden">
               {importing ? "Loading..." : "Import"}
             </span>
+          </button>
+
+          <button
+            onClick={downloadImportTemplate}
+            title="Download a blank Excel template with the columns the importer understands"
+            className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
+          >
+            <Download size={12} className="md:w-4 md:h-4" />
+            <span className="hidden sm:inline ml-1">Template</span>
           </button>
 
           <button
@@ -4370,7 +4191,7 @@ export default function PayrollSystem() {
       <input
         ref={importInputRef}
         type="file"
-        accept=".xlsx,.xls"
+        accept=".xlsx,.xls,.csv"
         onChange={handleImportExcel}
         className="hidden"
       />
