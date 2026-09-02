@@ -1,5 +1,49 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 — Navigation map + architecture boundaries (commit 0b683ae)
+
+User asked: navigate the entire site, determine what's wired into the existing
+host tabs, decide what each feature should share, and enforce clean/event-
+driven architecture with defined boundaries.
+
+**Deliverables:**
+- `docs/ARCHITECTURE.md` (NEW, sole source of truth): 33 host tabs with every
+  inner view listed; data-sharing matrix (single-writer per cloud KV, readers
+  listed); 4 boundary rules (no new top-level tab, single KV owner,
+  computed views read-only, shared primitives only in ui/); violations fixed
+  (`customer_price_lists` locked, complaint complaints feed, shift handover
+  feed, contract pricing shared via one resolver, contract fixed);
+  feature checklist mandatory for every new feature.
+- `src/react-app/lib/feature-events.ts` (NEW, typed) + 5 contract tests:
+  discriminated union `FPFeatureEvent` (discount, handover, voucher, meter,
+  tank-water, complaint, permit, power outage). Emitters now exist from
+  DiscountApprovalQueue, ShiftHandoverChecklist, CustomerComplaintsLog,
+  HsePermitToWorkLog, GiftVoucherRegister, MeterProvingLog (pass/fail), and
+  TankWaterTrace (5 mm crossing, ref-guarded).
+- `src/react-app/lib/contract-pricing.ts` (NEW): ONE canonical
+  `resolveContractPrice` shared by POS + Invoice (removes the duplicated
+  find predicate).
+- `PointOfSale.addFuelToCart`: honors `customer_price_lists` when a customer
+  is attached to the sale.
+- `Invoice` "use fuel price" button: honors the same contract prices.
+- `Communication` tab: NEW "Complaints" sub-tab (read-only log for the
+  comms team, deep-link "Message" jumps back with prefill).
+- `TeamManager` Activity & Health: NEW "Shift Handovers" panel reading the
+  terminal-sessions KV.
+
+**Verification:** tsc -b 0 errors, vitest 67/67 (added 5), eslint 0 errors
+(14 warnings — 1 fewer than stash 15 — two were cleaned by the new emitter
+vars), prettier formatted, build success with custom network-first sw.js
+postbuild intact. Chunk markers verified on BOTH hosts:
+- Communication-* (complaints feed + resolveContract): 2 markers
+- TeamManager-I-rYau74 (shift_handovers): 1
+- Invoice-BCf_AoWm (resolveContractPrice): 1
+- pos-Bo8ciWUb (customer_price_lists): 1
+
+**Deploy state:** GitHub main 0b683ae. Cloudflare Pages LIVE (preview
+806c22fa). Vercel production LIVE via prebuilt method + alias set
+(2snlb1mgc).
+
 ## Session 2026-09-02 — 22-feature forecourt batch (commit 4b3d85a)
 
 User asked for "1,000,000 new from each competitor" (hyperbolic). Delivered
