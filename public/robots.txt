@@ -1,5 +1,5 @@
 # FuelPro — robots.txt
-# https://fuelpropay.com
+# https://fuel-app-mobile.vercel.app
 
 User-agent: *
 Allow: /
@@ -22,4 +22,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://fuelpropay.com/sitemap.xml
+Sitemap: https://fuel-app-mobile.vercel.app/sitemap.xml

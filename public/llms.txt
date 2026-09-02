@@ -8,9 +8,9 @@
 
 ## Product
 
-- [Home](https://fuelpropay.com/): Product overview and entry point.
-- [Sign in](https://fuelpropay.com/sign-in): Access an existing station account.
-- [Sign up](https://fuelpropay.com/sign-up): Create a station account and complete guided setup.
+- [Home](https://fuel-app-mobile.vercel.app/): Product overview and entry point.
+- [Sign in](https://fuel-app-mobile.vercel.app/sign-in): Access an existing station account.
+- [Sign up](https://fuel-app-mobile.vercel.app/sign-up): Create a station account and complete guided setup.
 
 ## Core capabilities
 
@@ -28,4 +28,4 @@
 - The app is a single-page application; in-app views live under the dashboard
   and require authentication. Authenticated views are marked noindex.
 - API endpoints under /api/ are serverless functions and are disallowed to crawlers.
-- Sitemap: https://fuelpropay.com/sitemap.xml
+- Sitemap: https://fuel-app-mobile.vercel.app/sitemap.xml
