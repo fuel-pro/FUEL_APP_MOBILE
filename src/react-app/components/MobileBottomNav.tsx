@@ -25,9 +25,10 @@ import {
   Receipt,
   Settings,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 
 interface MobileBottomNavProps {
   activeTab: string;
@@ -76,122 +77,105 @@ export default function MobileBottomNav({
     return true;
   };
 
-  // Primary nav: most used tabs - 48px touch targets
-  const primaryNav: NavItem[] = [
-    { id: "dashboard", label: "Home", icon: Home, color: "text-blue-500" },
-    { id: "pos", label: "POS", icon: ShoppingCart, color: "text-green-500" },
-    { id: "sales", label: "Sales", icon: BarChart3, color: "text-purple-500" },
-    {
-      id: "inventory",
-      label: "Stock",
-      icon: Package,
-      color: "text-orange-500",
-    },
-  ].filter((item) => isTabAllowed(item.id));
+  const { state } = useFuel();
 
-  // Secondary nav: all other tabs - filtered by feature flags + permissions
-  const secondaryNav: NavItem[] = [
-    {
-      id: "reports",
-      label: "Reports",
-      icon: FileText,
-      color: "text-orange-400",
-    },
-    {
-      id: "fuelsalesreport",
-      label: "Fuel Rpt",
-      icon: TrendingUp,
-      color: "text-orange-400",
-    },
-    { id: "offloading", label: "Offload", icon: Fuel, color: "text-amber-500" },
-    { id: "delivery", label: "Delivery", icon: Truck, color: "text-teal-500" },
-    {
-      id: "invoice",
-      label: "Invoice",
-      icon: FileText,
-      color: "text-indigo-500",
-    },
-    { id: "credit", label: "Credit", icon: Wallet, color: "text-pink-500" },
-    // "debt" (Debt Reminder) merged into Credit as a sub-tab — removed from nav.
-    { id: "payroll", label: "Payroll", icon: Users, color: "text-pink-500" },
-    { id: "team", label: "Team", icon: Users, color: "text-purple-500" },
-    { id: "customers", label: "Loyalty", icon: Award, color: "text-amber-500" },
-    {
-      id: "analytics",
-      label: "Analytics",
-      icon: LineChart,
-      color: "text-violet-500",
-    },
-    {
-      id: "documents",
-      label: "Docs",
-      icon: FolderOpen,
-      color: "text-cyan-500",
-    },
-    {
-      id: "audit",
-      label: "Audit",
-      icon: ClipboardList,
-      color: "text-indigo-500",
-    },
-    {
-      id: "communication",
-      label: "Comms",
-      icon: Activity,
-      color: "text-green-500",
-    },
-    { id: "news", label: "News", icon: Newspaper, color: "text-blue-400" },
-    { id: "data", label: "Data", icon: Database, color: "text-gray-400" },
-    {
-      id: "integration",
-      label: "Integrate",
-      icon: Plug,
-      color: "text-indigo-500",
-    },
-    {
-      id: "regional",
-      label: "Compliance",
-      icon: Globe,
-      color: "text-blue-500",
-    },
-    { id: "fueltypes", label: "Fuels", icon: Fuel, color: "text-amber-500" },
-    {
-      id: "maintenance",
-      label: "Maint.",
-      icon: Wrench,
-      color: "text-gray-400",
-    },
-    { id: "expenses", label: "Expenses", icon: Receipt, color: "text-red-400" },
-    // SalesZote-style additive modules
-    {
-      id: "products",
-      label: "Products",
-      icon: Package,
-      color: "text-indigo-400",
-    },
-    {
-      id: "terminal",
-      label: "Terminal",
-      icon: Monitor,
-      color: "text-cyan-400",
-    },
-    {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      color: "text-blue-500",
-    },
-  ].filter((item) => isTabAllowed(item.id));
+  // Registry-driven nav: every visible tab in FuelContext.tabConfigurations
+  // is reachable on mobile (previously hardcoded and missed livetransaction,
+  // suppliers, pumpmapping, automation, price-finder).
+  const allNav: NavItem[] = useMemo(() => {
+    const SHORT_LABEL: Record<string, string> = {
+      dashboard: "Home",
+      pos: "POS",
+      sales: "Sales",
+      inventory: "Stock",
+      livetransaction: "Live Txn",
+      fuelsalesreport: "Fuel Rpt",
+      customers: "Loyalty",
+      mpesa: "M-PESA",
+      suppliers: "Suppliers",
+      pumpmapping: "Pump Map",
+      integration: "Integrate",
+      regional: "Compliance",
+      fueltypes: "Fuels",
+      documents: "Docs",
+      reports: "Reports",
+      analytics: "Analytics",
+      communication: "Comms",
+      maintenance: "Maint.",
+      expenses: "Expenses",
+      data: "Data",
+      news: "News",
+      terminal: "Terminal",
+      offloading: "Offload",
+      delivery: "Delivery",
+      invoice: "Invoice",
+      credit: "Credit",
+      payroll: "Payroll",
+      team: "Team",
+      audit: "Audit",
+      "price-finder": "Price Finder",
+      automation: "Automation",
+    };
+    const FALLBACK_ICONS: Record<string, any> = {
+      dashboard: Home,
+      pos: ShoppingCart,
+      sales: BarChart3,
+      inventory: Package,
+      livetransaction: Activity,
+      fuelsalesreport: TrendingUp,
+      customers: Award,
+      suppliers: Truck,
+      pumpmapping: Monitor,
+      "price-finder": Fuel,
+      integration: Plug,
+      regional: Globe,
+      fueltypes: Fuel,
+      audit: ClipboardList,
+      terminal: Monitor,
+      data: Database,
+      documents: FolderOpen,
+      reports: FileText,
+      analytics: LineChart,
+      communication: Activity,
+      maintenance: Wrench,
+      mpesa: CreditCard,
+      invoice: FileText,
+      offloading: Fuel,
+      delivery: Truck,
+      credit: Wallet,
+      payroll: Users,
+      team: Users,
+      expenses: Receipt,
+      news: Newspaper,
+      settings: Settings,
+    };
+    const FALLBACK_COLORS: Record<string, string> = {
+      dashboard: "text-blue-500",
+      pos: "text-green-500",
+      sales: "text-purple-500",
+      inventory: "text-orange-500",
+    };
+    return state.tabConfigurations
+      .filter((t) => t.visible && isTabAllowed(t.id))
+      .sort((a, b) => a.order - b.order)
+      .map((t) => ({
+        id: t.id,
+        label:
+          SHORT_LABEL[t.id] ??
+          (t.label.length > 12 ? t.label.slice(0, 12) : t.label),
+        icon: FALLBACK_ICONS[t.id] ?? Monitor,
+        color: FALLBACK_COLORS[t.id] ?? "text-gray-400",
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.tabConfigurations, featureFlags, canAccessTab]);
 
-  // M-PESA is ONLY shown if feature flag enabled (Kenya/TZ only)
-  if (featureFlags.mpesa) {
-    secondaryNav.unshift({
-      id: "mpesa",
-      label: "M-PESA",
-      icon: CreditCard,
-      color: "text-green-600",
-    });
-  }
+  const PRIMARY_IDS = ["dashboard", "pos", "sales", "inventory"];
+  const primaryNav: NavItem[] = allNav.filter((it) =>
+    PRIMARY_IDS.includes(it.id),
+  );
+  const secondaryNav: NavItem[] = allNav.filter(
+    (it) => !PRIMARY_IDS.includes(it.id),
+  );
 
   const handleNavClick = (tabId: string) => {
     onTabChange(tabId);
