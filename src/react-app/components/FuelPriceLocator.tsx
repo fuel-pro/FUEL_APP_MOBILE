@@ -33,6 +33,7 @@ import {
 import { getCountryById } from "@/react-app/config/countries";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import FuelTracker from "@/react-app/components/FuelTracker";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 // ── API base URL ──
 // Cloudflare Pages does NOT serve /api/* endpoints — only Vercel does.
@@ -137,6 +138,8 @@ export default function FuelPriceLocator() {
   // Inner sub-tab: "Price Finder" (this component) vs "Auto Fuel Price"
   // (the formerly-standalone FuelTracker GPS engine, now hosted here).
   const [activeView, setActiveView] = useState<"finder" | "auto">("finder");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("price-finder", setActiveView);
 
   const countryProfile = getCountryById(getDetectedCountryCode());
   const regulatorFullName =

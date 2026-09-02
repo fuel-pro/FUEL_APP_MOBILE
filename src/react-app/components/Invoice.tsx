@@ -42,6 +42,7 @@ import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { resolveContractPrice } from "@/react-app/lib/contract-pricing";
 import { useStations } from "@/react-app/context/StationContext";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
@@ -66,6 +67,8 @@ export default function Invoice() {
   const [activeView, setActiveView] = useState<"invoice" | "sales-invoices">(
     "invoice",
   );
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("invoice", setActiveView);
   const [quantityLabel, setQuantityLabel] = useState(
     state.invoiceSettings.quantityLabel,
   );

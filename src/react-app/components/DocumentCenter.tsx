@@ -49,6 +49,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DocumentConverter from "@/react-app/components/DocumentConverter";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "M-PESA Receipt": "var(--blend-green)",
@@ -162,6 +163,8 @@ export default function DocumentCenter() {
   const [activeView, setActiveView] = useState<"documents" | "converter">(
     "documents",
   );
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("documents", setActiveView);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);

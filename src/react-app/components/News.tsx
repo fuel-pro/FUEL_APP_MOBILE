@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import {
+  useSubTabDeepLink,
+  type SubTabPayload,
+} from "@/react-app/hooks/useSubTabDeepLink";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import { Search } from "lucide-react";
@@ -33,6 +37,7 @@ import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import LiveFeedEmbed from "@/react-app/components/LiveFeedEmbed";
 import MoviesEmbed from "@/react-app/components/MoviesEmbed";
 import { Film } from "lucide-react";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 interface DisplayNewsItem extends ExternalNewsItem {
   bookmarked: boolean;
@@ -282,7 +287,22 @@ export default function News() {
     "articles" | "movies" | "live-tv" | "live-radio"
   >("articles");
 
+  // External movie search seed (QuickSearch / AI Chatbot deep links).
+  const [movieSeed, setMovieSeed] = useState<{ q: string; ts: number }>({
+    q: "",
+    ts: 0,
+  });
+
   // Live feed embed state — country filter for TV / Radio sub-tabs
+  // Deep-link: applies payload.subTab; extras seed the Movies search.
+  const handleNewsExtras = (p: SubTabPayload) => {
+    const q = String(p.movieTitle || p.searchQuery || "").trim();
+    if (q) {
+      setActiveSubTab("movies");
+      setMovieSeed({ q, ts: Date.now() });
+    }
+  };
+  useSubTabDeepLink("news", setActiveSubTab, handleNewsExtras);
   const [tvCountry, setTvCountry] = useState<string>(currentCountry.id);
   const [radioCountry, setRadioCountry] = useState<string>(currentCountry.id);
 
@@ -735,7 +755,11 @@ export default function News() {
         <div className="space-y-4">
           {/* Global movie catalog — full search + genre + favorites/watchlist
               + continue-watching + embedded player. Silently integrated. */}
-          <MoviesEmbed accent="amber" />
+          <MoviesEmbed
+            accent="amber"
+            searchSeed={movieSeed.q}
+            searchSeedKey={movieSeed.ts}
+          />
         </div>
       )}
 

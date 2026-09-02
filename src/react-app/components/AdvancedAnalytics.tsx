@@ -33,6 +33,7 @@ import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 const EnhancedAnalyticsDashboard = lazy(() =>
   import("@/react-app/features/analytics/EnhancedAnalyticsDashboard").then(
@@ -69,6 +70,8 @@ export default function AdvancedAnalytics() {
   const [activeSubTab, setActiveSubTab] = useState<"analytics" | "enhanced">(
     "analytics",
   );
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("analytics", setActiveSubTab);
   // Use the station's currency (reactive to station/company changes) rather
   // than the device-detected location currency, which was wrong for
   // multi-country setups (a Kenyan station viewed from a US browser showed $).

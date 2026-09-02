@@ -63,6 +63,7 @@ import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { resolveContractPrice } from "@/react-app/lib/contract-pricing";
 import { lazy, Suspense } from "react";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 const EnhancedPOSView = lazy(() =>
   import("@/react-app/features/pos-enhanced/EnhancedPOS").then((m) => ({
@@ -113,6 +114,8 @@ export default function PointOfSale() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const [posView, setPosView] = useState<"standard" | "enhanced">("standard");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("pos", setPosView);
   const stationId = currentStation?.id;
   // Resolve currency symbol from companyData first, then the station record,
   // then the detected currency. This ensures a US station shows "$" even if

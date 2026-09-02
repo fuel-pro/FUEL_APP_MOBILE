@@ -17,6 +17,17 @@ import {
 import { useFuel } from "@/react-app/context/FuelContext";
 import { getCurrencySymbol, isKenyaStation } from "@/react-app/lib/currency";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import {
+  switchToTab,
+  navigateToTab,
+} from "@/react-app/lib/mpesa-integration-service";
+import {
+  searchSubTabs,
+  SITE_SUBTABS,
+  SITE_ACTIONS,
+  type SubTabEntry,
+  type QuickActionEntry,
+} from "@/react-app/lib/site-search-index";
 
 // Declare Speech Recognition types
 declare global {
@@ -587,9 +598,74 @@ export default function AIChatbot() {
       return `**Business Overview - ${context.businessName}**\n\n**Sales:**\n• Today's Revenue: ${currency} ${todaySales?.totalRevenue?.toLocaleString() || 0}\n${salesOverviewLines}\n\n💰 **Financials:**\n• Outstanding Debt: ${currency} ${deliveryTracker?.totalDebt?.toLocaleString() || 0}\n• Total Expenses Today: ${currency} ${todaySales?.totalExpenses?.toLocaleString() || 0}\n• Saved Invoices: ${invoices?.savedInvoices || 0}\n\n👥 **Staff:** ${payroll?.totalEmployees || 0} employees\n🚛 **Offloading:** ${offloading?.totalRecords || 0} records\n📅 **Sales History:** ${salesHistory?.totalDaysRecorded || 0} days recorded`;
     }
 
+    // Movies / Live TV / Radio / entertainment — the AI answers about the
+    // site's full streaming + broadcast catalog.
+    if (
+      lowerMsg.includes("movie") ||
+      lowerMsg.includes("film") ||
+      lowerMsg.includes("series") ||
+      lowerMsg.includes("tv show") ||
+      lowerMsg.includes("watch") ||
+      lowerMsg.includes("live tv") ||
+      lowerMsg.includes("live radio") ||
+      lowerMsg.includes("channel") ||
+      lowerMsg.includes("stream")
+    ) {
+      return `**Entertainment & Live Broadcasts**
+
+FuelPro includes a full entertainment hub in the **News** tab:
+
+**Movies** — full streaming catalog (movies, series, documentaries) with search, genres, seasons, and an in-app player.
+📺 **Live TV** — 1,500+ live channels worldwide (news, sports, movies, kids, music…), with subtitles/AI captions.
+📻 **Live Radio** — 4,000+ live stations by genre and country.
+
+Say "watch <title>" and I'll open the Movies tab and search it for you. Or use **Quick Search (Ctrl+K)** — it searches the whole site: tabs, sub-tabs, settings, actions, and the movie catalog.`;
+    }
+
     // Help
     if (lowerMsg.includes("help") || lowerMsg.includes("what can you do")) {
       return `**I'm your FuelPro AI Assistant!**\n\nI can help you with:\n\n**Sales Analysis** - Today's sales, revenue trends, pump performance\n💰 **Debt Tracking** - Outstanding balances, customer debts\n📄 **Invoices** - Current invoice status and totals\n**Fuel Management** - Prices, tank levels, consumption\n👥 **Payroll** - Employee info, salary summaries\n🚛 **Offloading** - Fuel received from suppliers\n📱 **M-PESA** - Mobile payment analysis\n**Business Overview** - Complete business health check\n\n**Example questions:**\n• "What are today's sales?"\n• "Show outstanding debts"\n• "What are my fuel prices?"\n• "Business overview"\n• "Payroll summary"\n\nI'm running in **local mode** - all responses are generated from your actual business data stored in this device.`;
+    }
+
+    // Site-wide feature search — the query is matched against EVERY tab,
+    // sub-tab, setting, and quick action in the site. Nothing restricted.
+    const allTabs: { id: string; name: string; description?: string }[] =
+      context.availableTabs || [];
+    const q = lowerMsg.trim();
+    if (q.length >= 3) {
+      const tabMatches = allTabs.filter(
+        (t) =>
+          t.name?.toLowerCase().includes(q) ||
+          t.id.toLowerCase().includes(q) ||
+          t.description?.toLowerCase().includes(q) ||
+          q.includes(t.name?.toLowerCase() || "~~~") ||
+          q.includes(t.id.toLowerCase()),
+      );
+      const subHits = searchSubTabs(q, 5);
+      const actHits = (SITE_ACTIONS || [])
+        .filter((a: QuickActionEntry) =>
+          `${a.label} ${a.description} ${a.keywords || ""}`
+            .toLowerCase()
+            .includes(q),
+        )
+        .slice(0, 3);
+      const lines: string[] = [];
+      for (const t of tabMatches.slice(0, 3)) {
+        lines.push(
+          `• **${t.name}** (tab)${t.description ? ` — ${t.description}` : ""}`,
+        );
+      }
+      for (const e of subHits) {
+        lines.push(
+          `• **${e.label}** (sub-tab)${e.description ? ` — ${e.description}` : ""}`,
+        );
+      }
+      for (const a of actHits) {
+        lines.push(`• **${a.label}** (action) — ${a.description}`);
+      }
+      if (lines.length > 0) {
+        return `**I found ${lines.length} match${lines.length > 1 ? "es" : ""} for "${message}" in the site:**\n\n${lines.join("\n")}\n\nSay "open <name>" and I'll take you there — or use **Quick Search (Ctrl+K)** for instant access to every feature.`;
+      }
     }
 
     // Default response
@@ -620,10 +696,52 @@ export default function AIChatbot() {
       // Generate local AI response — no artificial delay
       const response = generateLocalResponse(message, businessContext);
 
+      let navNote = "";
+      const lower = message.toLowerCase();
+      const openMatch = lower.match(
+        /(?:open|go to|goto|show me|take me to|launch)\s+(.+)/,
+      );
+      const watchMatch = lower.match(/(?:watch|play|stream)\s+(.+)/);
+      const tabs: { id: string; name: string }[] =
+        businessContext.availableTabs || [];
+      const subTargets: SubTabEntry[] = SITE_SUBTABS;
+      if (watchMatch && !openMatch) {
+        const title = watchMatch[1].trim();
+        navigateToTab("news", { subTab: "movies", movieTitle: title });
+        navNote = `\n\n🎬 Opening the **Movies** tab and searching for "${title}"…`;
+      } else if (openMatch) {
+        const target = openMatch[1].trim().replace(/[.!?]+$/, "");
+        // Sub-tab match first (more specific), then top-level tab match.
+        const sub = subTargets.find(
+          (e) =>
+            e.label.toLowerCase() === target ||
+            e.subId.toLowerCase() === target ||
+            e.label.toLowerCase().includes(target) ||
+            target.includes(e.label.toLowerCase()),
+        );
+        if (sub) {
+          navigateToTab(sub.hostTab, { subTab: sub.subId });
+          navNote = `\n\n↗️ Opening **${sub.label}** now…`;
+        } else {
+          const hit = tabs.find(
+            (t) =>
+              t.name?.toLowerCase() === target ||
+              t.id.toLowerCase() === target ||
+              t.name?.toLowerCase().includes(target) ||
+              target.includes(t.name?.toLowerCase() || "~~~"),
+          );
+          if (hit) {
+            switchToTab(hit.id);
+            navNote = `\n\n↗️ Opening **${hit.name}** now…`;
+          }
+        }
+      }
+      const finalResponse = response + navNote;
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: response,
+        content: finalResponse,
         timestamp: new Date(),
         suggestions: [
           "Today's Sales",
@@ -640,7 +758,7 @@ export default function AIChatbot() {
 
       // Speak the response if speech is enabled
       if (speechEnabled && synthRef.current) {
-        speak(response);
+        speak(finalResponse);
       }
     } catch (error) {
       console.error("Chat error:", error);

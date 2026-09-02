@@ -35,6 +35,7 @@ import LoyaltyTierConfig from "@/react-app/components/LoyaltyTierConfig";
 import Promotions from "@/react-app/components/Promotions";
 import PunchCardLoyalty from "@/react-app/components/PunchCardLoyalty";
 import CustomerPurchaseHistory from "@/react-app/components/CustomerPurchaseHistory";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 interface Customer {
   id: string;
@@ -173,6 +174,8 @@ export default function CustomerLoyalty() {
     | "complaints"
     | "tiers"
   >("customers");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("customers", setInnerView);
   const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();

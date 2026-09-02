@@ -6,8 +6,21 @@
  * Linear, Notion, etc.
  */
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Search, X, ArrowRight, Layout, Zap } from "lucide-react";
-import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { Search, X, ArrowRight, Layout, Zap, Film, Layers } from "lucide-react";
+import {
+  switchToTab,
+  navigateToTab,
+} from "@/react-app/lib/mpesa-integration-service";
+import {
+  searchSubTabs,
+  searchActions,
+  type SubTabEntry,
+  type QuickActionEntry,
+} from "@/react-app/lib/site-search-index";
+import {
+  searchMovies,
+  type MovieItem,
+} from "@/react-app/services/MovieService";
 
 interface SearchEntry {
   id: string;
@@ -29,6 +42,42 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Live movie search — debounced against the streaming catalog via the
+  // same-origin /api/movies proxy.
+  const [movieResults, setMovieResults] = useState<MovieItem[]>([]);
+  const [movieSearching, setMovieSearching] = useState(false);
+  const movieSeqRef = useRef(0);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setMovieResults([]);
+      setMovieSearching(false);
+      return;
+    }
+    setMovieSearching(true);
+    const seq = ++movieSeqRef.current;
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchMovies(q);
+        if (movieSeqRef.current === seq) setMovieResults(res.slice(0, 6));
+      } catch {
+        if (movieSeqRef.current === seq) setMovieResults([]);
+      } finally {
+        if (movieSeqRef.current === seq) setMovieSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Static site-wide matches (sub-tabs + quick actions) — from the
+  // site-search-index registry.
+  const [subTabHits, setSubTabHits] = useState<SubTabEntry[]>([]);
+  const [actionHits, setActionHits] = useState<QuickActionEntry[]>([]);
+  useEffect(() => {
+    setSubTabHits(searchSubTabs(query, 8));
+    setActionHits(searchActions(query, 4));
+  }, [query]);
 
   // Global keyboard shortcut: Ctrl+K / Cmd+K to toggle.
   useEffect(() => {
@@ -69,6 +118,21 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
   }, [query, entries]);
 
   const results = filtered();
+
+  const openSubTab = useCallback((e: SubTabEntry) => {
+    navigateToTab(e.hostTab, { subTab: e.subId });
+    setOpen(false);
+  }, []);
+
+  const openAction = useCallback((a: QuickActionEntry) => {
+    navigateToTab(a.hostTab, a.subId ? { subTab: a.subId } : undefined);
+    setOpen(false);
+  }, []);
+
+  const openMovie = useCallback((movie: MovieItem) => {
+    navigateToTab("news", { subTab: "movies", movieTitle: movie.name });
+    setOpen(false);
+  }, []);
 
   const execute = useCallback((entry: SearchEntry) => {
     if (entry.action) {
@@ -139,7 +203,7 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
                 setActiveIndex(0);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Search tabs, actions..."
+              placeholder="Search anything — tabs, sub-tabs, settings, actions, movies…"
               className="flex-1 bg-transparent text-white placeholder-slate-500 outline-none text-base"
             />
             <button
@@ -153,6 +217,114 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
 
           {/* Results */}
           <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">
+            {(subTabHits.length > 0 || actionHits.length > 0) && (
+              <div className="mb-2">
+                {subTabHits.length > 0 && (
+                  <>
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      Sub-tabs & Settings
+                    </p>
+                    {subTabHits.map((e) => (
+                      <button
+                        key={`sub-${e.hostTab}-${e.subId}`}
+                        onClick={() => openSubTab(e)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-700/60 transition-colors group"
+                      >
+                        <div className="w-7 h-7 rounded bg-slate-700 flex items-center justify-center shrink-0">
+                          <Layers size={14} className="text-slate-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">
+                            {e.label}
+                          </p>
+                          <p className="text-xs text-slate-400 truncate">
+                            {e.description || e.keywords}
+                          </p>
+                        </div>
+                        <ArrowRight
+                          size={14}
+                          className="text-slate-600 group-hover:text-slate-400 shrink-0"
+                        />
+                      </button>
+                    ))}
+                  </>
+                )}
+                {actionHits.length > 0 && (
+                  <>
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      Do it now
+                    </p>
+                    {actionHits.map((a) => (
+                      <button
+                        key={`act-${a.label}`}
+                        onClick={() => openAction(a)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-700/60 transition-colors group"
+                      >
+                        <div className="w-7 h-7 rounded bg-slate-700 flex items-center justify-center shrink-0">
+                          <Zap size={14} className="text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">
+                            {a.label}
+                          </p>
+                          <p className="text-xs text-slate-400 truncate">
+                            {a.description}
+                          </p>
+                        </div>
+                        <ArrowRight
+                          size={14}
+                          className="text-slate-600 group-hover:text-slate-400 shrink-0"
+                        />
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+            {(movieResults.length > 0 || movieSearching) && (
+              <div className="mb-2">
+                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Movies & TV
+                </p>
+                {movieSearching && movieResults.length === 0 ? (
+                  <p className="px-4 py-2 text-xs text-slate-500">
+                    Searching the movie catalog…
+                  </p>
+                ) : (
+                  movieResults.map((m) => (
+                    <button
+                      key={`movie-${m.id}`}
+                      onClick={() => openMovie(m)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-700/60 transition-colors group"
+                    >
+                      <div className="w-8 h-10 rounded bg-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
+                        {m.poster ? (
+                          <img
+                            src={m.poster}
+                            alt={m.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Film size={14} className="text-slate-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{m.name}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {m.year ? `${m.year} · ` : ""}
+                          {m.type === "tv" ? "Series" : "Movie"}
+                        </p>
+                      </div>
+                      <ArrowRight
+                        size={14}
+                        className="text-slate-600 group-hover:text-slate-400 shrink-0"
+                      />
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
             {results.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-500">
                 <Search size={32} className="mx-auto mb-2 opacity-40" />

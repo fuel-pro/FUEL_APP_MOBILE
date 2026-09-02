@@ -26,6 +26,7 @@ import { TrendingUp, Coins, Banknote, PieChart } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 interface SalesEntry {
   date: string;
@@ -41,6 +42,8 @@ export default function FuelSalesReport() {
   const [innerView, setInnerView] = useState<
     "report" | "analysis" | "vehicles" | "services" | "payrecon" | "mix"
   >("report");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("fuelsalesreport", setInnerView);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reportData, setReportData] = useState<SalesEntry[]>([]);

@@ -85,6 +85,7 @@ import {
 } from "@/react-app/config/pricing";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
 
@@ -419,6 +420,8 @@ export default function TeamManager() {
   const [activeView, setActiveView] = useState<
     "team" | "shifts" | "roles" | "activity" | "performance"
   >("team");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("team", setActiveView);
 
   // ── Search + filter for the team members roster ──
   const [memberSearch, setMemberSearch] = useState("");

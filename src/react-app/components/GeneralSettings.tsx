@@ -93,6 +93,7 @@ import { getVATRate } from "@/react-app/config/pricing";
 import { TabConfiguration } from "@/react-app/context/FuelContext";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { FALLBACK_TAB, resolveLandingTab } from "@/react-app/lib/landing-tab";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 // ─── Cloud-backed settings store ────────────────────────────────────────────
 const SETTINGS_KEY = "general_settings_v1";
@@ -317,6 +318,8 @@ export default function GeneralSettings() {
   const { toast, show } = useToast();
 
   const [activeSubTab, setActiveSubTab] = useState("general");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("settings", setActiveSubTab);
   const [config, setConfig] = useState<GeneralSettingsConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

@@ -72,6 +72,7 @@ import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
 import { lazy, Suspense } from "react";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 const EnhancedInventoryManagement = lazy(() =>
   import("@/react-app/features/inventory-pro/EnhancedInventory").then((m) => ({
@@ -1781,6 +1782,8 @@ const ReordersPanel = ({
 export default function InventoryManagement() {
   const { currentStation } = useStations();
   const [activeTab, setActiveTab] = useState<InventoryTab>("products");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("inventory", setActiveTab);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [stations, setStations] = useState<any[]>([]);

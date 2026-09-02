@@ -30,6 +30,7 @@ import CustomerPriceLists from "@/react-app/components/CustomerPriceLists";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DebtReminder from "@/react-app/components/DebtReminder";
+import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 import {
   navigateToTab,
   onTabPayload,
@@ -159,6 +160,8 @@ export default function CreditManagement() {
     | "aging"
     | "pricelists"
   >("accounts");
+  // Deep-link: QuickSearch/AIChatbot can jump straight into a sub-tab.
+  useSubTabDeepLink("credit", setActiveView);
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
       "credit_accounts",

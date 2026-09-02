@@ -77,6 +77,10 @@ type TypeFilter = "all" | "movie" | "tv";
 
 interface Props {
   accent?: "blue" | "purple" | "amber";
+  /** External search seed (QuickSearch / AI Chatbot deep links). */
+  searchSeed?: string;
+  /** Changes on every new seed (even identical queries) to re-fire. */
+  searchSeedKey?: number;
 }
 
 // ─── MoviePlayer — native hls.js player for the reverse-engineered stream ─────
@@ -1210,7 +1214,11 @@ function EmbedFallbackPlayer({
   );
 }
 
-export default function MoviesEmbed({ accent = "amber" }: Props) {
+export default function MoviesEmbed({
+  accent = "amber",
+  searchSeed,
+  searchSeedKey,
+}: Props) {
   const { user } = useAuth();
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -1225,6 +1233,16 @@ export default function MoviesEmbed({ accent = "amber" }: Props) {
   const [browseSlider, setBrowseSlider] = useState("trending");
   const [browseTitles, setBrowseTitles] = useState<MovieItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  // External search seed (QuickSearch/AIChatbot deep links) — runs the
+  // catalog search on each new seed.
+  useEffect(() => {
+    const q = (searchSeed || "").trim();
+    if (!q || !searchSeedKey) return;
+    setSearchQuery(q);
+    runSearch(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchSeedKey]);
+
   const [searchResults, setSearchResults] = useState<MovieItem[]>([]);
 
   // ── Detail + player ───────────────────────────────────────────────────────
