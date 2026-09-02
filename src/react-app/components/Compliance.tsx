@@ -18,7 +18,11 @@ import {
   Download,
   Eye,
   Info,
+  ShieldCheck,
+  FileSignature,
 } from "lucide-react";
+import SafetyInspectionLog from "@/react-app/components/SafetyInspectionLog";
+import HsePermitToWorkLog from "@/react-app/components/HsePermitToWorkLog";
 import {
   getComplianceConfig,
   getAllComplianceCountries,
@@ -85,6 +89,8 @@ export default function Compliance() {
     { id: "features", label: "Compliance Features", icon: CheckCircle2 },
     { id: "payments", label: "Payment Compliance", icon: Landmark },
     { id: "template", label: "Compliance Template", icon: FileText },
+    { id: "safety", label: "Safety Inspections", icon: ShieldCheck },
+    { id: "hsse", label: "Permit to Work", icon: FileSignature },
   ];
 
   const handlePrint = () => {
@@ -281,6 +287,8 @@ export default function Compliance() {
                   {section.id === "template" && (
                     <TemplateSection config={config} />
                   )}
+                  {section.id === "safety" && <SafetyInspectionLog />}
+                  {section.id === "hsse" && <HsePermitToWorkLog />}
                 </div>
               )}
             </div>

@@ -62,6 +62,10 @@ import ThresholdAlertRules from "@/react-app/components/ThresholdAlertRules";
 import TamperAlarmLog from "@/react-app/components/TamperAlarmLog";
 import ItemMovementLedger from "@/react-app/components/ItemMovementLedger";
 import StockValuationReport from "@/react-app/components/StockValuationReport";
+import DipToLitresCalculator from "@/react-app/components/DipToLitresCalculator";
+import TankWaterTrace from "@/react-app/components/TankWaterTrace";
+import AbcInventoryAnalysis from "@/react-app/components/AbcInventoryAnalysis";
+import MeterProvingLog from "@/react-app/components/MeterProvingLog";
 import TankTelemetry from "@/react-app/components/TankTelemetry";
 import TankCalibration from "@/react-app/components/TankCalibration";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -129,7 +133,10 @@ type InventoryTab =
   | "reorders"
   | "enhanced"
   | "movement"
-  | "valuation";
+  | "valuation"
+  | "dipcalc"
+  | "abc"
+  | "meterproving";
 
 const TABS = [
   { id: "products", label: "Products" },
@@ -144,6 +151,9 @@ const TABS = [
   { id: "history", label: "History" },
   { id: "movement", label: "Item Ledger" },
   { id: "valuation", label: "Valuation" },
+  { id: "dipcalc", label: "Dip to Litres" },
+  { id: "abc", label: "ABC Analysis" },
+  { id: "meterproving", label: "Meter Proving" },
   { id: "enhanced", label: "Pro Inventory" },
 ] as const;
 
@@ -2168,10 +2178,14 @@ export default function InventoryManagement() {
             <EvaporationDriftDetector />
             <ThresholdAlertRules />
             <TamperAlarmLog />
+            <TankWaterTrace />
           </div>
         )}
         {activeTab === "telemetry" && <TankTelemetry />}
         {activeTab === "calibration" && <TankCalibration />}
+        {activeTab === "dipcalc" && <DipToLitresCalculator />}
+        {activeTab === "abc" && <AbcInventoryAnalysis />}
+        {activeTab === "meterproving" && <MeterProvingLog />}
         {activeTab === "movement" && <ItemMovementLedger />}
         {activeTab === "valuation" && (
           <StockValuationReport products={products} />

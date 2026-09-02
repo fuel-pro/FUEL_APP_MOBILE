@@ -23,11 +23,15 @@ import {
   FileText,
   CreditCard,
   History,
+  MessageSquareWarning,
+  Award,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { navigateToTab } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import CustomerSegments from "@/react-app/components/CustomerSegments";
+import CustomerComplaintsLog from "@/react-app/components/CustomerComplaintsLog";
+import LoyaltyTierConfig from "@/react-app/components/LoyaltyTierConfig";
 import Promotions from "@/react-app/components/Promotions";
 import PunchCardLoyalty from "@/react-app/components/PunchCardLoyalty";
 import CustomerPurchaseHistory from "@/react-app/components/CustomerPurchaseHistory";
@@ -161,7 +165,13 @@ function normalizeLoyaltyCustomers(arr: unknown): Customer[] {
 
 export default function CustomerLoyalty() {
   const [innerView, setInnerView] = useState<
-    "customers" | "segments" | "promos" | "punchcards" | "history"
+    | "customers"
+    | "segments"
+    | "promos"
+    | "punchcards"
+    | "history"
+    | "complaints"
+    | "tiers"
   >("customers");
   const location = useLocation();
   const { user } = useAuth();
@@ -544,6 +554,8 @@ export default function CustomerLoyalty() {
           { id: "promos", label: "Promotions", icon: Sparkles },
           { id: "punchcards", label: "Punch Cards", icon: Gift },
           { id: "history", label: "Purchase History", icon: History },
+          { id: "complaints", label: "Complaints", icon: MessageSquareWarning },
+          { id: "tiers", label: "Loyalty Tiers", icon: Award },
         ]}
         active={innerView}
         onChange={(id) => setInnerView(id as typeof innerView)}
@@ -555,6 +567,10 @@ export default function CustomerLoyalty() {
         <Promotions />
       ) : innerView === "punchcards" ? (
         <PunchCardLoyalty />
+      ) : innerView === "complaints" ? (
+        <CustomerComplaintsLog />
+      ) : innerView === "tiers" ? (
+        <LoyaltyTierConfig />
       ) : innerView === "history" ? (
         <CustomerPurchaseHistory />
       ) : (

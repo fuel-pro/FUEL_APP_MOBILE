@@ -18,6 +18,9 @@ import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatMoney as fmtMoney } from "../lib/currency";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import ShiftHandoverChecklist from "@/react-app/components/ShiftHandoverChecklist";
+import GiftVoucherRegister from "@/react-app/components/GiftVoucherRegister";
+import DiscountApprovalQueue from "@/react-app/components/DiscountApprovalQueue";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import {
   openTerminalSession,
@@ -443,6 +446,10 @@ export default function TerminalSessions() {
           </div>
         </div>
       )}
+
+      <ShiftHandoverChecklist />
+      <GiftVoucherRegister />
+      <DiscountApprovalQueue />
 
       {/* Close Session Modal */}
       {showCloseModal && closingSession && (

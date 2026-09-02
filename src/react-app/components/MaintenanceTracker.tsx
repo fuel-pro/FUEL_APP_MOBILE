@@ -32,6 +32,11 @@ import {
 } from "@/react-app/lib/mpesa-integration-service";
 import GeneratorFuelTracker from "@/react-app/components/GeneratorFuelTracker";
 import UtilityTracker from "@/react-app/components/UtilityTracker";
+import PowerInterruptionLog from "@/react-app/components/PowerInterruptionLog";
+import EnergyMixTracker from "@/react-app/components/EnergyMixTracker";
+import BatteryBackupHealth from "@/react-app/components/BatteryBackupHealth";
+import HoseReplacementLog from "@/react-app/components/HoseReplacementLog";
+import PreventiveChecklists from "@/react-app/components/PreventiveChecklists";
 
 interface MaintenanceRecord {
   id: string;
@@ -563,6 +568,11 @@ export default function MaintenanceTracker() {
 
       <GeneratorFuelTracker />
       <UtilityTracker />
+      <PowerInterruptionLog />
+      <EnergyMixTracker />
+      <BatteryBackupHealth />
+      <HoseReplacementLog />
+      <PreventiveChecklists />
 
       {/* Stats */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">

@@ -17,11 +17,12 @@ import {
 } from "@/react-app/config/pricing";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import FuelMixReport from "@/react-app/components/FuelMixReport";
 import VehicleSalesTracker from "@/react-app/components/VehicleSalesTracker";
 import CarWashServices from "@/react-app/components/CarWashServices";
 import PaymentReconByPump from "@/react-app/components/PaymentReconByPump";
 import NozzleAnalysis from "@/react-app/components/NozzleAnalysis";
-import { TrendingUp, Coins, Banknote } from "lucide-react";
+import { TrendingUp, Coins, Banknote, PieChart } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -38,7 +39,7 @@ export default function FuelSalesReport() {
   const { state } = useFuel();
   const fuelTypeApi = useStationFuelTypes();
   const [innerView, setInnerView] = useState<
-    "report" | "analysis" | "vehicles" | "services" | "payrecon"
+    "report" | "analysis" | "vehicles" | "services" | "payrecon" | "mix"
   >("report");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -510,6 +511,7 @@ export default function FuelSalesReport() {
           { id: "vehicles", label: "Vehicle Sales", icon: ShoppingCart },
           { id: "services", label: "Services", icon: Coins },
           { id: "payrecon", label: "Payment Recon", icon: Banknote },
+          { id: "mix", label: "Fuel Mix", icon: PieChart },
         ]}
         active={innerView}
         onChange={(id) => setInnerView(id as typeof innerView)}
@@ -522,6 +524,8 @@ export default function FuelSalesReport() {
         <CarWashServices />
       ) : innerView === "payrecon" ? (
         <PaymentReconByPump />
+      ) : innerView === "mix" ? (
+        <FuelMixReport />
       ) : (
         <>
           {/* Controls */}

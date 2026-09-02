@@ -15,11 +15,13 @@ import {
   Package,
   BookOpen,
   Landmark,
+  Calculator,
 } from "lucide-react";
 import DayBook from "@/react-app/components/DayBook";
 import LossControl from "@/react-app/components/LossControl";
 import BankLedger from "@/react-app/components/BankLedger";
 import CashFlowReport from "@/react-app/components/CashFlowReport";
+import StationPnlSummary from "@/react-app/components/StationPnlSummary";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -49,6 +51,7 @@ type ReportType =
   | "losscontrol"
   | "bankledger"
   | "cashflow"
+  | "stationpnl"
   | "profit-loss"
   | "expenses"
   | "vat-return"
@@ -1271,6 +1274,7 @@ export default function ReportsCenter() {
       losscontrol: "Loss Control (Shrinkage)",
       bankledger: "Bank & Cash Ledger",
       cashflow: "Cash Flow",
+      stationpnl: "Station P&L",
       overall: "Overall Financial Report",
       "profit-loss": "Profit & Loss Statement",
       expenses: "Expenses Report",
@@ -2449,6 +2453,7 @@ export default function ReportsCenter() {
             { id: "losscontrol", label: "Loss Control", icon: TrendingDown },
             { id: "bankledger", label: "Bank & Cash Ledger", icon: Landmark },
             { id: "cashflow", label: "Cash Flow", icon: TrendingUp },
+            { id: "stationpnl", label: "Station P&L", icon: Calculator },
             { id: "profit-loss", label: "Profit & Loss", icon: TrendingUp },
             { id: "expenses", label: "Expenses Report", icon: TrendingDown },
             { id: "vat-return", label: "VAT Return", icon: Receipt },
@@ -2545,6 +2550,8 @@ export default function ReportsCenter() {
             <BankLedger />
           ) : activeReport === "cashflow" ? (
             <CashFlowReport />
+          ) : activeReport === "stationpnl" ? (
+            <StationPnlSummary />
           ) : (
             <>
               {activeReport === "expenses" && renderExpensesReport()}

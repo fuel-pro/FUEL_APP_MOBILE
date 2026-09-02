@@ -31,6 +31,8 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import PurchasesSuppliers from "@/react-app/components/PurchasesSuppliers";
+import SupplierContractRegister from "@/react-app/components/SupplierContractRegister";
+import SupplierScorecard from "@/react-app/components/SupplierScorecard";
 
 interface Supplier {
   id: string;
@@ -203,7 +205,7 @@ export default function SupplierManagement() {
     return loadOrders();
   });
   const [activeView, setActiveView] = useState<
-    "suppliers" | "orders" | "purchases"
+    "suppliers" | "orders" | "purchases" | "contracts" | "scorecard"
   >("suppliers");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -531,6 +533,22 @@ export default function SupplierManagement() {
             Purchases
           </button>
           <button
+            onClick={() => {
+              setActiveView("contracts");
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "contracts" ? "bg-amber-500 text-gray-900 dark:text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+          >
+            Contracts
+          </button>
+          <button
+            onClick={() => {
+              setActiveView("scorecard");
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "scorecard" ? "bg-amber-500 text-gray-900 dark:text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+          >
+            Scorecard
+          </button>
+          <button
             onClick={() => switchToTab("delivery")}
             className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
           >
@@ -549,6 +567,10 @@ export default function SupplierManagement() {
 
       {activeView === "purchases" ? (
         <PurchasesSuppliers />
+      ) : activeView === "contracts" ? (
+        <SupplierContractRegister />
+      ) : activeView === "scorecard" ? (
+        <SupplierScorecard />
       ) : activeView === "suppliers" ? (
         <>
           {/* Supplier Summary Stats */}

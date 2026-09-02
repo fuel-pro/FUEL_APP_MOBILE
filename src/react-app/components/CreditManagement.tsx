@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   Truck,
   Share,
+  CalendarClock,
+  Tag,
 } from "lucide-react";
 import FleetCards from "@/react-app/components/FleetCards";
 import FleetTelemetry from "@/react-app/components/FleetTelemetry";
@@ -23,6 +25,8 @@ import FarmFuelEquipment from "@/react-app/components/FarmFuelEquipment";
 import FleetEmissionsTracker from "@/react-app/components/FleetEmissionsTracker";
 import CustomerStatement from "@/react-app/components/CustomerStatement";
 import CreditCustomerPortal from "@/react-app/components/CreditCustomerPortal";
+import CreditAgingReport from "@/react-app/components/CreditAgingReport";
+import CustomerPriceLists from "@/react-app/components/CustomerPriceLists";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import DebtReminder from "@/react-app/components/DebtReminder";
@@ -147,7 +151,13 @@ export default function CreditManagement() {
   // (debt payment reminders — formerly the standalone "Fuel Debt Payment
   // Reminder" tab; fleet/corporate fuel cards from Shell Fleet / Pesapal).
   const [activeView, setActiveView] = useState<
-    "accounts" | "fleet" | "reminders" | "statements" | "portal"
+    | "accounts"
+    | "fleet"
+    | "reminders"
+    | "statements"
+    | "portal"
+    | "aging"
+    | "pricelists"
   >("accounts");
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
@@ -475,13 +485,11 @@ export default function CreditManagement() {
           { id: "reminders", label: "Debt Payment Reminders", icon: BellRing },
           { id: "statements", label: "Statements", icon: FileText },
           { id: "portal", label: "Customer Portal", icon: Share },
+          { id: "aging", label: "Aging", icon: CalendarClock },
+          { id: "pricelists", label: "Price Lists", icon: Tag },
         ]}
         active={activeView}
-        onChange={(id) =>
-          setActiveView(
-            id as "accounts" | "fleet" | "reminders" | "statements" | "portal",
-          )
-        }
+        onChange={(id) => setActiveView(id as typeof activeView)}
       />
 
       {activeView === "fleet" ? (
@@ -497,6 +505,10 @@ export default function CreditManagement() {
         <CustomerStatement />
       ) : activeView === "portal" ? (
         <CreditCustomerPortal />
+      ) : activeView === "aging" ? (
+        <CreditAgingReport />
+      ) : activeView === "pricelists" ? (
+        <CustomerPriceLists />
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
