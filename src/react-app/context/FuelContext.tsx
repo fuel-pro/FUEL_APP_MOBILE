@@ -26,6 +26,8 @@ import {
   emitFuelPriceChange,
   onFuelPriceChange,
 } from "@/react-app/lib/fuel-interlink-bus";
+import { recordPriceChange } from "@/react-app/lib/price-history";
+import type { PriceSchedule } from "@/react-app/lib/forecourt-features";
 import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
 // Resolve default prices from the detected country (world-wide, not Kenya-only)
@@ -1382,7 +1384,11 @@ interface FuelContextType {
    * alongside dispatch(SET_PRICES) from any component that edits a station
    * pump price (PumpSettingsPanel, "Set as my price" actions, etc.).
    */
-  syncPriceToFuelTypes: (raw: string, price: number) => void;
+  syncPriceToFuelTypes: (
+    raw: string,
+    price: number,
+    changedBy?: string,
+  ) => void;
 }
 
 const FuelContext = createContext<FuelContextType | undefined>(undefined);
@@ -1414,6 +1420,68 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stationIdRef.current = stationId;
   }, [stationId]);
+
+  // PRICE SCHEDULER — apply due scheduled price changes APP-WIDE on login.
+  // Previously the scheduler only fired when the Fuel Type Manager tab was
+  // open (a mount effect inside PriceScheduler), so a queued price change
+  // never applied unless the owner happened to open that tab. FuelContext
+  // mounts with the app shell, so due schedules now apply on any login.
+  // Application flows through syncPriceToFuelTypes → fuel_types_config +
+  // the shared price-history trail (Rate History) records it automatically.
+  const schedulesAppliedRef = useRef<string>("");
+  useEffect(() => {
+    if (!user || !stationId) return;
+    const scopeKey = `${user.id}:${stationId}`;
+    if (schedulesAppliedRef.current === scopeKey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const schedules =
+          (await cloudStorageService.get<PriceSchedule[]>(
+            "price_schedules",
+            stationId,
+          )) || [];
+        const now = new Date();
+        const due = schedules.filter(
+          (s) =>
+            s &&
+            s.status === "pending" &&
+            Number.isFinite(s.price) &&
+            s.price > 0 &&
+            new Date(s.effectiveOn) <= now,
+        );
+        if (due.length === 0 || cancelled) {
+          schedulesAppliedRef.current = scopeKey;
+          return;
+        }
+        for (const s of due) {
+          // Declared later in this component body; effects run after render,
+          // so the binding is initialized by the time this closure executes.
+          syncPriceToFuelTypes(
+            s.label || s.fuelType,
+            s.price,
+            "Price Scheduler (auto)",
+          );
+        }
+        const appliedIds = new Set(due.map((d) => d.id));
+        await cloudStorageService.set(
+          "price_schedules",
+          schedules.map((s) =>
+            appliedIds.has(s.id) ? { ...s, status: "applied" as const } : s,
+          ),
+          stationId,
+        );
+      } catch {
+        /* best-effort — the tab-level check is the fallback */
+      } finally {
+        if (!cancelled) schedulesAppliedRef.current = scopeKey;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, stationId]);
 
   // WORLDWIDE: reconcile companyData.currency with the STATION's currency.
   // companyData.currency defaults to "KSh" (Kenya) and is persisted to the
@@ -2355,41 +2423,59 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // fuel_types_config (so FuelTypesManager/PriceBoard/POS/Invoice/Reports see
   // it) and broadcast on the interlink bus. Exposed via context for any
   // component that edits a station pump price.
-  const syncPriceToFuelTypes = useCallback((raw: string, price: number) => {
-    if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
-    const canonical = normalizeFuelType(raw);
-    if (!canonical) return;
-    // Update the matching fuel_types_config entry (if any) and persist.
-    const list = fuelTypesRef.current;
-    if (list.length > 0) {
-      const idx = list.findIndex(
-        (ft) => normalizeFuelType(ft.name) === canonical,
-      );
-      if (idx >= 0 && list[idx].price !== price) {
-        const next = list.slice();
-        next[idx] = { ...next[idx], price };
-        fuelTypesRef.current = next;
-        cloudStorageService
-          .set("fuel_types_config", next, stationIdRef.current)
-          .catch(() => {});
+  const syncPriceToFuelTypes = useCallback(
+    (raw: string, price: number, changedBy?: string) => {
+      if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
+      const canonical = normalizeFuelType(raw);
+      if (!canonical) return;
+      // Update the matching fuel_types_config entry (if any) and persist.
+      const list = fuelTypesRef.current;
+      let oldPrice: number | null = null;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== price) {
+          oldPrice = list[idx].price ?? null;
+          const next = list.slice();
+          next[idx] = { ...next[idx], price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
       }
-    }
-    // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
-    if (canonical === "petrol" || canonical === "diesel") {
-      dispatch({
-        type: "SET_PRICES",
-        payload:
-          canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
+      // Record the change in the shared price-history trail so Rate History
+      // (and the whole Fuel Type Manager matrix) sees changes from EVERY
+      // source — Price Board, Price Scheduler, Dashboard, Fuel Price Finder.
+      // Deduped inside recordPriceChange so double-callers don't double-log.
+      if (oldPrice !== null && oldPrice !== price) {
+        void recordPriceChange({
+          fuelType: raw,
+          oldPrice,
+          newPrice: price,
+          changedBy: changedBy || "Station",
+          stationId: stationIdRef.current,
+        });
+      }
+      // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
+      if (canonical === "petrol" || canonical === "diesel") {
+        dispatch({
+          type: "SET_PRICES",
+          payload:
+            canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
+        });
+      }
+      // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
+      emitFuelPriceChange({
+        fuelType: raw,
+        canonical,
+        price,
+        source: "FuelContext.syncPriceToFuelTypes",
       });
-    }
-    // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
-    emitFuelPriceChange({
-      fuelType: raw,
-      canonical,
-      price,
-      source: "FuelContext.syncPriceToFuelTypes",
-    });
-  }, []);
+    },
+    [],
+  );
 
   // Listen for price changes broadcast by OTHER components on the bus (e.g.
   // FuelPriceLocator "Set as my price") and mirror them into FuelContext +

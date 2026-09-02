@@ -58,7 +58,8 @@ export default function PriceScheduler() {
     if (due.length === 0) return;
     appliedRef.current = true;
     for (const s of due) {
-      syncPriceToFuelTypes(s.label || s.fuelType, s.price);
+      // changedBy flows into the shared price-history trail (Rate History).
+      syncPriceToFuelTypes(s.label || s.fuelType, s.price, "Price Scheduler");
     }
     setSchedules((prev) =>
       prev.map((s) =>

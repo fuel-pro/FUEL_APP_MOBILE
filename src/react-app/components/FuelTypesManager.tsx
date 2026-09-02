@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import { recordPriceChange } from "@/react-app/lib/price-history";
 import PriceBoard from "@/react-app/components/PriceBoard";
 import PriceScheduler from "@/react-app/components/PriceScheduler";
 import FuelQualityTesting from "@/react-app/components/FuelQualityTesting";
@@ -368,8 +369,66 @@ export default function FuelTypesManager() {
   const fuelTypesRef = useRef(fuelTypes);
   fuelTypesRef.current = fuelTypes;
 
+  // Fuel Quality ↔ Fuel Types data-sharing: latest quality test result per
+  // fuel type, surfaced as a badge on each row so a failed test is visible
+  // where the fuel is managed (not only inside the Quality sub-tab).
+  const [qualityTests, setQualityTests] = useState<
+    { fuelType: string; passed: boolean; date: string }[]
+  >([]);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const tests = await cloudStorageService.get<
+          { fuelType: string; passed: boolean; date: string }[]
+        >("fuel_quality_tests", stationId);
+        if (!cancelled && Array.isArray(tests)) setQualityTests(tests);
+      } catch {
+        /* best-effort badge */
+      }
+    })();
+    const unsub = cloudStorageService.subscribe<
+      { fuelType: string; passed: boolean; date: string }[]
+    >("fuel_quality_tests", stationId, (val) => {
+      if (Array.isArray(val)) setQualityTests(val);
+    });
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [user, stationId]);
+
+  const qualityByCanonical = useMemo(() => {
+    const map = new Map<string, { passed: boolean; date: string }>();
+    const sorted = [...qualityTests].sort((a, b) =>
+      (a.date || "").localeCompare(b.date || ""),
+    );
+    for (const t of sorted) {
+      const canonical = normalizeFuelType(t.fuelType || "");
+      if (canonical) map.set(canonical, { passed: t.passed, date: t.date });
+    }
+    return map;
+  }, [qualityTests]);
+
   const persist = (types: CustomFuelType[]) => {
     localModifiedRef.current = true;
+    // Record genuine price changes into the shared price-history trail
+    // (Rate History sub-tab) so edits made HERE appear alongside changes
+    // from Price Board / Price Scheduler / Dashboard. Deduped centrally.
+    const prevById = new Map(fuelTypes.map((f) => [f.id, f]));
+    for (const ft of types) {
+      const prev = prevById.get(ft.id);
+      if (prev && typeof prev.price === "number" && prev.price !== ft.price) {
+        void recordPriceChange({
+          fuelType: ft.name,
+          oldPrice: prev.price,
+          newPrice: ft.price,
+          changedBy: "Fuel Type Manager",
+          stationId,
+        });
+      }
+    }
     setFuelTypes(types);
     saveFuelTypes(types);
     if (cloudLoadCompleteRef.current)
@@ -970,6 +1029,29 @@ export default function FuelTypesManager() {
                             Inactive
                           </span>
                         )}
+                        {(() => {
+                          const q = qualityByCanonical.get(
+                            normalizeFuelType(ft.name) || "",
+                          );
+                          if (!q) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveView("quality");
+                              }}
+                              title={`Latest quality test: ${q.passed ? "PASSED" : "FAILED"} on ${new Date(q.date).toLocaleDateString()} — open Fuel Quality`}
+                              className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                q.passed
+                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+                                  : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
+                              }`}
+                            >
+                              {q.passed ? "Quality ✓" : "Quality ✗"}
+                            </button>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                         {ft.localName || ""} | {currencySymbol}{" "}

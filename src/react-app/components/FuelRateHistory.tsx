@@ -16,11 +16,14 @@ interface PriceChangeLike {
   id?: string;
   date?: string;
   timestamp?: string;
+  changedAt?: string;
   fuelType?: string;
   label?: string;
   oldPrice?: number;
   newPrice?: number;
   price?: number;
+  changedBy?: string;
+  reason?: string;
 }
 
 export default function FuelRateHistory() {
@@ -38,7 +41,9 @@ export default function FuelRateHistory() {
     const seen = new Map<string, number>();
     const out: (PriceChangeLike & { change: number; changePct: number })[] = [];
     const sorted = [...(history || [])].sort((a, b) =>
-      (a.date || a.timestamp || "").localeCompare(b.date || b.timestamp || ""),
+      (a.date || a.timestamp || a.changedAt || "").localeCompare(
+        b.date || b.timestamp || b.changedAt || "",
+      ),
     );
     for (const h of sorted) {
       const fuel = h.fuelType || h.label || "Fuel";
@@ -83,8 +88,9 @@ export default function FuelRateHistory() {
 
       {byFuel.length === 0 ? (
         <p className="text-xs text-gray-500">
-          No price changes recorded yet — change a price in Fuel Type Manager or
-          Price Board and it appears here.
+          No price changes recorded yet — change a price in Fuel Type Manager,
+          Price Board, Price Scheduler, Dashboard or Fuel Price Finder and it
+          appears here.
         </p>
       ) : (
         <div className="space-y-3">
@@ -97,19 +103,36 @@ export default function FuelRateHistory() {
                 {rowsForFuel.map((r, i) => (
                   <div
                     key={r.id || i}
-                    className="flex items-center justify-between text-xs rounded border border-gray-100 dark:border-gray-800 px-2 py-1.5"
+                    className="flex items-center justify-between gap-2 text-xs rounded border border-gray-100 dark:border-gray-800 px-2 py-1.5"
                   >
-                    <span>{r.date || r.timestamp || "—"}</span>
-                    <span className="font-medium">
+                    <span className="whitespace-nowrap">
+                      {r.date || r.timestamp || r.changedAt
+                        ? new Date(
+                            (r.date || r.timestamp || r.changedAt) as string,
+                          ).toLocaleString(undefined, {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })
+                        : "—"}
+                    </span>
+                    <span className="font-medium whitespace-nowrap">
                       {currency}
                       {(r.newPrice ?? r.price ?? 0).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                       })}
                       /L
                     </span>
+                    {r.changedBy && (
+                      <span
+                        className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 truncate max-w-[120px]"
+                        title={r.reason || r.changedBy}
+                      >
+                        {r.changedBy}
+                      </span>
+                    )}
                     {r.change !== 0 && (
                       <span
-                        className={`flex items-center gap-0.5 ${
+                        className={`flex items-center gap-0.5 whitespace-nowrap ${
                           r.change > 0 ? "text-emerald-600" : "text-red-500"
                         }`}
                       >

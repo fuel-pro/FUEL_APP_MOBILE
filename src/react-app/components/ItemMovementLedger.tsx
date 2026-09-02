@@ -6,9 +6,10 @@
  * Cloud KV `item_movement_entries` (station-scoped).
  */
 import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
+import { fetchInventoryTransactions } from "@/react-app/lib/pos-service";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const KEY = "item_movement_entries";
@@ -23,6 +24,20 @@ interface MovementEntry {
   date: string;
   qty: number;
   reference: string;
+  /** "auto" = derived from the real stock/payment matrix (inventory
+   *  transactions) — read-only. undefined = manual entry. */
+  source?: "auto" | "manual";
+}
+
+/** Maps the real inventory_transactions.transaction_type onto the ledger's
+ *  movement vocabulary so actual stock operations show up automatically. */
+function mapTransactionType(raw: string): MovementType {
+  const t = (raw || "").toLowerCase();
+  if (t === "sale" || t === "sell") return "sale";
+  if (t === "restock" || t === "purchase" || t === "receive") return "purchase";
+  if (t === "transfer") return "transfer";
+  if (t === "wastage" || t === "waste" || t === "damage") return "wastage";
+  return "adjustment";
 }
 
 function id() {
@@ -54,30 +69,66 @@ export default function ItemMovementLedger() {
   });
   const [filterItem, setFilterItem] = useState("");
 
+  // Data-sharing matrix: pull REAL stock movements from the
+  // inventory_transactions table (written by Products adjustments, stock
+  // transfers, wastage logs, reorder fulfillment, POS checkout) so the
+  // ledger reflects actual operations without double data entry.
+  const [autoEntries, setAutoEntries] = useState<MovementEntry[]>([]);
+  useEffect(() => {
+    if (!stationId) return;
+    let cancelled = false;
+    (async () => {
+      const txns = await fetchInventoryTransactions(stationId, undefined, 200);
+      if (cancelled) return;
+      setAutoEntries(
+        txns.map((t: any) => ({
+          id: `auto_${t.id}`,
+          item: t.products?.name || "Unknown item",
+          type: mapTransactionType(t.transaction_type || ""),
+          date: t.created_at || "",
+          qty: Math.abs(t.quantity_change ?? 0),
+          reference: t.notes || t.reference_type || "",
+          source: "auto" as const,
+        })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stationId]);
+
+  // Manual entries + auto-derived movements, unified (auto rows are
+  // read-only; manual rows keep full CRUD).
+  const allEntries = useMemo(() => {
+    const manual = (entries || []).map((e) => ({
+      ...e,
+      source: "manual" as const,
+    }));
+    return [...autoEntries, ...manual];
+  }, [entries, autoEntries]);
+
   const items = useMemo(
-    () => Array.from(new Set((entries || []).map((e) => e.item))).sort(),
-    [entries],
+    () => Array.from(new Set(allEntries.map((e) => e.item))).sort(),
+    [allEntries],
   );
 
   const visible = useMemo(
     () =>
-      (entries || [])
+      allEntries
         .filter((e) => !filterItem || e.item === filterItem)
         .sort((a, b) => a.date.localeCompare(b.date)),
-    [entries, filterItem],
+    [allEntries, filterItem],
   );
 
   const balances = useMemo(() => {
     const map = new Map<string, number>();
-    const sorted = [...(entries || [])].sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
+    const sorted = [...allEntries].sort((a, b) => a.date.localeCompare(b.date));
     for (const e of sorted) {
       map.set(e.id, (map.get(e.item) ?? 0) + TYPE_SIGN[e.type] * e.qty);
       map.set(e.item, map.get(e.id)!);
     }
     return map;
-  }, [entries]);
+  }, [allEntries]);
 
   const addEntry = () => {
     const item = form.item.trim();
@@ -139,8 +190,9 @@ export default function ItemMovementLedger() {
               Item Movement Ledger
             </h4>
             <p className="text-xs text-gray-500">
-              Per-item chronological movements with running balance (Codelab
-              item ledger / movement report).
+              Per-item chronological movements with running balance. Real stock
+              operations (adjustments, transfers, wastage, restocks) appear
+              automatically; manual entries can also be recorded.
             </p>
           </div>
         </div>
@@ -251,8 +303,24 @@ export default function ItemMovementLedger() {
                   key={e.id}
                   className="border-t border-gray-100 dark:border-gray-800"
                 >
-                  <td className="px-2 py-1.5">{e.date}</td>
-                  <td className="px-2 py-1.5 font-medium">{e.item}</td>
+                  <td className="px-2 py-1.5">
+                    {e.date
+                      ? new Date(e.date).toLocaleDateString(undefined, {
+                          dateStyle: "short",
+                        })
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-1.5 font-medium">
+                    {e.item}
+                    {e.source === "auto" && (
+                      <span
+                        className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 align-middle"
+                        title="Recorded automatically from stock operations"
+                      >
+                        auto
+                      </span>
+                    )}
+                  </td>
                   <td className="px-2 py-1.5 capitalize">{e.type}</td>
                   <td className="px-2 py-1.5 text-right">
                     {TYPE_SIGN[e.type] === 1 ? "+" : "−"}
@@ -263,13 +331,15 @@ export default function ItemMovementLedger() {
                     {(balances.get(e.id) ?? 0).toLocaleString()}
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    <button
-                      onClick={() => removeEntry(e)}
-                      className="text-red-500"
-                      aria-label="Remove movement"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    {e.source !== "auto" && (
+                      <button
+                        onClick={() => removeEntry(e)}
+                        className="text-red-500"
+                        aria-label="Remove movement"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
