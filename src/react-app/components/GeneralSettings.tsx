@@ -92,7 +92,11 @@ import {
 import { getVATRate } from "@/react-app/config/pricing";
 import { TabConfiguration } from "@/react-app/context/FuelContext";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
-import { FALLBACK_TAB, resolveLandingTab } from "@/react-app/lib/landing-tab";
+import {
+  FALLBACK_TAB,
+  resolveLandingTab,
+  beginLandingPreview,
+} from "@/react-app/lib/landing-tab";
 import { useSubTabDeepLink } from "@/react-app/hooks/useSubTabDeepLink";
 
 // ─── Cloud-backed settings store ────────────────────────────────────────────
@@ -1447,18 +1451,20 @@ function GeneralTab({
                 <button
                   type="button"
                   onClick={() => {
-                    const target =
-                      (prefs.rememberLastTab &&
-                        window.localStorage.getItem(
-                          "fuelpro_last_active_tab",
-                        )) ||
-                      prefs.defaultTab ||
-                      FALLBACK_TAB;
+                    // Preview = switch to the RESOLVED landing tab (same
+                    // logic the router uses on login) so the owner sees the
+                    // real behavior, then auto-return to Settings so they
+                    // don't lose their place.
+                    const target = resolveLandingTab(prefs, tabConfigs);
+                    const label =
+                      tabConfigs.find((t) => t.id === target)?.label || target;
+                    beginLandingPreview(); // don't clobber the real last-tab
                     switchToTab(target);
                     show(
-                      `Opened "${target}" — that's your landing tab`,
+                      `Preview: opened "${label}" — returning to Settings`,
                       "info",
                     );
+                    window.setTimeout(() => switchToTab("settings"), 1800);
                   }}
                   className="px-3 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 >

@@ -14,6 +14,10 @@ import type { UserPreferences } from "@/react-app/lib/user-preferences";
 
 export const FALLBACK_TAB = "dashboard";
 export const LAST_TAB_STORAGE_KEY = "fuelpro_last_active_tab";
+/** SessionStorage flag set right before a PREVIEW tab-switch so the
+ *  router does not overwrite the saved "last used tab" while previewing
+ *  (otherwise the preview would clobber the owner's real last tab). */
+export const PREVIEW_FLAG_KEY = "fuelpro_landing_preview";
 
 type LandingTabConfigs =
   Pick<TabConfiguration, "id" | "visible">[] | undefined | null;
@@ -58,11 +62,36 @@ export function resolveLandingTab(
   return FALLBACK_TAB;
 }
 
-/** Persists the currently open tab for the remember-last feature. */
+/** Persists the currently open tab for the remember-last feature.
+ *  Skips persistence while a landing-tab PREVIEW is in progress so the
+ *  previewed tab does not become the owner's "last used tab". */
 export function persistLastActiveTab(tabId: string): void {
   try {
+    if (window.sessionStorage.getItem(PREVIEW_FLAG_KEY) === "1") return;
     window.localStorage.setItem(LAST_TAB_STORAGE_KEY, tabId);
   } catch {
     /* private mode / quota — non-fatal */
+  }
+}
+
+/** Marks the start of a landing-tab preview (auto-clears after `ms`). */
+export function beginLandingPreview(ms = 4000): void {
+  try {
+    window.sessionStorage.setItem(PREVIEW_FLAG_KEY, "1");
+    window.setTimeout(
+      () => window.sessionStorage.removeItem(PREVIEW_FLAG_KEY),
+      ms,
+    );
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Clears the preview flag (called when the preview ends). */
+export function endLandingPreview(): void {
+  try {
+    window.sessionStorage.removeItem(PREVIEW_FLAG_KEY);
+  } catch {
+    /* non-fatal */
   }
 }
