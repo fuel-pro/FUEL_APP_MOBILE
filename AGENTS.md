@@ -1,5 +1,54 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 — AIChatbot all-rounded upgrade (commits 30a0b0e + 17b4681)
+
+Upgraded the AIChatbot from a Q&A-only assistant into an all-rounded,
+secure action agent. New `src/react-app/lib/chatbot-actions.ts` — an
+owner-scoped action layer that reuses EXISTING services (no new endpoints,
+no credentials in code):
+
+- **Documents**: list/find/download from Document Center (Supabase Storage
+  `fuelpro-files` + `user_documents`, RLS owner-scoped). "list my
+  documents", "download document NEMA".
+- **Data extraction**: full cloud backup export
+  (`cloudStorageService.getAll()` → JSON download). "export all my data".
+- **Reports**: sales/delivery/debt reports in PDF/Excel/TXT from live
+  station data (exportUtils). "download sales report pdf".
+- **Print**: business summary via paper-friendly iframe print
+  (silentPrintService). "print summary".
+- **Send**: email/WhatsApp summary via configured gateways
+  (`callIntegration("email-send"|"whatsapp-send")`) with **confirm-first
+  action buttons** in the chat (one-shot, `actionDone` state) + honest
+  mailto/wa.me fallbacks when no gateway is configured.
+- **Analyze**: sales trend (totals, averages, best/worst day, WoW change)
+  from `state.salesHistory` pump + POS data (no double counting —
+  `byTypeAmount` canonical when present).
+- **Forecast**: least-squares linear projection from real sales history
+  (needs ≥3 days, honest otherwise).
+- **General**: safe arithmetic (see CSP note), date/time, identity.
+
+**AIChatbot.tsx**: `Message` gains `action?`/`actionDone?`; intent chain
+runs BEFORE the AI/local fallback so actions always win; confirm-action
+button UI; greeting/help/quick-action chips updated.
+
+**CSP gotcha (17b4681)**: the site CSP forbids `unsafe-eval`, so a
+`Function()`-based arithmetic evaluator silently returned null in
+production (worked in dev/tests). Replaced with a hand-written
+recursive-descent parser — NEVER use `eval`/`Function()` in this codebase.
+
+**Also fixed**: 14 pre-existing `tsc -b` TS2345 errors
+(`useSubTabDeepLink` setter type widened to
+`Dispatch<SetStateAction<string>>`) + News.tsx duplicate import.
+
+**Verified live** (fuel-app-mobile.pages.dev, owner QA): analyze (honest
+empty state), forecast (honest ≥3-day message), list documents (235 real
+docs), download NEMA.pdf (real file), send summary (confirm → gateway
+check → honest mailto fallback), 25*4=100, export all data (87
+collections, 238 KB JSON). tsc 0 errors, vitest 79/79 (12 new), eslint 0
+errors, prettier clean, build success. Deployed: GitHub main 30a0b0e +
+17b4681; Cloudflare Pages LIVE (8f0c664b + main alias); Vercel production
+LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Mobile missing tabs fixed (commit 6f75778)
 
 User reported (with screenshot) that on mobile the "All Features" sheet was
