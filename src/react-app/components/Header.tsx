@@ -212,32 +212,36 @@ export default function Header({
                 <Fuel size={18} className="text-gray-900 dark:text-white" />
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 max-w-44 xl:max-w-60">
               <h1 className="text-base font-bold font-serif truncate leading-tight">
                 {currentStation?.name || state.companyData.name || "FuelPro"}
               </h1>
               <p className="text-[9px] text-gray-500 dark:text-gray-400 truncate leading-tight">
-                {currentStation?.location || "Fuel Distribution & Management"}
+                {currentStation?.location &&
+                currentStation.location !== "Auto-detected"
+                  ? currentStation.location
+                  : "Fuel Station Management"}
               </p>
             </div>
           </div>
 
-          {/* Center: Location Selector (desktop) */}
+          {/* Center: Location + Station switcher (desktop) */}
           <div className="hidden lg:flex items-center gap-2">
             <LocationSelector compact />
-            <div className="w-px h-5 bg-gray-100 dark:bg-white/10" />
-            {/* Station Selector — always visible so the user can always
-                reach Manage Stations / switch to another station. */}
+            <div className="w-px h-5 bg-gray-200 dark:bg-white/10" />
+            {/* Station switcher — switching, combined view, add/manage all
+                live inside ONE dropdown to keep the bar uncluttered. */}
             {stations.length > 0 ? (
               <div className="relative inline-block">
                 <button
                   onClick={() => setShowStationMenu(!showStationMenu)}
                   aria-haspopup="listbox"
                   aria-expanded={showStationMenu}
-                  className="flex h-10 items-center gap-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  title="Switch station"
+                  className="flex h-9 items-center gap-1.5 px-3 bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 rounded-lg text-xs font-medium transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 >
                   <Layers size={12} />
-                  <span className="max-w-20 truncate">
+                  <span className="max-w-28 truncate">
                     {currentStation?.name}
                   </span>
                   <ChevronDown
@@ -247,9 +251,12 @@ export default function Header({
                 </button>
                 {showStationMenu && (
                   <div
-                    className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
+                    className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
                     role="listbox"
                   >
+                    <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      Stations
+                    </p>
                     {stations.map((s) => (
                       <button
                         key={s.id}
@@ -257,9 +264,9 @@ export default function Header({
                           switchStation(s.id);
                           setShowStationMenu(false);
                         }}
-                        className={`w-full flex h-10 items-center gap-2.5 px-3 text-left hover:bg-gray-50 dark:bg-white/5 transition-colors duration-150 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
+                        className={`w-full flex h-10 items-center gap-2.5 px-3 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors duration-150 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                       >
-                        <div className="w-6 h-6 bg-gradient-to-br from-amber-500 to-amber-700 rounded-md flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
+                        <div className="w-6 h-6 bg-gradient-to-br from-amber-500 to-amber-700 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
                           {s.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-xs text-gray-800 dark:text-gray-200 truncate">
@@ -270,15 +277,17 @@ export default function Header({
                         )}
                       </button>
                     ))}
+                    <div className="h-px bg-gray-200 dark:bg-white/10 my-1" />
                     {onShowCombined && (
                       <button
                         onClick={() => {
                           onShowCombined();
                           setShowStationMenu(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:bg-white/5 text-amber-300 text-xs border-t border-gray-200 dark:border-white/10"
+                        className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                       >
-                        <Layers size={12} /> Combined View
+                        <Layers size={13} className="text-gray-500" />
+                        <span>Combined View</span>
                       </button>
                     )}
                     {onShowStations && (
@@ -287,9 +296,10 @@ export default function Header({
                           onShowStations();
                           setShowStationMenu(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:bg-white/5 text-amber-300 text-xs"
+                        className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                       >
-                        <Settings size={12} /> Manage Stations
+                        <Plus size={13} className="text-gray-500" />
+                        <span>Add / Manage Stations</span>
                       </button>
                     )}
                   </div>
@@ -299,20 +309,11 @@ export default function Header({
               onShowStations && (
                 <button
                   onClick={onShowStations}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-xs transition-colors"
+                  className="flex h-9 items-center gap-1.5 px-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium transition-colors"
                 >
-                  <Plus size={11} /> Add Station
+                  <Plus size={12} /> Add Station
                 </button>
               )
-            )}
-            {/* Add Station (always visible so users can add a second station) */}
-            {stations.length > 0 && onShowStations && (
-              <button
-                onClick={onShowStations}
-                className="flex h-10 items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-xs transition-colors"
-              >
-                <Plus size={11} /> Add Station
-              </button>
             )}
           </div>
 
@@ -390,7 +391,7 @@ export default function Header({
                   aria-haspopup="listbox"
                   aria-expanded={showCustomizeMenu}
                   title="Customize & Tools"
-                  className="px-2.5 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
+                  className="h-9 px-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1.5"
                 >
                   <Settings size={12} />
                   <span className="hidden lg:inline">Customize</span>
@@ -567,12 +568,12 @@ export default function Header({
                   aria-haspopup="listbox"
                   aria-expanded={showProfileMenu}
                   title="Account"
-                  className="flex items-center gap-2 pl-1 pr-2 py-1 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors"
+                  className="flex h-9 items-center gap-2 pl-1.5 pr-2.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <div className="w-6 h-6 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white">
+                  <div className="w-6 h-6 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white">
                     {user?.name?.charAt(0).toUpperCase() || <User size={11} />}
                   </div>
-                  <span className="hidden xl:inline text-xs font-medium text-gray-800 dark:text-gray-200 max-w-28 truncate">
+                  <span className="hidden xl:inline text-xs font-medium text-gray-800 dark:text-gray-200 max-w-24 truncate">
                     {user?.name || "Account"}
                   </span>
                   <ChevronDown
@@ -657,10 +658,12 @@ export default function Header({
                 <div className="relative inline-block">
                   <button
                     onClick={() => setShowStationMenu(!showStationMenu)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg text-xs border border-amber-500/30"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-lg text-xs font-medium border border-amber-500/30"
                   >
                     <Layers size={12} />
-                    {currentStation?.name}
+                    <span className="max-w-28 truncate">
+                      {currentStation?.name}
+                    </span>
                     <ChevronDown size={10} />
                   </button>
                   {showStationMenu && (
@@ -672,7 +675,7 @@ export default function Header({
                             switchStation(s.id);
                             setShowStationMenu(false);
                           }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50 dark:bg-white/5 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                         >
                           <div className="w-5 h-5 bg-amber-500 rounded flex items-center justify-center text-[9px] font-bold text-gray-900 dark:text-white">
                             {s.name.charAt(0)}

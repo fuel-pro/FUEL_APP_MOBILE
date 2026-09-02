@@ -271,11 +271,11 @@ export default function NotificationCenter() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen((p) => !p)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+        className="relative h-9 w-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
         aria-label={`Notifications (${unreadCount} unread)`}
         title="Notifications"
       >
-        <Bell size={18} className="text-gray-600 dark:text-gray-300" />
+        <Bell size={16} className="text-gray-600 dark:text-gray-300" />
         {unreadCount > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center ${

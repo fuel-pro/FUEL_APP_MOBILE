@@ -166,13 +166,13 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 text-sm border border-slate-600/50 transition-colors"
+        className="flex h-9 items-center gap-2 px-3 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 text-xs font-medium border border-gray-200 dark:border-white/10 transition-colors"
         aria-label="Quick search (Ctrl+K)"
         title="Quick search (Ctrl+K)"
       >
-        <Search size={16} />
+        <Search size={14} />
         <span className="hidden sm:inline">Search...</span>
-        <kbd className="hidden sm:inline-block text-xs px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-500">
+        <kbd className="hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-400 dark:text-gray-500">
           ⌘K
         </kbd>
       </button>
