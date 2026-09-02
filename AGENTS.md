@@ -10839,3 +10839,10 @@ BOTH hosts ("Movies & TV", "Entertainment & Live Broadcasts",
 Deploy notes: CF token extraction — grep "API Token:" from API KEYS.txt
 (same line, CRLF). Vercel token is line 26 of API KEYS.txt (sed -n '26p').
 vercel build --prod takes ~5 min; run in background.
+
+## Session 2026-09-02 — REVERTED the site-wide QuickSearch/AIChatbot feature
+The feature (commit 4044597) was reverted per user request (revert commit
+9a3645d). QuickSearch is back to tab/action search only; AIChatbot back to
+business-data-only answers; News/MoviesEmbed deep-link seed props removed.
+Verified: tsc 0 errors, vitest 67/67, build success. Deployed to BOTH hosts
+(pages.dev 368137cd, vercel prebuilt) — feature markers return 0 counts.
