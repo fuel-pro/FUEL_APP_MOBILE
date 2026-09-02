@@ -1,5 +1,35 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Payslips sub-tab: official HR payslip format (commit 8ae0539)
+
+User supplied a reference payslip (Nairobi City County style) +
+PAYSLIP TEXT.txt spec and asked for it in Payroll System → Payslips.
+
+**Rebuilt `buildEmployeePayslipPdf`** (used by Export PDF, Send via
+email/WhatsApp, and bulk payslip download) to render the official layout:
+1. Header — org name (bold caps), red "OFFICIAL PAY SLIP - <MONTH YEAR>",
+   HRIS build/audit ref line, logo top-right (via loadLogoAsDataURL).
+2. PERSONAL DETAILS — bordered box: PF-Num (employee ID) + name, Station
+   (department), Desig (role), ID-Num, Tax-PIN, RoD (employment date).
+3. Bank/payment header (bank + account, centered bold).
+4. ALLOWANCES & EARNINGS — itemized, right-aligned amounts, underlined
+   TOTAL EARNINGS.
+5. DEDUCTIONS — SHIF/SHA, NSSF, advance as negative amounts
+   (country-aware labels), underlined TOTAL DEDUCTIONS.
+6. NETT PAY — bold with month-year.
+7. Small statutory reference row (SHA/NSSF/KRA/bank-code numbers).
+8. Footer rule + "Report all anomalies to your HR Department."
+
+Thousands separators + 2 decimals; totals use employee.netPay (fallback
+earnings−deductions); autoTable import removed.
+
+**Verified**: rendered a sample PDF (pymupdf) — text extraction matches
+the target structure exactly. Markers live in deployed chunk
+PayrollSystem-zbbuSnAm.js (OFFICIAL PAY SLIP, NETT PAY, PF-Num). tsc 0
+errors, eslint 0 errors, prettier clean, build success. Deployed: GitHub
+main 8ae0539; Cloudflare Pages LIVE (7cb1c4c6 + main alias); Vercel
+production LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Cross-tab data-sharing matrix audit + CI enforcement (commit 791f139)
 
 User asked for a data-sharing matrix across EVERY tab + sub-tab on both
