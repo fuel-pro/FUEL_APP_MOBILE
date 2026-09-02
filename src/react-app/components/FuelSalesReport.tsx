@@ -667,7 +667,11 @@ export default function FuelSalesReport() {
                   <div className="logo mb-4">
                     <img
                       src={state.companyData.logo}
-                      alt="Company Logo"
+                      alt={
+                        state.companyData.name
+                          ? `${state.companyData.name} logo`
+                          : "Company logo"
+                      }
                       className="report-logo h-16 mx-auto max-w-[150px] max-h-[60px] object-contain"
                     />
                   </div>

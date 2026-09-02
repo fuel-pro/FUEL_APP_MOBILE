@@ -109,7 +109,7 @@ export default function Compliance() {
         {companyLogo && (
           <img
             src={companyLogo}
-            alt="Logo"
+            alt={companyName ? `${companyName} logo` : "Company logo"}
             className="mx-auto mb-2 max-h-20 max-w-[150px] object-contain"
             crossOrigin="anonymous"
           />

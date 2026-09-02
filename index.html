@@ -12,15 +12,18 @@
          checks, TVGarden live TV/radio embeds in News). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app https://www.youtube.com https://api.exchangerate-api.com https://vixcloud.co https://*.vixcloud.co https://*.vix-content.net; frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://fuel-app-mobile.vercel.app https://vixcloud.co https://*.vixcloud.co https://tvgarden.world https://*.tvgarden.world https://vidsrc.to https://*.vidsrc.to https://vidsrc.me https://*.vidsrc.me https://player.videasy.net https://*.videasy.net https://player.videasy.to https://*.videasy.to https://autoembed.co https://*.autoembed.co https://vidlink.pro https://*.vidlink.pro https://www.2embed.cc https://*.2embed.cc; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://archive.org https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app https://www.youtube.com https://api.exchangerate-api.com https://vixcloud.co https://*.vixcloud.co https://*.vix-content.net; frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://fuel-app-mobile.vercel.app https://vixcloud.co https://*.vixcloud.co https://tvgarden.world https://*.tvgarden.world https://vidsrc.to https://*.vidsrc.to https://vidsrc.me https://*.vidsrc.me https://player.videasy.net https://*.videasy.net https://player.videasy.to https://*.videasy.to https://autoembed.co https://*.autoembed.co https://vidlink.pro https://*.vidlink.pro https://www.2embed.cc https://*.2embed.cc; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!-- Primary SEO meta -->
     <meta
-      http-equiv="Referrer-Policy"
-      content="strict-origin-when-cross-origin"
+      name="description"
+      content="FuelPro is the all-in-one fuel station management platform: point of sale, pump and tank inventory, M-PESA payments, invoicing, payroll, compliance, and real-time analytics."
     />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="FuelPro" />
+    <link rel="canonical" href="https://fuelpropay.com/" />
     <!-- Preload critical assets for faster rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -86,41 +89,35 @@
     </script>
     <!-- Force color scheme for older browsers -->
     <meta name="color-scheme" content="light dark" />
-    <meta property="og:title" content="FuelPro - Fuel Management System" />
+    <!-- Open Graph (social share) -->
+    <meta property="og:title" content="FuelPro — Fuel Station Management System" />
     <meta
       property="og:description"
-      content="Professional fuel distribution and payment management system"
+      content="All-in-one fuel station management: POS, inventory, M-PESA payments, invoicing, payroll, compliance, and real-time analytics."
     />
-    <meta
-      property="og:image"
-      content="https://mocha-cdn.com/0199d39d-8fc8-7b37-bf10-097a162ee9f3/QRRR.jpg"
-      type="image/jpeg"
-    />
-    <meta property="og:url" content="https://fuelpro.mocha.app" />
+    <meta property="og:image" content="https://fuelpropay.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="FuelPro — fuel station management platform" />
+    <meta property="og:url" content="https://fuelpropay.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:author" content="FuelPro" />
-    <meta property="og:site_name" content="FuelPro - Fuel Management System" />
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:site" content="@get_mocha" />
-    <meta property="twitter:title" content="FuelPro - Fuel Management System" />
+    <meta property="og:site_name" content="FuelPro" />
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FuelPro — Fuel Station Management System" />
     <meta
-      property="twitter:description"
-      content="Professional fuel distribution and payment management system"
+      name="twitter:description"
+      content="All-in-one fuel station management: POS, inventory, M-PESA payments, invoicing, payroll, compliance, and real-time analytics."
     />
-    <meta
-      property="twitter:image"
-      content="https://mocha-cdn.com/0199d39d-8fc8-7b37-bf10-097a162ee9f3/QRRR.jpg"
-      type="image/jpeg"
-    />
-    <link rel="shortcut icon" href="/logo-small.jpg" type="image/jpeg" />
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="/logo-main.jpg"
-      type="image/jpeg"
-    />
+    <meta name="twitter:image" content="https://fuelpropay.com/og-image.png" />
+    <meta name="twitter:image:alt" content="FuelPro — fuel station management platform" />
+    <!-- Favicons -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#f59e0b" />
+    <meta name="theme-color" content="#c5a059" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
@@ -128,9 +125,48 @@
       content="black-translucent"
     />
     <meta name="apple-mobile-web-app-title" content="FuelPro" />
-    <meta name="msapplication-TileImage" content="/logo-main.jpg" />
-    <meta name="msapplication-TileColor" content="#f59e0b" />
-    <title>FuelPro - Fuel Management System</title>
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
+    <meta name="msapplication-TileColor" content="#0a0e17" />
+    <title>FuelPro — Fuel Station Management System</title>
+    <!-- Structured data: Organization + WebSite -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://fuelpropay.com/#organization",
+            "name": "FuelPro",
+            "url": "https://fuelpropay.com/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://fuelpropay.com/icon-512.png",
+              "width": 512,
+              "height": 512
+            },
+            "description": "FuelPro builds fuel station management software for point of sale, inventory, payments, payroll, and compliance.",
+            "sameAs": []
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://fuelpropay.com/#website",
+            "url": "https://fuelpropay.com/",
+            "name": "FuelPro",
+            "publisher": { "@id": "https://fuelpropay.com/#organization" },
+            "inLanguage": "en"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "FuelPro",
+            "operatingSystem": "Web",
+            "applicationCategory": "BusinessApplication",
+            "url": "https://fuelpropay.com/",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "publisher": { "@id": "https://fuelpropay.com/#organization" }
+          }
+        ]
+      }
+    </script>
     <!-- Prevent FOUC (Flash of Unstyled Content) - Apply theme BEFORE React loads -->
     <script>
       (function () {

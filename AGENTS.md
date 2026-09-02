@@ -1,4 +1,57 @@
 # FuelPro Mobile — Repository Knowledge
+## Session 2026-09-01 — Full SEO/performance/deployment hardening
+
+Replaced the template "Mocha" placeholders (og:url `fuelpro.mocha.app`,
+mocha-cdn images, `@get_mocha`) with a real SEO layer and purged all default
+placeholder content.
+
+**SEO core (`src/react-app/lib/seo.ts`):**
+- `applySeoMeta` upserts title/description/canonical/robots/OG/Twitter tags.
+- `ROUTE_SEO`: per-route titles (Sign In, Sign Up, Site, Founder, Station
+  Access, Join, Reset, 404).
+- `TAB_SEO`: unique title+description for all ~29 app tabs (`noindex,
+  nofollow` — HashRouter app views aren't crawlable as separate URLs).
+- `applyLocalBusinessSchema` (GasStation JSON-LD from active station),
+  `applyBreadcrumbSchema` (Home → view JSON-LD).
+- `SITE_URL` = `https://fuel-app-mobile.vercel.app` (canonical target; the
+  registrar checks for fuelpropay.com / fuelpro.app / fuelpro.co.ke all
+  failed with 000/unreachable, so production URLs were kept as the canonical
+  base).
+
+**Wiring:** `SeoManager.tsx` (route-level meta, mounted inside HashRouter in
+`App.tsx`), `NotFound.tsx` (branded 404, `path="*"`). `Home.tsx` tab-SEO
+effect + visible breadcrumb `<nav>` + footer with internal links. Alt-text
+audit: all `<img>` have alt (LiveFeedEmbed improved to `{channel.name}
+logo`).
+
+**Static files (all in `public/`, shipped to dist):** `robots.txt`
+(routes AI/crawler bots, blocks nothing), `sitemap.xml`, `llms.txt` (LLM
+content policy), `404.html` (standalone branded fallback for CDN hosts),
+`CNAME` (custom domain prep), favicon set (`favicon.ico` + 16/32 PNGs +
+apple-touch-icon + 192/512 icons + 1200x630 `og-image.png`) generated from
+`logo-main.jpg` via PIL. `manifest.json` rewritten (proper names, icons,
+theme colors).
+
+**Build config (`vite.config.ts`):** `sourcemap: false` (no prod maps),
+`manualChunks` vendor splitting (sentry/supabase/charts/pdf/trpc/media/
+transformers separate), `chunkSizeWarningLimit` up. Biggest entry chunk now
+~776 KB vs a single mega-bundle; heavy libs lazy-load on demand.
+
+**CSP console errors fixed (`index.html`):** added `https://accounts.google.com`
+to `style-src` (GSI stylesheet was blocked → real console error) and
+`https://archive.org` to `connect-src` (MovieService public-domain search).
+
+**Verification:** tsc -b 0 errors, vitest 55/55 (new `src/test/seo.test.ts`
+6 cases — robots/canonical/OG/titles/schema/no-placeholder assertions),
+eslint 0 errors (pre-existing warnings only), prettier clean, build 131
+precache entries. Runtime-verified via debug marker on the work-host
+browser: `document.title` updates per tab (`SEODBG:pos|Point of Sale —
+FuelPro`) — the browser tool's `get_state` title field is stale for
+JS-driven title changes; instrument the DOM to verify, as done here.
+
+**Deploy:** pushed to GitHub main; Vercel auto-deploys via Git integration.
+Cloudflare Pages relay needs CLOUDFLARE_API_TOKEN (unavailable in sandbox).
+
 ## Session 2026-09-01 — PayHero Kenya payment gateway integration (commits fe9b8b3 + dadc59a)
 
 Reverse-engineered payherokenya.com (M-PESA aggregator, works like Kopo

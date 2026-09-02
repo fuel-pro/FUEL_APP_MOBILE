@@ -1042,7 +1042,7 @@ function ChannelCard({
         {channel.logo && !logoError ? (
           <img
             src={channel.logo}
-            alt=""
+            alt={channel.name ? `${channel.name} logo` : "Channel logo"}
             loading="lazy"
             onError={() => setLogoError(true)}
             className="w-full h-full object-contain"

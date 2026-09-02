@@ -37,29 +37,56 @@ export default defineConfig({
       // Disabling the plugin's auto-inject avoids a duplicate minimal
       // registration that doesn't handle updates.
       injectRegister: false,
-      includeAssets: ["favicon.ico", "logo-main.jpg", "logo-small.jpg", "*.svg"],
+      includeAssets: [
+        "favicon.ico",
+        "favicon-16x16.png",
+        "favicon-32x32.png",
+        "apple-touch-icon.png",
+        "icon-192.png",
+        "icon-512.png",
+        "og-image.png",
+        "logo-main.jpg",
+        "logo-small.jpg",
+        "robots.txt",
+        "sitemap.xml",
+        "llms.txt",
+        "*.svg",
+      ],
       manifest: {
-        name: "FuelPro - Fuel Management System",
+        name: "FuelPro — Fuel Station Management System",
         short_name: "FuelPro",
-        description: "Complete fuel station management, sales tracking, EPRA compliance, and real-time analytics",
-        theme_color: "#f59e0b",
-        background_color: "#0a0a0f",
+        description:
+          "All-in-one fuel station management: POS, inventory, M-PESA payments, invoicing, payroll, compliance, and real-time analytics.",
+        theme_color: "#c5a059",
+        background_color: "#0a0e17",
         display: "standalone",
         orientation: "any",
         scope: "/",
         start_url: "/",
         icons: [
           {
-            src: "/logo-main.jpg",
+            src: "/icon-192.png",
             sizes: "192x192",
-            type: "image/jpeg",
-            purpose: "any maskable",
+            type: "image/png",
+            purpose: "any",
           },
           {
-            src: "/logo-small.jpg",
+            src: "/icon-512.png",
             sizes: "512x512",
-            type: "image/jpeg",
-            purpose: "any maskable",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
           },
         ],
         categories: ["business", "productivity", "finance"],
@@ -94,7 +121,10 @@ export default defineConfig({
           {
             // Always fetch HTML/navigations from network first (5s timeout
             // then falls back to cache for offline support).
-            urlPattern: ({ url }) => url.pathname === "/" || url.pathname.endsWith(".html") || url.pathname.startsWith("/#"),
+            urlPattern: ({ url }) =>
+              url.pathname === "/" ||
+              url.pathname.endsWith(".html") ||
+              url.pathname.startsWith("/#"),
             handler: "NetworkFirst",
             options: {
               cacheName: "html-cache",
@@ -163,12 +193,21 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 5000,
+    // Never ship production source maps — keeps bundles smaller and avoids
+    // exposing full source in the browser devtools.
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks: {
-          // Split heavy vendor libraries
-          trpc: ["@trpc/react-query", "@trpc/client", "@tanstack/react-query"],
+          // Split heavy vendor libraries into long-cacheable chunks so the
+          // main entry bundle stays lean.
           vendor: ["react", "react-dom", "react-router"],
+          trpc: ["@trpc/react-query", "@trpc/client", "@tanstack/react-query"],
+          supabase: ["@supabase/supabase-js"],
+          charts: ["chart.js", "react-chartjs-2"],
+          sentry: ["@sentry/react"],
+          media: ["hls.js"],
+          transformers: ["@xenova/transformers"],
           // Code split large components to prevent chunk loading failures
           founder: ["./src/react-app/pages/FounderAccess.tsx"],
           pos: ["./src/react-app/components/PointOfSale.tsx"],

@@ -3094,7 +3094,11 @@ export default function PayrollSystem() {
           {settings.organizationLogo ? (
             <img
               src={settings.organizationLogo}
-              alt="Organization Logo"
+              alt={
+                settings.organizationName
+                  ? `${settings.organizationName} logo`
+                  : "Organization logo"
+              }
               className="max-h-16 md:max-h-32 mx-auto mb-1 md:mb-2"
             />
           ) : (

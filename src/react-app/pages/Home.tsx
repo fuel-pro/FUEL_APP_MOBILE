@@ -21,6 +21,11 @@ import {
   persistLastActiveTab,
 } from "@/react-app/lib/landing-tab";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import {
+  applyTabSeo,
+  applyLocalBusinessSchema,
+  applyBreadcrumbSchema,
+} from "@/react-app/lib/seo";
 import OnboardingTutorial from "@/react-app/components/OnboardingTutorial";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
@@ -241,6 +246,29 @@ function HomeContent() {
   useEffect(() => {
     persistLastActiveTab(activeTab);
   }, [activeTab]);
+
+  // Per-tab SEO: unique document title + meta description for every view,
+  // plus BreadcrumbList structured data (Home → current view).
+  useEffect(() => {
+    applyTabSeo(activeTab, resolveTabLabel(activeTab));
+    applyBreadcrumbSchema(resolveTabLabel(activeTab));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // LocalBusiness (GasStation) structured data from the active station so
+  // search engines can associate the app with the real business.
+  useEffect(() => {
+    if (!currentStation) return;
+    applyLocalBusinessSchema({
+      name: currentStation.name,
+      location: currentStation.location,
+      phone: currentStation.phone,
+      email: currentStation.email,
+      country: currentStation.country,
+      currency: currentStation.currency,
+      logo: currentStation.logo,
+    });
+  }, [currentStation]);
 
   // Auto-login to role
   useEffect(() => {
@@ -779,6 +807,36 @@ function HomeContent() {
           />
         </div>
 
+        {/* Breadcrumb navigation (desktop) */}
+        <nav aria-label="Breadcrumb" className="hidden md:block px-1 pb-1">
+          <ol className="flex items-center gap-1.5 text-xs">
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("dashboard");
+                  broadcast("tab_change", "dashboard");
+                }}
+                className="text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 font-medium transition-colors"
+              >
+                Home
+              </button>
+            </li>
+            <li
+              aria-hidden="true"
+              className="text-gray-400 dark:text-gray-500 select-none"
+            >
+              /
+            </li>
+            <li
+              aria-current="page"
+              className="text-gray-700 dark:text-gray-300 font-medium"
+            >
+              {resolveTabLabel(activeTab)}
+            </li>
+          </ol>
+        </nav>
+
         {/* Mobile Active Tab Title */}
         <div className="md:hidden mb-1 sm:mb-2">
           <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -804,6 +862,42 @@ function HomeContent() {
             {renderTabContent()}
           </Suspense>
         </div>
+
+        {/* Site footer with internal links */}
+        <footer className="mt-4 mb-16 md:mb-2 border-t border-gray-200 dark:border-gray-700 pt-3 pb-2 px-1">
+          <nav aria-label="Site sections">
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {[
+                { id: "dashboard", label: "Dashboard" },
+                { id: "pos", label: "Point of Sale" },
+                { id: "sales", label: "Sales Tracking" },
+                { id: "invoice", label: "Invoice" },
+                { id: "inventory", label: "Stock Management" },
+                { id: "reports", label: "Reports Center" },
+                { id: "price-finder", label: "Fuel Price Finder" },
+                { id: "news", label: "News & Live TV" },
+                { id: "settings", label: "Settings" },
+              ].map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      broadcast("tab_change", item.id);
+                    }}
+                    className="text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+            FuelPro — Fuel Station Management System
+            {currentStation?.name ? ` · ${currentStation.name}` : ""}
+          </p>
+        </footer>
       </div>
 
       {/* Mobile Bottom Navigation - NO duplicate AI here */}

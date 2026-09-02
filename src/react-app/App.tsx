@@ -22,6 +22,8 @@ import {
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import StationAccess from "@/react-app/pages/StationAccess";
 import FounderAccess from "@/react-app/pages/FounderAccess";
+import NotFound from "@/react-app/pages/NotFound";
+import SeoManager from "@/react-app/components/SeoManager";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { SkipToContent } from "@/react-app/lib/accessibility";
 import UpdateAvailableBanner from "@/react-app/components/UpdateAvailableBanner";
@@ -268,6 +270,7 @@ export default function App() {
                 <PlatformDataProvider>
                   <TRPCProvider>
                     <Router>
+                      <SeoManager />
                       <Routes>
                         {/* Firebase Authentication - handled by AuthLogin component */}
                         <Route path="/sign-in" element={<AuthLogin />} />
@@ -306,8 +309,8 @@ export default function App() {
                         {/* Main app - requires auth, shows loader while checking */}
                         <Route path="/" element={<MainAppLoader />} />
 
-                        {/* Catch all */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        {/* Catch all — branded 404 */}
+                        <Route path="*" element={<NotFound />} />
                       </Routes>
                       {/* Offline indicator for sync status */}
                       <OfflineIndicator />
