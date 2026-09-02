@@ -1,5 +1,43 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Cross-tab data-sharing matrix audit + CI enforcement (commit 791f139)
+
+User asked for a data-sharing matrix across EVERY tab + sub-tab on both
+hosts, plus one more thing needing a matrix.
+
+**Audit result** — every tab group verified for whether its sub-tabs share
+a single source of truth (cloud key / table) or hold disconnected copies.
+The functional gaps were fixed in the prior commits (16300be etc.); the
+full matrix now reads:
+
+| Group | Shared key(s) | Writers | Readers |
+|---|---|---|---|
+| Fuel Type Manager | fuel_types_config | FuelTypesManager | PriceBoard, PriceScheduler, FuelQuality, Dashboard, POS, SalesTracking |
+| — | priceboard_data | PriceBoard | Dashboard |
+| — | price_schedules | PriceScheduler | FuelContext (applies app-wide) |
+| — | price_history_data | FuelContext, FuelTypesManager, PriceBoard | FuelRateHistory |
+| — | fuel_quality_tests | FuelQualityTesting | FuelTypesManager (badge) |
+| Stock Mgmt | products + inventory_transactions | InventoryManagement | ItemMovementLedger (merges real movements) |
+| — | tank_monitor_readings | TankMonitor, TankTelemetry | Theft/Replenishment/Drift/Alerts/Water/LossControl |
+| Payments | mpesa_transactions | POS, MPESAAnalyzer, LiveTransaction | all + Credit |
+| Credit | credit_accounts + credit_transactions | CreditManagement | Aging, Statements, Portal, Fleet |
+| Team Mgr | shift_employees + shift_data | ShiftManagement | AttendantPerformance |
+| Payroll | payroll_employees/settings/column_names | PayrollSystem | Commissions |
+| News | live_feed_* + news_bookmarks/read | LiveFeedEmbed, News | all sub-tabs |
+
+**New enforcement** — `lib/data-matrix.ts` (the registry) +
+`src/test/data-matrix.test.ts` (51 contracts): each writer's source is
+asserted to reference its shared key (literal / CLOUD_KEYS alias /
+UPPER_SNAKE constant / via helper module). A refactor that disconnects a
+sub-tab from its shared store now FAILS CI.
+
+**Second matrix added**: Stock Management → Item Movement Ledger (was a
+disconnected manual ledger; now merges real inventory_transactions).
+
+148/148 tests pass, tsc 0 errors, eslint 0 errors, prettier clean, build
+success. Deployed: GitHub main 791f139; Cloudflare Pages LIVE (16781e89 +
+main alias); Vercel production LIVE (prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Fuel Type Manager data-sharing matrix (commit 16300be)
 
 User asked for a data-sharing matrix across the Fuel Type Manager sub-tabs
