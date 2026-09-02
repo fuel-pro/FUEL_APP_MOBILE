@@ -1,5 +1,27 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Zoom-out blank-sides layout fix (commit c1a3ee9)
+
+User reported blank bands on both sides when zooming the browser out.
+Root cause: the base layout caps `.container` at a fixed 1400px
+(`@media (min-width:1024px) .container { max-width:1400px }`), so on
+wide monitors — or when zooming out, which enlarges the CSS viewport —
+the app rendered in a narrow centered column with empty space left/right.
+
+**Fix (index.css)**: fluid large-screen caps that scale with the
+viewport so the app always fills the available width:
+- 1440px+: `max-width: min(1600px, 94vw)`
+- 1600px+: `max-width: min(1800px, 94vw)`
+- 1920px+: `max-width: min(2200px, 92vw)`
+- 2560px+: `max-width: min(3000px, 90vw)`
+- Page-level centered wrappers (`max-w-5xl/6xl/7xl`) also widen at
+  1920px+ and 2560px+ so content is not crushed into a narrow column.
+
+Verified in deployed CSS (index-DmHNcBGI.css has both `min(2200px,92vw)`
++ `min(3000px,90vw)`). Build success. Deployed: GitHub main c1a3ee9;
+Cloudflare Pages LIVE (6b03f163 + main alias); Vercel production LIVE
+(prebuilt, aliased).
+
 ## Session 2026-09-02 (cont.) — Header professional restructure (commit f7ba137)
 
 User screenshot showed a vibe-coded header: station name rendered 3×
