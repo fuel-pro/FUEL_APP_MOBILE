@@ -1509,7 +1509,50 @@ export default function PayrollSystem() {
     // top border, bank header (underlined), earnings/deductions with
     // right-aligned amounts + underlined totals, emblem watermark,
     // NETT PAY, and the HR footer on a light warm background.
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    // Compute the deduction rows up-front so we can size the page exactly
+    // (A4 leaves ~half the page blank; a custom format page removes it).
+    const computedEmployee = employee;
+    const computeDeductions = (
+      emp: Employee,
+    ): { label: string; amt: number }[] => {
+      const rows: { label: string; amt: number }[] = [];
+      const sha = Number.isFinite(emp.sha) ? emp.sha : 0;
+      const nssf = Number.isFinite(emp.nssf) ? emp.nssf : 0;
+      const advance = Number.isFinite(emp.advance) ? emp.advance : 0;
+      if (sha > 0)
+        rows.push({
+          label: isKenya ? "SHIF Auto" : "Health Insurance",
+          amt: sha,
+        });
+      if (nssf > 0)
+        rows.push({
+          label: isKenya ? "NSSF Auto" : "Pension Contribution",
+          amt: nssf,
+        });
+      if (advance > 0) rows.push({ label: "Salary Advance", amt: advance });
+      return rows;
+    };
+    const deductionsPre = computeDeductions(computedEmployee);
+    const hasBank = Boolean(employee.bank || employee.bankAccount);
+    // Heights in mm — see the layout below for each step's advance.
+    const headerH = 16 + 7 + 5 + 3.5 + 3.5 + 5; // org/title/refs
+    const boxH = 49; // PERSONAL DETAILS block
+    const bankH = hasBank ? 6.5 : 0;
+    const earnH = 5.5 + 1 * 5 + 1 + 7; // header + Basic Salary row + total
+    const dedH = 5.5 + deductionsPre.length * 5 + 1 + 8; // rows + total
+    const contentEndY = headerH + boxH + bankH + earnH + dedH;
+    const footerGap = 28; // outerM*2 + 12 (from page bottom to footer line)
+    const pageHeightMm = contentEndY + footerGap;
+
+    // jsPDF sorts the raw format array (smallest dimension becomes width)
+    // and swaps to portrait when height > width. Passing the array as
+    // [contentHeight, 210] with orientation:"landscape" keeps the 210mm
+    // width and the exact compact content height (no blank A4 area).
+    const doc = new jsPDF({
+      unit: "mm",
+      format: [pageHeightMm, 210],
+      orientation: "landscape",
+    });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
@@ -1698,19 +1741,9 @@ export default function PayrollSystem() {
     y += 7;
 
     // ── Deductions ─────────────────────────────────────────────────────
-    const sha = Number.isFinite(employee.sha) ? employee.sha : 0;
-    const nssf = Number.isFinite(employee.nssf) ? employee.nssf : 0;
-    const advance = Number.isFinite(employee.advance) ? employee.advance : 0;
-    const deductions: [string, number][] = [];
-    if (sha > 0) {
-      deductions.push([isKenya ? "SHIF Auto" : "Health Insurance", sha]);
-    }
-    if (nssf > 0) {
-      deductions.push([isKenya ? "NSSF Auto" : "Pension Contribution", nssf]);
-    }
-    if (advance > 0) {
-      deductions.push(["Salary Advance", advance]);
-    }
+    const deductions = deductionsPre.map(
+      (d) => [d.label, d.amt] as [string, number],
+    );
     const totalDeductions = deductions.reduce((s, [, v]) => s + v, 0);
 
     doc.setFont("helvetica", "bold");
