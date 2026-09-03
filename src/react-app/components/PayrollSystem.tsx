@@ -63,6 +63,14 @@ import {
   getDetectedCountryCode,
 } from "../lib/currency";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
+import QRCode from "qrcode";
+import {
+  code128CModules,
+  computePayslipDocHash,
+  buildPayslipVerifyPayload,
+  numericDocCode,
+  type PayslipSecurityInput,
+} from "@/react-app/lib/payslip-security";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface Employee {
@@ -1503,16 +1511,18 @@ export default function PayrollSystem() {
   const buildEmployeePayslipPdf = async (
     employee: Employee,
   ): Promise<jsPDF> => {
-    // Exact replica of the "Official Secure Pay Slip" template:
-    // A5 page, shield badge + org name, blue "OFFICIAL PAY SLIP" subtitle,
-    // QR verify box, EMPLOYEE PARTICULARS table, side-by-side EARNINGS /
-    // STATUTORY & OTHER DEDUCTIONS tables (red negative amounts), GROSS
-    // EARNINGS / TOTAL DEDUCTIONS totals, a NETT PAY pill, red VERIFIED
-    // seal, scripted signatures, barcode, and a DOC HASH / SECURE PRINT
-    // footer.
+    // Replica of the "Official Secure Pay Slip" template with REAL,
+    // verifiable security features: the QR code encodes a genuine
+    // verification payload (org + employee + period + nett + truncated
+    // SHA-256 doc hash), the barcode is a real ISO/IEC 15417 Code 128C
+    // encoding of a numeric code derived from the doc hash (scannable by
+    // any barcode reader), and the DOC HASH footer is a real SHA-256 of
+    // the canonical payslip contents — any tampered figure changes all
+    // three. The badge is the station's uploaded logo (shield fallback).
     const monthName = new Date(2023, settings.payrollMonth - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
+    const period = `${monthName}-${settings.payrollYear}`;
     const money = (n: number) =>
       (Number.isFinite(n) ? n : 0).toLocaleString("en-US", {
         minimumFractionDigits: 2,
@@ -1555,6 +1565,32 @@ export default function PayrollSystem() {
         ? employee.netPay
         : gross - totalDeductions;
 
+    // ── Real security material ───────────────────────────────────────────
+    const securityInput: PayslipSecurityInput = {
+      organizationName: settings.organizationName || "ORGANIZATION",
+      employeeId: employee.employeeId || "NA",
+      employeeName: employee.fullName || "—",
+      period,
+      gross,
+      deductions: totalDeductions,
+      nett,
+      currency: currencyCode,
+    };
+    const docHash = await computePayslipDocHash(securityInput);
+    const qrPayload = buildPayslipVerifyPayload(securityInput, docHash);
+    const barcodeDigits = numericDocCode(docHash);
+    const barcodeModules = code128CModules(barcodeDigits);
+    let qrDataUrl: string | null = null;
+    try {
+      qrDataUrl = await QRCode.toDataURL(qrPayload, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 128,
+      });
+    } catch (err) {
+      console.warn("Payslip QR generation failed:", err);
+    }
+
     // A5 portrait (compact — no wasted page).
     const doc = new jsPDF({ unit: "mm", format: "a5" });
     const pageW = doc.internal.pageSize.getWidth();
@@ -1570,18 +1606,51 @@ export default function PayrollSystem() {
     doc.setLineWidth(0.4);
     doc.rect(6, 6, pageW - 12, pageH - 12);
 
-    // ── Header: shield badge (left) + org name + blue subtitle + QR ────
+    // ── Header: station logo badge (left) + org name + subtitle + QR ────
     const headerY = 16;
-    // Shield badge: navy hexagon + red cross.
-    const shieldX = L + 4;
-    const shieldY = headerY;
-    doc.setFillColor(20, 30, 50); // navy
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(1.2);
-    doc.ellipse(shieldX, shieldY + 4, 8, 9, "FD");
-    doc.setFillColor(178, 34, 34); // red cross
-    doc.rect(shieldX - 1.6, shieldY, 3.2, 8, "F");
-    doc.rect(shieldX - 4.5, shieldY + 2.4, 9, 3.2, "F");
+    const badgeX = L + 4;
+    const badgeY = headerY + 4;
+    const logoSrc =
+      settings.organizationLogo || String(fuelState.companyData?.logo || "");
+    let logoDrawn = false;
+    if (logoSrc) {
+      const logoDataUrl = await loadLogoAsDataURL(logoSrc);
+      if (logoDataUrl) {
+        try {
+          const fmt = logoDataUrl.includes("image/jpeg") ? "JPEG" : "PNG";
+          // White disc + station logo + navy ring (the badge frame).
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(20, 30, 50);
+          doc.setLineWidth(1);
+          doc.circle(badgeX, badgeY, 9, "FD");
+          doc.addImage(
+            logoDataUrl,
+            fmt,
+            badgeX - 6.8,
+            badgeY - 6.8,
+            13.6,
+            13.6,
+          );
+          doc.setDrawColor(20, 30, 50);
+          doc.setLineWidth(0.8);
+          doc.circle(badgeX, badgeY, 9, "S");
+          logoDrawn = true;
+        } catch (err) {
+          console.warn("Could not render station logo on payslip:", err);
+        }
+      }
+    }
+    if (!logoDrawn) {
+      // Fallback shield badge (navy disc + red cross) when the station has
+      // no uploaded logo.
+      doc.setFillColor(20, 30, 50);
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(1.2);
+      doc.ellipse(badgeX, badgeY, 8, 9, "FD");
+      doc.setFillColor(178, 34, 34);
+      doc.rect(badgeX - 1.6, badgeY - 4, 3.2, 8, "F");
+      doc.rect(badgeX - 4.5, badgeY - 1.6, 9, 3.2, "F");
+    }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
@@ -1607,21 +1676,17 @@ export default function PayrollSystem() {
       { align: "center" },
     );
 
-    // QR verify box (top-right).
+    // REAL QR code (top-right) — decodes to the verification payload.
     const qrSize = 18;
     const qrX = R - qrSize;
     const qrY = headerY - 6;
-    doc.setDrawColor(20, 30, 50);
-    doc.setLineWidth(0.4);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(qrX, qrY, qrSize, qrSize, "FD");
-    doc.setFillColor(20, 30, 50);
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 8; j++) {
-        if ((i * 7 + j * 13) % 3 !== 0) {
-          doc.rect(qrX + 1 + i * 2, qrY + 1 + j * 2, 1.6, 1.6, "F");
-        }
-      }
+    if (qrDataUrl) {
+      doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+    } else {
+      doc.setDrawColor(20, 30, 50);
+      doc.setLineWidth(0.4);
+      doc.setFillColor(255, 255, 255);
+      doc.rect(qrX, qrY, qrSize, qrSize, "FD");
     }
     doc.setFontSize(5);
     doc.setTextColor(60, 60, 60);
@@ -1645,15 +1710,21 @@ export default function PayrollSystem() {
     doc.line(L, y + 2, R, y + 2);
     y += 7;
 
+    const stationName = currentStation?.name || employee.department || "—";
+    const incrementMonth = employee.employmentDate
+      ? new Date(employee.employmentDate)
+          .toLocaleString("default", { month: "short" })
+          .toUpperCase()
+      : "—";
     const particulars: [string, string][] = [
       ["Employee Name:", employee.fullName || "—"],
       ["PF-Number:", employee.employeeId || "—"],
       ["ID Number:", employee.idNo || "—"],
       ["Designation:", employee.role || "—"],
       ["Tax PIN:", employee.kraPin || "—"],
-      ["Station:", employee.department || "—"],
-      ["Increment Month:", "JAN"],
-      ["Retirement Date:", employee.employmentDate || "—"],
+      ["Station:", stationName],
+      ["Increment Month:", incrementMonth],
+      ["Employment Date:", employee.employmentDate || "—"],
     ];
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -1729,7 +1800,7 @@ export default function PayrollSystem() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(60, 60, 60);
-    doc.text(`NETT PAY: ${monthName}-${settings.payrollYear}`, L + 3, y + 6.5);
+    doc.text(`NETT PAY: ${period}`, L + 3, y + 6.5);
     doc.setFontSize(13);
     doc.setTextColor(178, 34, 34);
     doc.text(`${currencyCode} ${money(nett)}`, R - 3, y + 7, {
@@ -1777,28 +1848,40 @@ export default function PayrollSystem() {
     doc.setTextColor(0, 0, 0);
     y += 14;
 
-    // Barcode (bottom-left).
+    // REAL Code 128C barcode (bottom-left) — encodes numericDocCode(hash).
+    const barcodeW = 32;
+    const barcodeH = 9;
+    const moduleW = barcodeW / barcodeModules.length;
     doc.setFillColor(20, 20, 20);
-    for (let i = 0; i < 24; i++) {
-      const bw =
-        (i * 7919) % 3 === 0 ? 1.4 : (i * 104729) % 5 === 0 ? 0.9 : 0.5;
-      doc.rect(L + 3 + i * 1.2, y, bw, 9, "F");
-    }
+    barcodeModules.forEach((m, i) => {
+      if (m === 1) {
+        doc.rect(
+          L + 3 + i * moduleW,
+          y,
+          Math.max(moduleW, 0.18),
+          barcodeH,
+          "F",
+        );
+      }
+    });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(60, 60, 60);
+    doc.text(barcodeDigits, L + 3, y + barcodeH + 3);
     y += 14;
 
-    // Footer: DOC HASH + SECURE PRINT.
+    // Footer: REAL SHA-256 DOC HASH + SECURE PRINT.
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(90, 90, 90);
-    const docHash = Array.from({ length: 32 }, (_, i) =>
-      `${(i * 7 + employee.idNo.length) % 16}`.replace(
-        /1[0-5]/g,
-        (m) => "abcdef"[Number(m) - 10] || m,
-      ),
-    ).join("");
-    doc.text(`DOC HASH: ${docHash}`, pageW / 2, pageH - 14, {
-      align: "center",
-    });
+    doc.text(
+      `DOC HASH: ${docHash.slice(0, 32).toUpperCase()}`,
+      pageW / 2,
+      pageH - 14,
+      {
+        align: "center",
+      },
+    );
     doc.text(
       `SECURE PRINT: ${new Date().toLocaleString()} | NODE: FuelPro-HRIS`,
       pageW / 2,
