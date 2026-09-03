@@ -1,7 +1,10 @@
 const { app, BrowserWindow, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 
-// Live site URLs (Cloudflare Pages primary, Vercel fallback).
+// The desktop app loads the LIVE site directly (always up-to-date) with
+// Cloudflare Pages primary and Vercel as fallback. App-shell updates are
+// delivered silently via GitHub Releases auto-update below.
 const URLS = [
   "https://fuel-app-mobile.pages.dev/",
   "https://fuel-app-mobile.vercel.app/",
@@ -40,18 +43,28 @@ function createWindow() {
     }
   });
 
-  // Try Cloudflare first, then Vercel, then the bundled offline build.
+  // Load the live site (content updates arrive instantly, no app update).
   const tryLoad = (index) => {
-    if (index >= URLS.length) {
-      win.loadFile(path.join(__dirname, "../dist/index.html"));
-      return;
-    }
+    if (index >= URLS.length) return;
     win.loadURL(URLS[index]).catch(() => tryLoad(index + 1));
   };
   tryLoad(0);
 }
 
+// ── Auto-update from GitHub Releases (silent, background download + install)
+// electron-updater reads the GitHub release feed for this repo; on launch
+// it downloads newer versions in the background and installs on quit.
+function setupAutoUpdate() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {
+    // Network issues shouldn't break the app — stay silent.
+  });
+}
+
 app.whenReady().then(() => {
+  setupAutoUpdate();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
