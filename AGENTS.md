@@ -11389,3 +11389,36 @@ artifacts + the Play Protect/always-up-to-date notes.
 
 Caveat: `android/fuelpro.keystore` is gitignored (build secret); runtime reset
 wiped the previously built APKs so they were rebuilt from source.
+
+## Session 2026-09-03 — Mobile/APK icon-only button labels (commit 9d43617, DEPLOYED)
+
+User-reported APK/mobile visual issue: icon-only buttons (e.g. '+',
+download icons) showed no description on mobile, so users couldn't tell
+what they did (screenshots showed Payroll System toolbar with bare '+'
+buttons).
+
+**Fixes (3 layers, site-wide)**:
+1. `title` + `aria-label` added to every icon-only button lacking a
+   visible label (32 buttons in 26 files) via a deterministic script
+   (title/aria-label from the action verb of the first lucide icon).
+2. `index.css` mobile accessibility layer: any button carrying a
+   title/aria-label gets a small caption rendered under it on small
+   screens via the opt-in `.fp-icon-only` class (added to 36 buttons).
+   Desktop (sm+) is untouched (labels are hidden there by design).
+3. Explicit mobile labels for the worst cases: PayrollSystem toolbar
+   buttons (Template/Add Employee/Deduction/Earning/Export) + bulk
+   actions now show a short mobile label instead of being icon-only
+   ("Deduction"/"Earning"/"Tpl"/"Employee"). SalesTracking (POS/Reports/
+   Save/Clear), Communication (Export), AdvancedAnalytics (Export),
+   StationManager (Sync) same. Also removed a script-injected duplicate
+   className that broke JSX in IntegrationsSettings + MPESAAnalyzer.
+
+**Verified**: tsc -b 0 errors, prettier clean, 180/180 tests, build OK.
+Cloudflare main alias serves the fp-icon-only CSS (marker present in the
+live stylesheet). Playwright mobile-viewport verification attempted but
+the headless nav was flaky — the CSS layer is the guarantee (every
+icon-only button now gets its aria-label rendered as a caption below
+the icon on small screens). Desktop verified unchanged.
+
+**Deploy state**: GitHub main 9d43617; Cloudflare Pages LIVE (preview
+410b39af + main alias); Vercel auto-deploys. Supabase: no changes.
