@@ -1810,24 +1810,58 @@ export default function PayrollSystem() {
     y += 16;
 
     // ── Signatures + VERIFIED seal + barcode + footer ──────────────────
-    // Scripted signatures (left + right).
+    // Resolve the authorizing officer by role (manager / HR / accountant /
+    // payroll manager), in priority order, excluding the payslip's own
+    // employee. Falls back to the org name when no such officer exists.
+    const officerRoleKeywords = [
+      "payroll manager",
+      "payroll",
+      "hr manager",
+      "human resource",
+      "hr",
+      "accountant",
+      "finance",
+      "manager",
+      "owner",
+    ];
+    const officer =
+      employees.find((emp) => {
+        if (emp.employeeId === employee.employeeId) return false;
+        const role = String(emp.role || "").toLowerCase();
+        return officerRoleKeywords.some((k) => role.includes(k));
+      }) || null;
+    const officerName = officer?.fullName || settings.organizationName;
+    const officerTitle = officer?.role || "Manager";
+
+    // Signature block Y positions.
+    const sigTextY = y; // scripted name baseline
+    const sigLineY = sigTextY + 3; // underline rule
+    const sigCaptionY = sigTextY + 6.5; // caption below the rule
+
+    // Scripted signatures (left = employee, right = authorizing officer).
     doc.setFont("courier", "italic");
     doc.setFontSize(11);
     doc.setTextColor(40, 40, 40);
-    doc.text(employee.fullName || "Employee", L + 6, y);
-    doc.text("Authorizing Officer", R - 4, y, { align: "right" });
+    doc.text(employee.fullName || "Employee", L + 6, sigTextY);
+    doc.text(officerName, R - 4, sigTextY, { align: "right" });
     doc.setDrawColor(60, 60, 60);
     doc.setLineWidth(0.3);
-    doc.line(L + 3, y + 3, L + 38, y + 3);
-    doc.line(R - 38, y + 3, R - 3, y + 3);
+    doc.line(L + 3, sigLineY, L + 38, sigLineY);
+    doc.line(R - 38, sigLineY, R - 3, sigLineY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.5);
-    doc.text("EMPLOYEE SIGNATURE", L + 3, y + 6.5);
-    doc.text("AUTHORIZING OFFICER", R - 3, y + 6.5, { align: "right" });
+    doc.text("EMPLOYEE SIGNATURE", L + 3, sigCaptionY);
+    doc.text("AUTHORIZING OFFICER", R - 3, sigCaptionY, { align: "right" });
+    // Officer's role caption (manager / hr / accountant / payroll manager).
+    doc.setFontSize(5.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text(`(${officerTitle})`, R - 3, sigCaptionY + 3, { align: "right" });
+    doc.setTextColor(0, 0, 0);
 
-    // VERIFIED seal (center, slightly above the signatures like the template).
-    const sealX = pageW / 2;
-    const sealY = y - 9;
+    // VERIFIED seal sits BELOW the authorizing-officer signature block,
+    // right-aligned over the officer column (as in the reference template).
+    const sealX = R - 20;
+    const sealY = sigCaptionY + 13;
     doc.setDrawColor(178, 34, 34);
     doc.setLineWidth(0.5);
     doc.circle(sealX, sealY, 9, "S");
@@ -1846,7 +1880,9 @@ export default function PayrollSystem() {
       { align: "center" },
     );
     doc.setTextColor(0, 0, 0);
-    y += 14;
+
+    // Advance y past the taller of the seal bottom and the signature block.
+    y = Math.max(sealY + 9, sigCaptionY + 4) + 4;
 
     // REAL Code 128C barcode (bottom-left) — encodes numericDocCode(hash).
     const barcodeW = 32;
