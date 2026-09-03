@@ -11266,3 +11266,48 @@ Markers in live chunks: "Add Deduction Column", `custom_deductions`,
   envelope handles new fields transparently).
 - Gates: tsc -b 0 errors, eslint 0 errors (1 pre-existing exhaustive-deps
   warning PayrollSystem.tsx:582), prettier clean, vitest 172/172, build OK.
+
+## Session 2026-09-03 — Payroll column calc modes (fixed/percent/describe) + EARNINGS & ALLOWANCES (DEPLOYED LIVE, commit 8d5e9a8)
+
+**Tasks 1+3**: every custom deduction/earning column now has a calc MODE —
+fixed flat amount, percent of basic salary, or a free-text "Describe the rule"
+field that parses into fixed/percent (deterministic offline parser, no network).
+Edit applies to ALL employees at once ("Apply to ALL employees now" checkbox)
+or to individual employees (per-cell input or per-type row in the employee
+modal, each with a Fixed/%of-basic selector).
+
+**Task 2**: full EARNINGS & ALLOWANCES columns (add/edit/remove) that ADD to
+net pay — mirror of the deduction system.
+
+**Files**:
+- `src/react-app/lib/payroll-deductions.ts`: DeductionType gains calcMode /
+  fixedAmount / percentRate / ruleDescription; EarningType = same shape;
+  parseDeductionRule (deterministic percent/money parser e.g. "5%", "KSh 500",
+  "500 per month"); resolveDeductionAmount/resolveEarningAmount (percent→money
+  vs basic salary); computeColumnValue; calcNetPay adds +earnings;
+  normalizeEarningTypes/normalizeCustomEarnings aliases; deductionAmountFor
+  resolves when basicSalary is given; setEarningAmount alias.
+- `PayrollSystem.tsx`: shared add/edit column modal (deduction OR earning)
+  with mode radio (fixed/percent/describe) + live parse preview; earnings table
+  columns; percent-mode cells resolve + readOnly; employee modal per-type rows
+  with mode selector; Settings sub-tab has BOTH managers (mode summary + edit +
+  remove); dashboard "Earnings:" total; CSV/Excel exports; payslip PDF
+  EARNINGS & ALLOWANCES rows; applyColumnTypeToAll (batch cloud update);
+  removeColumnType (kind-aware cleanup + recalc).
+
+**Verified live** (preview 3143f2ea + main alias): 10% House Allowance applied
+to all (1000 each); Union Dues via "KSh 300 per month" describe-rule; edited
+10%→15% (apply to all → 1500); Ekal individually set to 20% (2000 vs 1500);
+payslip PDF shows House Allowance 2,000 in EARNINGS & ALLOWANCES + Union Dues
+-300 in STATUTORY & OTHER DEDUCTIONS, GROSS 12,000, NETT 10,885. Test columns
+removed; account at baseline. Markers live: "Earnings & Allowances",
+"Percent of basic salary", "Describe the rule", custom_earnings, earning_types.
+
+**Deploy state**:
+- GitHub main: 8d5e9a8 pushed.
+- Cloudflare Pages: LIVE (preview 3143f2ea + main alias, MD5 match).
+- Vercel: auto-deploys on push (GitHub integration READY).
+- Supabase: no schema changes (payroll_employees.custom_earnings +
+  payroll_settings.earning_types client-side fields).
+- Gates: tsc -b 0 errors, eslint 0 errors (1 pre-existing FAQ-warning),
+  prettier clean, vitest 180/180 (19 in payroll-deductions.test.ts), build OK.
