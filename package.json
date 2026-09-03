@@ -143,6 +143,7 @@
   "build": {
     "appId": "com.fuelpro.app",
     "productName": "FuelPro",
+    "npmRebuild": false,
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -174,7 +175,7 @@
           ]
         }
       ],
-      "icon": "public/logo-small.png"
+      "icon": "public/icon-512.png"
     },
     "nsis": {
       "oneClick": false,
@@ -187,14 +188,14 @@
       "target": [
         "dmg"
       ],
-      "icon": "public/logo-small.png"
+      "icon": "public/icon-512.png"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "icon": "public/logo-small.png",
+      "icon": "public/icon-512.png",
       "category": "Office"
     }
   }

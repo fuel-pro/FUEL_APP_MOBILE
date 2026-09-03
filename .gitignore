@@ -44,3 +44,5 @@ service-account.json
 !public/apple-touch-icon.png
 !public/favicon-16x16.png
 !public/favicon-32x32.png
+release/
+android/fuelpro.keystore
