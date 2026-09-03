@@ -222,3 +222,39 @@ export function numericDocCode(docHash: string, digits = 14): string {
   if (out.length % 2 !== 0) out += "0";
   return out;
 }
+
+/**
+ * The authorizing officer on a payslip is the NAME of whoever holds the
+ * authorizing role in the station/company structure. Priority (most
+ * payroll-specific first): payroll manager → HR / human resource →
+ * accountant / finance → manager → owner. The payslip's own employee is
+ * excluded (an employee cannot authorize their own payslip).
+ */
+export function resolveAuthorizingOfficer<
+  T extends { employeeId?: string; role?: string; fullName?: string },
+>(employees: T[], excludeEmployeeId?: string): T | null {
+  const priorities = [
+    "payroll manager",
+    "payroll",
+    "hr manager",
+    "human resource",
+    "hr",
+    "accountant",
+    "finance",
+    "manager",
+    "owner",
+  ];
+  let best: T | null = null;
+  let bestRank = Infinity;
+  for (const emp of employees) {
+    if (excludeEmployeeId && emp.employeeId === excludeEmployeeId) continue;
+    const role = String(emp.role || "").toLowerCase();
+    if (!role.trim()) continue;
+    const rank = priorities.findIndex((k) => role.includes(k));
+    if (rank !== -1 && rank < bestRank) {
+      bestRank = rank;
+      best = emp;
+    }
+  }
+  return best;
+}

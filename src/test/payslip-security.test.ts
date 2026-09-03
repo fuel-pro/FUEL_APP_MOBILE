@@ -6,6 +6,7 @@ import {
   numericDocCode,
   canonicalPayslipString,
   sha256Hex,
+  resolveAuthorizingOfficer,
   type PayslipSecurityInput,
 } from "@/react-app/lib/payslip-security";
 
@@ -184,6 +185,48 @@ describe("payslip security features", () => {
     expect(code).toMatch(/^\d+$/);
     expect(code.length % 2).toBe(0);
     expect(code.length).toBeGreaterThanOrEqual(14);
+  });
+
+  it("resolveAuthorizingOfficer picks the highest-priority role by name", () => {
+    const staff = [
+      { employeeId: "E1", fullName: "Cashier One", role: "Pump Attendant" },
+      { employeeId: "E2", fullName: "John Manager", role: "Station Manager" },
+      { employeeId: "E3", fullName: "Mary Payroll", role: "Payroll Manager" },
+      { employeeId: "E4", fullName: "Alice HR", role: "HR Officer" },
+      { employeeId: "E5", fullName: "Bob Accounts", role: "Accountant" },
+    ];
+    // Payroll Manager outranks everyone regardless of array order.
+    expect(resolveAuthorizingOfficer(staff)?.fullName).toBe("Mary Payroll");
+    // Without a payroll manager, HR wins over accountant/manager.
+    expect(
+      resolveAuthorizingOfficer(staff.filter((e) => e.employeeId !== "E3"))
+        ?.fullName,
+    ).toBe("Alice HR");
+    // Without HR, accountant wins.
+    expect(
+      resolveAuthorizingOfficer(
+        staff.filter((e) => !["E3", "E4"].includes(e.employeeId)),
+      )?.fullName,
+    ).toBe("Bob Accounts");
+    // Only a plain manager present → the manager is the officer.
+    expect(
+      resolveAuthorizingOfficer([
+        { employeeId: "E2", fullName: "John Manager", role: "Station Manager" },
+      ])?.fullName,
+    ).toBe("John Manager");
+    // Excluding the payslip's own employee.
+    expect(
+      resolveAuthorizingOfficer(
+        [{ employeeId: "E2", fullName: "John Manager", role: "Manager" }],
+        "E2",
+      ),
+    ).toBeNull();
+    // No authorizing role → null.
+    expect(
+      resolveAuthorizingOfficer([
+        { employeeId: "E1", fullName: "Cashier One", role: "Pump Attendant" },
+      ]),
+    ).toBeNull();
   });
 
   it("Code 128C module stream decodes back to the input with valid checksum", () => {

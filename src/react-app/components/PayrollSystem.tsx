@@ -69,6 +69,7 @@ import {
   computePayslipDocHash,
   buildPayslipVerifyPayload,
   numericDocCode,
+  resolveAuthorizingOfficer,
   type PayslipSecurityInput,
 } from "@/react-app/lib/payslip-security";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
@@ -1810,26 +1811,10 @@ export default function PayrollSystem() {
     y += 16;
 
     // ── Signatures + VERIFIED seal + barcode + footer ──────────────────
-    // Resolve the authorizing officer by role (manager / HR / accountant /
-    // payroll manager), in priority order, excluding the payslip's own
-    // employee. Falls back to the org name when no such officer exists.
-    const officerRoleKeywords = [
-      "payroll manager",
-      "payroll",
-      "hr manager",
-      "human resource",
-      "hr",
-      "accountant",
-      "finance",
-      "manager",
-      "owner",
-    ];
-    const officer =
-      employees.find((emp) => {
-        if (emp.employeeId === employee.employeeId) return false;
-        const role = String(emp.role || "").toLowerCase();
-        return officerRoleKeywords.some((k) => role.includes(k));
-      }) || null;
+    // The Authorizing Officer is the NAME of whoever holds the authorizing
+    // role in this station's structure — payroll manager / HR / accountant /
+    // manager / owner — resolved by priority (most payroll-specific first).
+    const officer = resolveAuthorizingOfficer(employees, employee.employeeId);
     const officerName = officer?.fullName || settings.organizationName;
     const officerTitle = officer?.role || "Manager";
 
