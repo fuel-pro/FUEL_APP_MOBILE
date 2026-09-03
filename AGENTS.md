@@ -1,5 +1,28 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — Payslip real security features + station logo (commit cc09abb)
+
+The payslip QR code, barcode and DOC HASH were decorative fake graphics —
+now real and cryptographically bound to the payslip contents. New
+`src/react-app/lib/payslip-security.ts`: real SHA-256 doc hash (Web Crypto)
+over the canonical string org|employeeId|name|period|gross|deductions|
+nett|currency (printed in the footer; any tampered figure changes it);
+`buildPayslipVerifyPayload()` QR content (org, employee id, period, nett,
+hash prefix — scanning proves the printed figures match the hashed doc);
+a genuine ISO/IEC 15417 **Code 128C** encoder (full pattern table +
+mod-103 checksum + quiet zones — scannable by any reader); numeric
+barcode content derived from the doc hash. Top-left badge is now the
+**station's uploaded logo** in a navy ring (shield only as no-logo
+fallback); particulars use real data (station name, employment-derived
+increment month, real Employment Date row). **Verified with real
+scanners**: OpenCV QRCodeDetector decodes the QR from a 300dpi render of
+the actual generated PDF to the exact payload; zxing-cpp decodes the
+Code128 barcode from the same PDF page to the exact doc code. New
+`src/test/payslip-security.test.ts` (6 tests incl. barcode round-trip +
+checksum). 154/154 tests, tsc/eslint clean. Deployed: GitHub main
+cc09abb; Cloudflare LIVE (preview 99d93f01, FP-PAYSLIP marker confirmed
+in live chunk); Vercel LIVE (prebuilt).
+
 ## Session 2026-09-03 (cont.) — Payslip exact Official Secure Pay Slip replica (commit 1c82f7d)
 
 User supplied the "Official Secure Pay Slip - July 2025" reference PDF and
