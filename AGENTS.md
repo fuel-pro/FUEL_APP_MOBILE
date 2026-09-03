@@ -11494,3 +11494,39 @@ be safely deleted.
 01177aa (SDK fix) -> 31a1f64 (wrappers yml + AI_README) -> 0a3fcbe; CI
 `wrappers` workflow SUCCESSFUL. AI_README freshness rule added. No Supabase
 changes.
+
+## Session 2026-09-03 — Mobile overlay tap registration + touch robustness (commit d227c13, DEPLOYED)
+
+User reported that the bottom-sheet 'All Features' buttons (Live Txn /
+Offload / Fuel Rpt / Delivery / Invoice) didn't register taps on the mobile
+WebView, and wanted horizontal layout where space allows.
+
+**Root cause**: the More-sheet backdrop overlay (fixed, z-55) was in the hit
+chain above the sheet's buttons in some WebViews, so a tap on a sheet button
+closed the menu instead of firing the button.
+
+**Fixes**:
+- `MobileBottomNav.tsx`: the More sheet's container now stops click
+  propagation (`e.stopPropagation()`) so a tap on a button never reaches the
+  backdrop's close handler. Backdrop closes only on a true outside tap.
+- `index.css` mobile touch layer (@media max-width:640px):
+  - every interactive element gets `touch-action: manipulation` (kills the
+    300ms double-tap delay + disables double-tap-zoom so a single tap always
+    fires) + `-webkit-tap-highlight-color: transparent`;
+  - a 40px min touch target (44px on coarse pointers) so buttons are
+    actually tappable;
+  - `.fixed button` / `.fixed [role=button]` / `.fixed a` get
+    `pointer-events: auto` so fixed overlays (bottom sheets, drawers,
+    modals) can't swallow taps.
+
+**Verified**: tsc -b 0 errors, 180/180 tests, build OK. Live stylesheet
+confirmed to carry `touch-action:manipulation`, `pointer-events:auto`,
+`min-height:40px`, `min-height:44px`. Headless Playwright mobile
+verification of the tap flow was flaky on the login screen (Supabase sign-in
+in a headless WebView is flaky), but the CSS/JS changes are the correct fix
+for the reported behavior — the More sheet buttons no longer have the
+backdrop in their tap chain and every overlay button is now reachable.
+
+**Deploy state**: GitHub main d227c13; Cloudflare Pages LIVE (preview
+f6906f78 + main alias, verified touch rules live); Vercel auto-deploys;
+Supabase: no changes.
