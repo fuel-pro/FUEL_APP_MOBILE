@@ -2133,6 +2133,109 @@ html.dark select option {
 }
 
 /* ============================================================
+   MOBILE OVERFLOW / CLIPPING SAFETY NET (APK fix round 2)
+   The user's screenshot showed stat-card values (e.g. "Curated")
+   clipped at the card edge and long text/chips overflowing on
+   mobile. These global rules guarantee:
+   - flex children can shrink below their content width (min-w-0)
+   - text in cards/stat values truncates with an ellipsis instead
+     of overflowing/clipping
+   - tables scroll horizontally instead of pushing the page
+   - chips/filters wrap instead of overflowing
+   - no element forces a horizontal page scroll on mobile
+   ============================================================ */
+
+/* 1) Flex children in card-like containers may shrink below content width */
+@media (max-width: 640px) {
+  .card,
+  [class*="rounded-lg"][class*="border"],
+  [class*="rounded-xl"][class*="border"] {
+    min-width: 0;
+  }
+  .card > .flex,
+  [class*="rounded-lg"][class*="border"] > .flex,
+  [class*="rounded-xl"][class*="border"] > .flex {
+    min-width: 0;
+  }
+  /* The text column next to a stat icon may shrink so the value can
+     truncate instead of overflowing the card. */
+  .card .flex > div:last-child,
+  [class*="rounded-lg"][class*="border"] .flex > div:last-child,
+  [class*="rounded-xl"][class*="border"] .flex > div:last-child {
+    min-width: 0;
+  }
+}
+
+/* 2) Long values/labels truncate with an ellipsis instead of clipping */
+@media (max-width: 640px) {
+  .card p,
+  .card span,
+  [class*="rounded-lg"][class*="border"] p,
+  [class*="rounded-lg"][class*="border"] span,
+  [class*="rounded-xl"][class*="border"] p,
+  [class*="rounded-xl"][class*="border"] span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Allow multi-line wrapping for titles but single-line ellipsis for
+     stat values (the visible clipping bug). */
+  .card .font-bold,
+  [class*="rounded-lg"][class*="border"] .font-bold,
+  [class*="rounded-xl"][class*="border"] .font-bold {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+}
+
+/* 3) Tables never push the page sideways on mobile — they scroll
+   horizontally inside their own container. */
+@media (max-width: 640px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  table thead,
+  table tbody {
+    display: table;
+    width: 100%;
+    min-width: 480px;
+  }
+}
+
+/* 4) Filter chips / category pills wrap instead of overflowing. */
+@media (max-width: 640px) {
+  .flex.flex-wrap,
+  .chips,
+  [class*="filter"],
+  [class*="chip"] {
+    flex-wrap: wrap;
+  }
+}
+
+/* 5) No element forces a horizontal page scroll on mobile. */
+@media (max-width: 640px) {
+  body {
+    overflow-x: hidden;
+  }
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+  pre,
+  code {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+/* ============================================================
    GLOBAL RESPONSIVE SAFETY NET (added for full multi-device audit)
    These rules protect EVERY page/component at every aspect ratio
    (phone portrait/landscape, small phone, tablet, laptop, TV).
