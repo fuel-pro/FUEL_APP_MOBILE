@@ -1,5 +1,9 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — Payslip seal placement + role-aware officer (commit 8e2e461)
+
+Fixed the VERIFIED/HRIS seal placement: it now sits BELOW the authorizing-officer signature block, centered over the officer column on the right (was overlapping the center/employee signature). The Authorizing Officer is now role-aware — resolved from the station's own employees (payroll manager / HR / accountant / finance / manager / owner, priority order, excluding the payslip's own employee), with the officer's role captioned under the signature (e.g. '(Payroll Manager)'), falling back to the organization name. Deployed: GitHub main 8e2e461; Cloudflare LIVE (ccb0d37d, AUTHORIZING OFFICER marker confirmed); Vercel LIVE (prebuilt).
+
 ## Session 2026-09-03 (cont.) — Payslip real security features + station logo (commit cc09abb)
 
 The payslip QR code, barcode and DOC HASH were decorative fake graphics —
