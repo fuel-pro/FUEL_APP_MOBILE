@@ -11354,3 +11354,38 @@ Notes for users: artifacts are self-signed / unsigned (no Microsoft/Google
 store certs) so Windows SmartScreen + Android 'unknown sources' prompts are
 expected. The wrappers launch the live production site with the Cloudflare
 Pages URL as primary and Vercel as fallback.
+
+## Session 2026-09-03 — Desktop .exe auto-update + always-live + Play Protect help (commit fe5fa40)
+
+Follow-up to the wrapper request: the user wanted the .exe/.apk to always be
+up-to-date + never blocked/warning (screenshot showed Google Play Protect
+blocking the Android install).
+
+**Desktop .exe — always up-to-date (2 layers)**
+1. Content: `electron/main.cjs` now loads the LIVE site directly
+   (Cloudflare Pages primary -> Vercel fallback; removed the bundled-dist
+   offline fallback). The app always shows the latest deploy without any
+   app update.
+2. Shell: `electron-updater` + electron-builder publish config
+   (provider: github, fuelpropay/FUEL_APP_MOBILE) — the installer checks
+   GitHub Releases on launch, downloads newer versions in the background
+   and installs on next quit. `npmRebuild` stays disabled.
+
+**Android .apk — already live** via capacitor `server.url =
+https://fuel-app-mobile.pages.dev/`, so it updates itself with every deploy.
+
+**Google Play Protect block — user guidance**
+The 'App blocked to protect your device' dialog appears because Google does
+not recognize a first-time self-signed developer certificate (expected for a
+first-party build, NOT a security issue). The GitHub Release notes
+(v1.0.0-desktop-android) now explain: tap 'Install anyway'; if it still
+blocks, disable Play Protect scanning for this app or download from the
+release page directly.
+
+**Built + published (release v1.0.0-desktop-android)**: FuelPro Setup 1.0.0.exe
+(NSIS, x64+ia32, auto-update), FuelPro 1.0.0.exe (portable x64), FuelPro.apk
+(signed), FuelPro-debug.apk (developer). Recreated the release with updated
+artifacts + the Play Protect/always-up-to-date notes.
+
+Caveat: `android/fuelpro.keystore` is gitignored (build secret); runtime reset
+wiped the previously built APKs so they were rebuilt from source.
