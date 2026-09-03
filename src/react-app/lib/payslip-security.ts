@@ -224,6 +224,31 @@ export function numericDocCode(docHash: string, digits = 14): string {
 }
 
 /**
+ * Resolve an employee record's display name. Payroll records are saved with
+ * a single `fullName` (camelCase) / `full_name` (snake_case) field — NOT
+ * separate first/last parts — so check full-name variants first, then
+ * assemble from first/last parts, then any `name` field.
+ */
+export function resolveEmployeeName(e: {
+  fullName?: string;
+  full_name?: string;
+  name?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+}): string {
+  const full = (e.fullName || e.full_name || e.name || "").trim();
+  if (full) return full;
+  const parts = [e.firstName || e.first_name, e.lastName || e.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (parts) return parts;
+  return "Employee";
+}
+
+/**
  * The authorizing officer on a payslip is the NAME of whoever holds the
  * authorizing role in the station/company structure. Priority (most
  * payroll-specific first): payroll manager → HR / human resource →

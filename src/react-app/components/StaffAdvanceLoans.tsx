@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useCloudKV } from "@/react-app/hooks/useCloudKV";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { resolveEmployeeName } from "@/react-app/lib/payslip-security";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const KEY = "staff_loans";
@@ -17,6 +18,11 @@ interface PayrollEmployeeLike {
   employeeId?: string;
   firstName?: string;
   lastName?: string;
+  fullName?: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  name?: string;
   role?: string;
 }
 
@@ -35,9 +41,7 @@ function id() {
 }
 
 function employeeName(e: PayrollEmployeeLike): string {
-  return (
-    [e.firstName, e.lastName].filter(Boolean).join(" ").trim() || "Employee"
-  );
+  return resolveEmployeeName(e);
 }
 
 export default function StaffAdvanceLoans() {
