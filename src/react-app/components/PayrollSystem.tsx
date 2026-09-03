@@ -1056,8 +1056,15 @@ export default function PayrollSystem() {
     }
   };
 
+  // Monotonic per-(employee, field) sequence so an older keystroke's cloud
+  // write can never overwrite a newer one.
+  const updateSeqRef = useRef(new Map<string, number>());
+
   // Update cell values — persist to cloud + localStorage
   const updateCell = async (employee: Employee, field: string, value: any) => {
+    const seqKey = `${employee.employeeId}:${field}`;
+    const seq = (updateSeqRef.current.get(seqKey) ?? 0) + 1;
+    updateSeqRef.current.set(seqKey, seq);
     try {
       const updatedEmployee = { ...employee };
 
@@ -1091,11 +1098,23 @@ export default function PayrollSystem() {
         (updatedEmployee as any)[field] = value;
       }
 
+      // Optimistically update local state FIRST — otherwise rapid keystrokes
+      // race the async cloud read below and clobber each other (each
+      // keystroke would otherwise wait for a network round-trip before the
+      // input re-renders, and the next keystroke's snapshot could be stale).
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.employeeId === employee.employeeId ? updatedEmployee : e,
+        ),
+      );
+
       const cloudData =
         (await cloudStorageService.get<any[]>(
           "payroll_employees",
           stationId,
         )) || [];
+      // A newer keystroke for the same field superseded this write — skip it.
+      if (updateSeqRef.current.get(seqKey) !== seq) return;
       const idx = cloudData.findIndex(
         (e: any) => e.employee_id === employee.employeeId,
       );
@@ -1137,13 +1156,6 @@ export default function PayrollSystem() {
           JSON.stringify(cloudData),
         );
       }
-
-      // Optimistically update local state
-      setEmployees((prev) =>
-        prev.map((e) =>
-          e.employeeId === employee.employeeId ? updatedEmployee : e,
-        ),
-      );
     } catch (error) {
       console.error("Error updating cell:", error);
       toastError("Failed to update employee: " + (error as Error).message);
