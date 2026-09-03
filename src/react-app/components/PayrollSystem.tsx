@@ -75,11 +75,20 @@ import {
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   calcNetPay,
+  computeColumnValue,
   deductionAmountFor,
   normalizeCustomDeductions,
+  normalizeCustomEarnings,
   normalizeDeductionTypes,
+  normalizeEarningTypes,
+  parseDeductionRule,
+  resolveDeductionAmount,
+  resolveEarningAmount,
   setDeductionAmount,
+  setEarningAmount,
+  type ColumnCalcMode,
   type DeductionType,
+  type EarningType,
 } from "@/react-app/lib/payroll-deductions";
 
 interface Employee {
@@ -96,7 +105,13 @@ interface Employee {
   nssf: number;
   advance: number;
   /** Per-employee amounts for station-defined custom deduction types. */
-  customDeductions: { typeId: string; amount: number }[];
+  customDeductions: {
+    typeId: string;
+    amount: number;
+    mode?: ColumnCalcMode;
+  }[];
+  /** Per-employee amounts for station-defined earnings/allowance types. */
+  earnings: { typeId: string; amount: number; mode?: ColumnCalcMode }[];
   netPay: number;
   bank: string;
   bankCode: string;
@@ -135,6 +150,8 @@ interface PayrollSettings {
   nssfAmount: number;
   /** Station-defined custom deduction types (add/remove per station). */
   deductionTypes: DeductionType[];
+  /** Station-defined earnings/allowance types (add/remove per station). */
+  earningTypes: EarningType[];
 }
 
 interface ColumnNames {
@@ -184,6 +201,7 @@ function normalizeEmployee(
     customDeductions: normalizeCustomDeductions(
       emp.custom_deductions ?? emp.customDeductions,
     ),
+    earnings: normalizeCustomEarnings(emp.custom_earnings ?? emp.earnings),
     netPay,
     bank: emp.bank_name ?? emp.bank ?? "",
     bankCode: emp.bank_code ?? emp.bankCode ?? "",
@@ -279,6 +297,9 @@ function normalizePayrollSettings(
     deductionTypes: normalizeDeductionTypes(
       s.deduction_types ?? s.deductionTypes ?? fallback.deductionTypes,
     ),
+    earningTypes: normalizeEarningTypes(
+      s.earning_types ?? s.earningTypes ?? fallback.earningTypes,
+    ),
   };
 }
 
@@ -312,6 +333,7 @@ const defaultSettings: PayrollSettings = {
   origCode: "",
   reference: "",
   deductionTypes: [],
+  earningTypes: [],
   shaPercentage: isKenya ? 2.75 : 0,
   nssfAmount: isKenya ? 480 : 0,
 };
@@ -381,11 +403,26 @@ export default function PayrollSystem() {
   const [showShaModal, setShowShaModal] = useState(false);
   const [showNssfModal, setShowNssfModal] = useState(false);
   const [showColumnModal, setShowColumnModal] = useState(false);
-  // Custom deduction types: add (modal) / remove (confirm) state.
-  const [showDeductionModal, setShowDeductionModal] = useState(false);
-  const [deductionLabel, setDeductionLabel] = useState("");
+  // Custom column types (deductions + earnings): shared add/edit modal with
+  // mode (fixed / percent / describe) + apply-to-all vs individual editing.
+  const [showColumnTypeModal, setShowColumnTypeModal] = useState(false);
+  const [columnModalKind, setColumnModalKind] = useState<
+    "deduction" | "earning"
+  >("deduction");
+  const [editingColumnType, setEditingColumnType] =
+    useState<DeductionType | null>(null);
+  const [columnTypeLabel, setColumnTypeLabel] = useState("");
+  const [columnTypeMode, setColumnTypeMode] = useState<
+    "fixed" | "percent" | "describe"
+  >("fixed");
+  const [columnTypeValue, setColumnTypeValue] = useState("");
+  const [columnTypeRule, setColumnTypeRule] = useState("");
+  const [columnTypeApplyAll, setColumnTypeApplyAll] = useState(true);
   const [deductionToRemove, setDeductionToRemove] =
     useState<DeductionType | null>(null);
+  const [earningToRemove, setEarningToRemove] = useState<EarningType | null>(
+    null,
+  );
 
   // Payslip delivery (email/WhatsApp) — config + log are cloud-synced
   // (station-scoped), so a schedule set on one device fires on every device.
@@ -455,7 +492,16 @@ export default function PayrollSystem() {
     advance: 0,
     sha: 0,
     nssf: 0,
-    customDeductions: [] as { typeId: string; amount: number }[],
+    customDeductions: [] as {
+      typeId: string;
+      amount: number;
+      mode?: ColumnCalcMode;
+    }[],
+    earnings: [] as {
+      typeId: string;
+      amount: number;
+      mode?: ColumnCalcMode;
+    }[],
     notes: "",
   });
 
@@ -559,6 +605,7 @@ export default function PayrollSystem() {
         reference_code: merged.reference,
         custom_roles: merged.customRoles?.join(", "),
         deduction_types: merged.deductionTypes ?? [],
+        earning_types: merged.earningTypes ?? [],
       };
       await cloudStorageService.set("payroll_settings", payload, stationId);
       localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
@@ -665,6 +712,7 @@ export default function PayrollSystem() {
       sha: 0,
       nssf: 0,
       customDeductions: [],
+      earnings: [],
       notes: "",
     });
     setShowEmployeeModal(true);
@@ -693,6 +741,7 @@ export default function PayrollSystem() {
       sha: employee.sha,
       nssf: employee.nssf,
       customDeductions: employee.customDeductions ?? [],
+      earnings: employee.earnings ?? [],
       notes: employee.notes,
     });
     setShowEmployeeModal(true);
@@ -723,6 +772,7 @@ export default function PayrollSystem() {
         sha: employeeForm.sha,
         nssf: employeeForm.nssf,
         customDeductions: employeeForm.customDeductions,
+        earnings: employeeForm.earnings,
       });
 
       const empData = {
@@ -747,6 +797,7 @@ export default function PayrollSystem() {
         sha_amount: employeeForm.sha || 0,
         nssf_amount: employeeForm.nssf || 0,
         custom_deductions: employeeForm.customDeductions ?? [],
+        custom_earnings: employeeForm.earnings ?? [],
         net_pay: computedNet,
         notes: employeeForm.notes,
       };
@@ -890,6 +941,7 @@ export default function PayrollSystem() {
             sha: newSha,
             nssf: emp.nssf_amount || 0,
             customDeductions: emp.custom_deductions ?? [],
+            earnings: emp.custom_earnings ?? [],
           }),
         };
       });
@@ -936,6 +988,7 @@ export default function PayrollSystem() {
             sha: emp.sha_amount || 0,
             nssf: nssfAmount,
             customDeductions: emp.custom_deductions ?? [],
+            earnings: emp.custom_earnings ?? [],
           }),
         };
       });
@@ -969,62 +1022,273 @@ export default function PayrollSystem() {
     setShowColumnModal(true);
   };
 
-  // ── Custom deduction types (add/remove) ────────────────────────────────
-  const addDeductionType = () => {
-    const label = deductionLabel.trim();
-    if (!label) {
-      toastError("Enter a name for the deduction (e.g. HELB Loan).");
-      return;
-    }
-    const exists = settings.deductionTypes.some(
-      (t) => t.label.toLowerCase() === label.toLowerCase(),
-    );
-    if (exists) {
-      toastError(`A deduction named "${label}" already exists.`);
-      return;
-    }
-    const type: DeductionType = {
-      id: `ded_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      label,
-    };
+  // ── Custom column types (deductions + EARNINGS & ALLOWANCES) ───────────
+  // A column type is deducting (subtracts from net) OR an earning (adds to
+  // net). Each has a calc mode: a fixed flat amount OR a percentage of the
+  // employee's basic salary (optionally set from a "describe the rule" text).
+  // Editing applies either to ALL employees at once (apply-to-all) or to a
+  // single employee (per-cell/per-form individual edit).
+
+  /** Which kind a column belongs to. `"deduction"` subtracts, `"earning"` adds. */
+  type Kind = "deduction" | "earning";
+
+  const typesOf = (kind: Kind) =>
+    kind === "deduction" ? settings.deductionTypes : settings.earningTypes;
+  const setTypesOf = (kind: Kind, types: DeductionType[]) => {
     const updated = {
       ...settings,
-      deductionTypes: [...settings.deductionTypes, type],
+      ...(kind === "deduction"
+        ? { deductionTypes: types }
+        : { earningTypes: types }),
     };
     setSettings(updated);
     saveSettings(updated);
-    setShowDeductionModal(false);
-    setDeductionLabel("");
-    toastSuccess(`Deduction column "${label}" added.`);
+  };
+
+  /** Open the shared add/edit column modal for a deduction or an earning. */
+  const openColumnTypeModal = (kind: Kind, existing?: DeductionType) => {
+    setColumnModalKind(kind);
+    setEditingColumnType(existing ?? null);
+    setColumnTypeLabel(existing?.label ?? "");
+    setColumnTypeMode(
+      existing
+        ? existing.calcMode === "percent"
+          ? "percent"
+          : "fixed"
+        : "fixed",
+    );
+    setColumnTypeValue(
+      existing?.calcMode === "percent"
+        ? String(existing.percentRate ?? "")
+        : existing?.calcMode === "fixed"
+          ? String(existing.fixedAmount ?? "")
+          : "",
+    );
+    setColumnTypeRule(existing?.ruleDescription ?? "");
+    setColumnTypeApplyAll(!!existing);
+    setShowColumnTypeModal(true);
+  };
+
+  /** Create or update a deduction/earning column type, then optionally
+   * apply its value to ALL employees (apply-to-all path). */
+  const saveColumnType = async () => {
+    const label = columnTypeLabel.trim();
+    const kind = columnModalKind;
+    const noun = kind === "deduction" ? "deduction" : "earning";
+    if (!label) {
+      toastError(
+        `Enter a name for the ${noun} (e.g. ${kind === "deduction" ? "HELB Loan" : "House Allowance"}).`,
+      );
+      return;
+    }
+    // Resolve the mode (fixed / percent / described rule → parsed rule).
+    let calcMode: ColumnCalcMode = "fixed";
+    let fixedAmount = 0;
+    let percentRate = 0;
+    let ruleDescription = "";
+    if (columnTypeMode === "describe") {
+      const parsed = parseDeductionRule(columnTypeRule);
+      if (!parsed) {
+        toastError(
+          `Couldn't understand "${columnTypeRule}" — try e.g. "5% of basic salary" or "KSh 500".`,
+        );
+        return;
+      }
+      calcMode = parsed.calcMode;
+      percentRate = parsed.percentRate ?? 0;
+      fixedAmount = parsed.fixedAmount ?? 0;
+      ruleDescription = columnTypeRule.trim();
+    } else if (columnTypeMode === "percent") {
+      const rate = parseFloat(columnTypeValue);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        toastError("Enter a percent rate between 0 and 100 (e.g. 5).");
+        return;
+      }
+      calcMode = "percent";
+      percentRate = rate;
+    } else {
+      const amount = parseFloat(columnTypeValue);
+      if (!Number.isFinite(amount) || amount < 0) {
+        toastError(`Enter the default ${noun} amount (0 or more).`);
+        return;
+      }
+      calcMode = "fixed";
+      fixedAmount = amount;
+    }
+
+    const list = typesOf(kind);
+    const exists = list.some(
+      (t) =>
+        t.label.toLowerCase() === label.toLowerCase() &&
+        t.id !== editingColumnType?.id,
+    );
+    if (exists) {
+      toastError(`A ${noun} named "${label}" already exists.`);
+      return;
+    }
+
+    const isEdit = !!editingColumnType;
+    const type: DeductionType = isEdit
+      ? {
+          ...editingColumnType,
+          label,
+          calcMode,
+          fixedAmount: calcMode === "fixed" ? fixedAmount : undefined,
+          percentRate: calcMode === "percent" ? percentRate : undefined,
+          ruleDescription: ruleDescription || undefined,
+        }
+      : {
+          id: `${kind.substring(0, 3)}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          label,
+          calcMode,
+          fixedAmount: calcMode === "fixed" ? fixedAmount : undefined,
+          percentRate: calcMode === "percent" ? percentRate : undefined,
+          ruleDescription: ruleDescription || undefined,
+        };
+
+    const updatedList = isEdit
+      ? list.map((t) => (t.id === type.id ? type : t))
+      : [...list, type];
+    setTypesOf(kind, updatedList);
+    setShowColumnTypeModal(false);
+    setEditingColumnType(null);
+
+    // Apply the default value to ALL employees (opt-in, and on edit only
+    // when the user checked the box).
+    const rawValue = calcMode === "percent" ? percentRate : fixedAmount;
+    const wantApplyAll = columnTypeApplyAll || !isEdit;
+    if (wantApplyAll && rawValue > 0) {
+      await applyColumnTypeToAll(type, kind, rawValue, calcMode);
+    } else if (isEdit) {
+      toastSuccess(
+        `${noun === "deduction" ? "Deduction" : "Earning"} column "${label}" updated.`,
+      );
+    } else {
+      toastSuccess(
+        `${noun === "deduction" ? "Deduction" : "Earning"} column "${label}" added.`,
+      );
+    }
+  };
+
+  /** Apply a column type's value to EVERY employee, then persist to cloud. */
+  const applyColumnTypeToAll = async (
+    type: DeductionType,
+    kind: Kind,
+    rawValue: number,
+    mode: ColumnCalcMode,
+  ) => {
+    const noun = kind === "deduction" ? "deduction" : "earning";
+    try {
+      setSaving(true);
+      const cloudData =
+        (await cloudStorageService.get<any[]>(
+          "payroll_employees",
+          stationId,
+        )) || [];
+      const updatedList = cloudData.map((emp: any) => {
+        const list = Array.isArray(
+          kind === "deduction" ? emp.custom_deductions : emp.custom_earnings,
+        )
+          ? [
+              ...(kind === "deduction"
+                ? emp.custom_deductions
+                : emp.custom_earnings),
+            ]
+          : [];
+        const idx = list.findIndex((d: any) => d?.typeId === type.id);
+        const entry = { typeId: type.id, amount: rawValue, mode };
+        if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+        else list.push(entry);
+        const deductions =
+          kind === "deduction" ? list : (emp.custom_deductions ?? []);
+        const earnings =
+          kind === "earning" ? list : (emp.custom_earnings ?? []);
+        return {
+          ...emp,
+          ...(kind === "deduction"
+            ? { custom_deductions: list }
+            : { custom_earnings: list }),
+          net_pay: calcNetPay({
+            basicSalary: Number(emp.basic_salary) || 0,
+            advance: Number(emp.advance_amount) || 0,
+            sha: Number(emp.sha_amount) || 0,
+            nssf: Number(emp.nssf_amount) || 0,
+            customDeductions: deductions,
+            earnings,
+          }),
+        };
+      });
+      await cloudStorageService.set(
+        "payroll_employees",
+        updatedList,
+        stationId,
+      );
+      localStorage.setItem(
+        "fuelpro_payroll_employees",
+        JSON.stringify(updatedList),
+      );
+      await fetchEmployees();
+      const summary =
+        mode === "percent"
+          ? `${rawValue}% of basic salary (${formatCurrency(
+              computeColumnValue(type, employees[0]?.basicSalary ?? 0),
+            )}${employees.length > 1 ? " each" : ""})`
+          : formatCurrency(rawValue);
+      toastSuccess(
+        `${noun === "deduction" ? "Deduction" : "Earning"} "${type.label}" applied to all ${employees.length} employees (${summary}).`,
+      );
+    } catch (err) {
+      console.error(`Failed to apply ${noun} "${type.label}" to all:`, err);
+      toastError(
+        `Failed to apply ${noun} "${type.label}": ` + (err as Error).message,
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const removeDeductionType = async (type: DeductionType) => {
-    // Strip the type from settings AND from every employee's deductions.
-    const updated = {
-      ...settings,
-      deductionTypes: settings.deductionTypes.filter((t) => t.id !== type.id),
-    };
-    setSettings(updated);
-    saveSettings(updated);
-    const recalc = (emp: Employee) => {
-      const customDeductions = (emp.customDeductions ?? []).filter(
-        (d) => d.typeId !== type.id,
-      );
+    await removeColumnType("deduction", type);
+    setDeductionToRemove(null);
+    toastSuccess(`Deduction column "${type.label}" removed.`);
+  };
+
+  const removeEarningType = async (type: EarningType) => {
+    await removeColumnType("earning", type);
+    setEarningToRemove(null);
+    toastSuccess(`Earning column "${type.label}" removed.`);
+  };
+
+  /** Strip a column type from settings AND from every employee's values on
+   * BOTH in-memory and cloud records, recalculating net pay. */
+  const removeColumnType = async (kind: Kind, type: DeductionType) => {
+    const list = typesOf(kind);
+    setTypesOf(
+      kind,
+      list.filter((t) => t.id !== type.id),
+    );
+    const strip = (emp: Employee) => {
+      const filtered =
+        kind === "deduction"
+          ? (emp.customDeductions ?? []).filter((d) => d.typeId !== type.id)
+          : (emp.earnings ?? []).filter((d) => d.typeId !== type.id);
+      const deductions = kind === "deduction" ? filtered : emp.customDeductions;
+      const earnings = kind === "earning" ? filtered : emp.earnings;
       return {
         ...emp,
-        customDeductions,
+        customDeductions: deductions,
+        earnings,
         netPay: calcNetPay({
           basicSalary: emp.basicSalary,
           advance: emp.advance,
           sha: emp.sha,
           nssf: emp.nssf,
-          customDeductions,
+          customDeductions: deductions,
+          earnings,
         }),
       };
     };
-    setEmployees(employees.map(recalc));
-    // Persist the cleaned employee list to cloud so the removed column's
-    // values don't linger on other devices.
+    setEmployees(employees.map(strip));
     try {
       const cloudData =
         (await cloudStorageService.get<any[]>(
@@ -1032,18 +1296,31 @@ export default function PayrollSystem() {
           stationId,
         )) || [];
       const cleaned = cloudData.map((e: any) => {
-        const custom_deductions = Array.isArray(e.custom_deductions)
-          ? e.custom_deductions.filter((d: any) => d?.typeId !== type.id)
+        const filtered = Array.isArray(
+          kind === "deduction" ? e.custom_deductions : e.custom_earnings,
+        )
+          ? (
+              (kind === "deduction"
+                ? e.custom_deductions
+                : e.custom_earnings) as any[]
+            ).filter((d: any) => d?.typeId !== type.id)
           : [];
+        const deductions =
+          kind === "deduction" ? filtered : (e.custom_deductions ?? []);
+        const earnings =
+          kind === "earning" ? filtered : (e.custom_earnings ?? []);
         return {
           ...e,
-          custom_deductions,
+          ...(kind === "deduction"
+            ? { custom_deductions: filtered }
+            : { custom_earnings: filtered }),
           net_pay: calcNetPay({
             basicSalary: Number(e.basic_salary) || 0,
             advance: Number(e.advance_amount) || 0,
             sha: Number(e.sha_amount) || 0,
             nssf: Number(e.nssf_amount) || 0,
-            customDeductions: custom_deductions,
+            customDeductions: deductions,
+            earnings,
           }),
         };
       });
@@ -1053,10 +1330,8 @@ export default function PayrollSystem() {
         JSON.stringify(cleaned),
       );
     } catch (err) {
-      console.error("Failed to clean removed deduction from cloud:", err);
+      console.error(`Failed to clean removed ${kind} from cloud:`, err);
     }
-    setDeductionToRemove(null);
-    toastSuccess(`Deduction column "${type.label}" removed.`);
   };
 
   const saveColumnName = () => {
@@ -1089,11 +1364,13 @@ export default function PayrollSystem() {
       const updatedEmployee = { ...employee };
 
       const isCustomDeduction = field.startsWith("ded:");
+      const isCustomEarning = field.startsWith("earn:");
       if (
         field === "sha" ||
         field === "nssf" ||
         field === "advance" ||
-        isCustomDeduction
+        isCustomDeduction ||
+        isCustomEarning
       ) {
         const numValue = parseFloat(value) || 0;
         if (field === "sha") updatedEmployee.sha = numValue;
@@ -1106,6 +1383,13 @@ export default function PayrollSystem() {
             numValue,
           );
         }
+        if (isCustomEarning) {
+          updatedEmployee.earnings = setEarningAmount(
+            updatedEmployee.earnings,
+            field.slice(5),
+            numValue,
+          );
+        }
 
         updatedEmployee.netPay = calcNetPay({
           basicSalary: updatedEmployee.basicSalary,
@@ -1113,6 +1397,7 @@ export default function PayrollSystem() {
           sha: updatedEmployee.sha,
           nssf: updatedEmployee.nssf,
           customDeductions: updatedEmployee.customDeductions,
+          earnings: updatedEmployee.earnings,
         });
       } else {
         (updatedEmployee as any)[field] = value;
@@ -1162,6 +1447,7 @@ export default function PayrollSystem() {
           sha_amount: updatedEmployee.sha,
           nssf_amount: updatedEmployee.nssf,
           custom_deductions: updatedEmployee.customDeductions ?? [],
+          custom_earnings: updatedEmployee.earnings ?? [],
           net_pay: updatedEmployee.netPay,
           notes: updatedEmployee.notes,
         };
@@ -1258,11 +1544,25 @@ export default function PayrollSystem() {
     (sum, emp) => sum + safeNum(emp.advance),
     0,
   );
-  // Sum of all station-defined custom deductions across employees.
+  // Sum of all station-defined custom deductions across employees (percent
+  // entries are resolved against the employee's basic salary).
   const totalCustomDeductions = employees.reduce(
     (sum, emp) =>
       sum +
-      (emp.customDeductions ?? []).reduce((s, d) => s + safeNum(d.amount), 0),
+      (emp.customDeductions ?? []).reduce(
+        (s, d) => s + resolveDeductionAmount(d, emp.basicSalary),
+        0,
+      ),
+    0,
+  );
+  // Sum of all earnings/allowances across employees (adds to net pay).
+  const totalEarnings = employees.reduce(
+    (sum, emp) =>
+      sum +
+      (emp.earnings ?? []).reduce(
+        (s, d) => s + resolveEarningAmount(d, emp.basicSalary),
+        0,
+      ),
     0,
   );
   const totalNet = employees.reduce((sum, emp) => sum + safeNum(emp.netPay), 0);
@@ -1283,8 +1583,9 @@ export default function PayrollSystem() {
       columnNames.sha,
       columnNames.nssf,
       columnNames.advance,
-      // Station-defined custom deduction columns (one per type).
+      // Station-defined deduction + earnings columns (one per type).
       ...settings.deductionTypes.map((t) => t.label),
+      ...settings.earningTypes.map((t) => t.label),
       "Net Pay",
       columnNames.bank,
       columnNames.bankCode,
@@ -1304,10 +1605,23 @@ export default function PayrollSystem() {
         emp.sha,
         emp.nssf,
         emp.advance,
-        ...settings.deductionTypes.map(
-          (t) =>
-            (emp.customDeductions ?? []).find((d) => d.typeId === t.id)
-              ?.amount ?? 0,
+        ...settings.deductionTypes.map((t) =>
+          resolveDeductionAmount(
+            (emp.customDeductions ?? []).find((d) => d.typeId === t.id) ?? {
+              typeId: t.id,
+              amount: 0,
+            },
+            emp.basicSalary,
+          ),
+        ),
+        ...settings.earningTypes.map((t) =>
+          resolveEarningAmount(
+            (emp.earnings ?? []).find((d) => d.typeId === t.id) ?? {
+              typeId: t.id,
+              amount: 0,
+            },
+            emp.basicSalary,
+          ),
         ),
         emp.netPay,
         emp.bank,
@@ -1391,6 +1705,7 @@ export default function PayrollSystem() {
     const employees = data.employees || [];
     const settings = data.settings;
     const customDeductionTypes = settings.deductionTypes ?? [];
+    const customEarningTypes = settings.earningTypes ?? [];
 
     const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
@@ -1410,8 +1725,9 @@ export default function PayrollSystem() {
         "NSSF",
         "BANK CHARGES",
         "ADVANCE",
-        // Station-defined custom deduction columns (one per type).
+        // Station-defined deduction + earnings columns (one per type).
         ...customDeductionTypes.map((t) => t.label.toUpperCase()),
+        ...customEarningTypes.map((t) => t.label.toUpperCase()),
         "NET TOTAL",
       ],
       ...employees.map((emp, index) => [
@@ -1422,10 +1738,23 @@ export default function PayrollSystem() {
         emp.nssf,
         0, // Bank charges
         emp.advance,
-        ...customDeductionTypes.map(
-          (t) =>
-            (emp.customDeductions ?? []).find((d) => d.typeId === t.id)
-              ?.amount ?? 0,
+        ...customDeductionTypes.map((t) =>
+          resolveDeductionAmount(
+            (emp.customDeductions ?? []).find((d) => d.typeId === t.id) ?? {
+              typeId: t.id,
+              amount: 0,
+            },
+            emp.basicSalary,
+          ),
+        ),
+        ...customEarningTypes.map((t) =>
+          resolveEarningAmount(
+            (emp.earnings ?? []).find((d) => d.typeId === t.id) ?? {
+              typeId: t.id,
+              amount: 0,
+            },
+            emp.basicSalary,
+          ),
         ),
         emp.netPay,
       ]),
@@ -1442,8 +1771,27 @@ export default function PayrollSystem() {
           employees.reduce(
             (sum, emp) =>
               sum +
-              ((emp.customDeductions ?? []).find((d) => d.typeId === t.id)
-                ?.amount ?? 0),
+              resolveDeductionAmount(
+                (emp.customDeductions ?? []).find((d) => d.typeId === t.id) ?? {
+                  typeId: t.id,
+                  amount: 0,
+                },
+                emp.basicSalary,
+              ),
+            0,
+          ),
+        ),
+        ...customEarningTypes.map((t) =>
+          employees.reduce(
+            (sum, emp) =>
+              sum +
+              resolveEarningAmount(
+                (emp.earnings ?? []).find((d) => d.typeId === t.id) ?? {
+                  typeId: t.id,
+                  amount: 0,
+                },
+                emp.basicSalary,
+              ),
             0,
           ),
         ),
@@ -1712,6 +2060,14 @@ export default function PayrollSystem() {
     const earningsRows: { label: string; amt: number }[] = [
       { label: "Basic Allowances", amt: basic },
     ];
+    // Station-defined earnings/allowance rows (add/remove in the payroll
+    // table; percent-mode entries resolve against the basic salary).
+    for (const ce of employee.earnings ?? []) {
+      const type = settings.earningTypes.find((t) => t.id === ce.typeId);
+      const amt = resolveEarningAmount(ce, basic);
+      if (amt > 0)
+        earningsRows.push({ label: type?.label || "Other Allowance", amt });
+    }
     const deductionRows: { label: string; amt: number }[] = [];
     if (sha > 0)
       deductionRows.push({
@@ -1725,10 +2081,11 @@ export default function PayrollSystem() {
       });
     if (advance > 0)
       deductionRows.push({ label: "Salary Advance", amt: advance });
-    // Station-defined custom deductions (add/remove in the payroll table).
+    // Station-defined custom deductions (percent-mode entries resolve
+    // against the basic salary).
     for (const cd of employee.customDeductions ?? []) {
       const type = settings.deductionTypes.find((t) => t.id === cd.typeId);
-      const amt = Number.isFinite(cd.amount) ? cd.amount : 0;
+      const amt = resolveDeductionAmount(cd, basic);
       if (amt > 0)
         deductionRows.push({ label: type?.label || "Other Deduction", amt });
     }
@@ -2858,15 +3215,21 @@ export default function PayrollSystem() {
           </button>
 
           <button
-            onClick={() => {
-              setDeductionLabel("");
-              setShowDeductionModal(true);
-            }}
+            onClick={() => openColumnTypeModal("deduction")}
             title="Add a custom statutory/other deduction column (e.g. HELB Loan, Union Dues)"
             className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
           >
             <Plus size={12} className="md:w-4 md:h-4" />
             <span className="hidden sm:inline ml-1">Deduction</span>
+          </button>
+
+          <button
+            onClick={() => openColumnTypeModal("earning")}
+            title="Add an EARNINGS & ALLOWANCES column (e.g. House Allowance, Transport Allowance, Overtime)"
+            className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
+          >
+            <Plus size={12} className="md:w-4 md:h-4" />
+            <span className="hidden sm:inline ml-1">Earning</span>
           </button>
         </div>
       </div>
@@ -2922,7 +3285,7 @@ export default function PayrollSystem() {
                   </button>
                 </div>
               </th>
-              {/* Station-defined custom deduction columns (add/remove). */}
+              {/* Station-defined custom deduction columns (add/edit/remove). */}
               {settings.deductionTypes.map((type) => (
                 <th
                   key={type.id}
@@ -2932,13 +3295,51 @@ export default function PayrollSystem() {
                     <span className="truncate" title={type.label}>
                       {type.label}
                     </span>
-                    <button
-                      onClick={() => setDeductionToRemove(type)}
-                      title={`Remove the "${type.label}" deduction column`}
-                      className="p-0.5 md:p-1 hover:bg-red-500/30 rounded"
-                    >
-                      <Trash2 size={10} className="md:w-3 md:h-3" />
-                    </button>
+                    <span className="flex items-center">
+                      <button
+                        onClick={() => openColumnTypeModal("deduction", type)}
+                        title={`Edit the "${type.label}" deduction column (mode, default value, apply to all)`}
+                        className="p-0.5 md:p-1 hover:bg-white/20 rounded"
+                      >
+                        <Edit size={10} className="md:w-3 md:h-3" />
+                      </button>
+                      <button
+                        onClick={() => setDeductionToRemove(type)}
+                        title={`Remove the "${type.label}" deduction column`}
+                        className="p-0.5 md:p-1 hover:bg-red-500/30 rounded"
+                      >
+                        <Trash2 size={10} className="md:w-3 md:h-3" />
+                      </button>
+                    </span>
+                  </div>
+                </th>
+              ))}
+              {/* Station-defined EARNINGS & ALLOWANCES columns (add/edit/remove). */}
+              {settings.earningTypes.map((type) => (
+                <th
+                  key={type.id}
+                  className="p-1 md:p-3 text-left text-xs md:text-base"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate" title={type.label}>
+                      {type.label}
+                    </span>
+                    <span className="flex items-center">
+                      <button
+                        onClick={() => openColumnTypeModal("earning", type)}
+                        title={`Edit the "${type.label}" earning column (mode, default value, apply to all)`}
+                        className="p-0.5 md:p-1 hover:bg-white/20 rounded"
+                      >
+                        <Edit size={10} className="md:w-3 md:h-3" />
+                      </button>
+                      <button
+                        onClick={() => setEarningToRemove(type)}
+                        title={`Remove the "${type.label}" earning column`}
+                        className="p-0.5 md:p-1 hover:bg-red-500/30 rounded"
+                      >
+                        <Trash2 size={10} className="md:w-3 md:h-3" />
+                      </button>
+                    </span>
                   </div>
                 </th>
               ))}
@@ -3021,21 +3422,74 @@ export default function PayrollSystem() {
                     className="w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
                   />
                 </td>
-                {/* Custom deduction amount cells (one per station type). */}
+                {/* Custom deduction amount cells (one per station type).
+                    Percent-mode entries resolve to a money amount and are
+                    read-only here (edit the rate in the employee modal or
+                    the column settings). */}
                 {settings.deductionTypes.map((type) => {
-                  const amt = deductionAmountFor(
+                  const entry = (employee.customDeductions ?? []).find(
+                    (d) => d.typeId === type.id,
+                  );
+                  const mode: ColumnCalcMode =
+                    entry?.mode ?? type.calcMode ?? "fixed";
+                  const resolved = deductionAmountFor(
                     employee.customDeductions,
                     type.id,
+                    employee.basicSalary,
                   );
                   return (
                     <td key={type.id} className="p-1 md:p-3">
                       <input
                         type="number"
-                        value={amt}
+                        value={resolved}
                         onChange={(e) =>
                           updateCell(employee, `ded:${type.id}`, e.target.value)
                         }
-                        className="w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
+                        readOnly={mode === "percent"}
+                        title={
+                          mode === "percent"
+                            ? `${entry?.amount ?? type.percentRate ?? 0}% of basic salary — edit the rate in the employee modal or column settings`
+                            : "Individual edit (flat amount)"
+                        }
+                        className={`w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent${mode === "percent" ? " opacity-80" : ""}`}
+                      />
+                    </td>
+                  );
+                })}
+                {/* Custom earnings/allowance cells (one per station type). */}
+                {settings.earningTypes.map((type) => {
+                  const entry = (employee.earnings ?? []).find(
+                    (d) => d.typeId === type.id,
+                  );
+                  const mode: ColumnCalcMode =
+                    entry?.mode ?? type.calcMode ?? "fixed";
+                  const resolved = resolveEarningAmount(
+                    entry ?? {
+                      typeId: type.id,
+                      amount: 0,
+                      mode,
+                    },
+                    employee.basicSalary,
+                  );
+                  return (
+                    <td key={type.id} className="p-1 md:p-3">
+                      <input
+                        type="number"
+                        value={resolved}
+                        onChange={(e) =>
+                          updateCell(
+                            employee,
+                            `earn:${type.id}`,
+                            e.target.value,
+                          )
+                        }
+                        readOnly={mode === "percent"}
+                        title={
+                          mode === "percent"
+                            ? `${entry?.amount ?? type.percentRate ?? 0}% of basic salary — edit the rate in the employee modal or column settings`
+                            : "Individual edit (flat amount)"
+                        }
+                        className={`w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent${mode === "percent" ? " opacity-80" : ""}`}
                       />
                     </td>
                   );
@@ -3145,6 +3599,14 @@ export default function PayrollSystem() {
             <strong>Other Deductions:</strong>{" "}
             <span className="block md:inline">
               {formatCurrency(totalCustomDeductions)}
+            </span>
+          </div>
+        )}
+        {settings.earningTypes.length > 0 && (
+          <div>
+            <strong>Earnings:</strong>{" "}
+            <span className="block md:inline">
+              {formatCurrency(totalEarnings)}
             </span>
           </div>
         )}
@@ -3573,51 +4035,88 @@ export default function PayrollSystem() {
         />
       </div>
 
-      {/* Statutory & Other Deductions — manage the custom deduction
-          columns that appear in the payroll table + on payslips. */}
-      <div className="form-group">
-        <label className="text-xs md:text-sm">
-          Statutory &amp; Other Deductions
-        </label>
-        <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 mb-2">
-          The built-in columns are SHA, NSSF and Advance. Add your own deduction
-          columns (e.g. HELB Loan, Union Dues, Insurance) — each appears in the
-          table, on payslips, and in exports.
-        </p>
-        <div className="space-y-2">
-          {settings.deductionTypes.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-              No custom deductions yet.
-            </p>
-          )}
-          {settings.deductionTypes.map((type) => (
-            <div
-              key={type.id}
-              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40"
+      {/* Custom column-type managers (Deductions + Earnings & Allowances) —
+          shared UI with mode summary + edit + apply-to-all + remove. */}
+      {(
+        [
+          {
+            kind: "deduction" as const,
+            title: "Statutory & Other Deductions",
+            empty: "No custom deductions yet.",
+            hint: "The built-in columns are SHA, NSSF and Advance. Add your own deduction columns (e.g. HELB Loan, Union Dues, Insurance) — each appears in the table, on payslips, and in exports.",
+          },
+          {
+            kind: "earning" as const,
+            title: "Earnings & Allowances",
+            empty: "No custom earnings yet.",
+            hint: "Add earnings/allowance columns (e.g. House Allowance, Transport Allowance, Overtime) — each ADDS to net pay and appears in the table, on payslips, and in exports.",
+          },
+        ] as const
+      ).map(({ kind, title, empty, hint }) => (
+        <div className="form-group" key={kind}>
+          <label className="text-xs md:text-sm">{title}</label>
+          <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 mb-2">
+            {hint}
+          </p>
+          <div className="space-y-2">
+            {typesOf(kind).length === 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                {empty}
+              </p>
+            )}
+            {typesOf(kind).map((type) => {
+              const summary =
+                type.calcMode === "percent"
+                  ? `${type.percentRate ?? 0}% of basic salary`
+                  : type.calcMode === "fixed"
+                    ? `flat ${type.fixedAmount ?? 0}`
+                    : "individual values";
+              const setRemove =
+                kind === "deduction"
+                  ? () => setDeductionToRemove(type)
+                  : () => setEarningToRemove(type);
+              return (
+                <div
+                  key={type.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40"
+                >
+                  <div className="min-w-0">
+                    <span className="text-xs md:text-sm font-medium">
+                      {type.label}
+                    </span>
+                    <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+                      {summary}
+                    </span>
+                  </div>
+                  <span className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openColumnTypeModal(kind, type)}
+                      title={`Edit "${type.label}" (mode, default value, apply to all)`}
+                      className="p-1 rounded hover:bg-white/20"
+                    >
+                      <Edit size={14} />
+                    </button>
+                    <button
+                      onClick={setRemove}
+                      title={`Remove "${type.label}"`}
+                      className="p-1 rounded text-red-500 hover:bg-red-500/10"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+            <button
+              onClick={() => openColumnTypeModal(kind)}
+              className="btn btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"
             >
-              <span className="text-xs md:text-sm font-medium truncate">
-                {type.label}
-              </span>
-              <button
-                onClick={() => setDeductionToRemove(type)}
-                title={`Remove "${type.label}"`}
-                className="p-1 rounded text-red-500 hover:bg-red-500/10"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() => {
-              setDeductionLabel("");
-              setShowDeductionModal(true);
-            }}
-            className="btn btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"
-          >
-            <Plus size={12} /> Add Deduction
-          </button>
+              <Plus size={12} />{" "}
+              {kind === "deduction" ? "Add Deduction" : "Add Earning"}
+            </button>
+          </div>
         </div>
-      </div>
+      ))}
 
       <div className="flex gap-2 md:gap-4 mt-4 md:mt-8">
         <button
@@ -3643,6 +4142,7 @@ export default function PayrollSystem() {
               origCode: "",
               reference: "",
               deductionTypes: [],
+              earningTypes: [],
               shaPercentage: 2.75,
               nssfAmount: 480,
             };
@@ -4494,34 +4994,127 @@ export default function PayrollSystem() {
                 />
               </div>
 
-              {/* Custom deduction amounts for this employee (one per
-                  station-defined deduction type). */}
-              {settings.deductionTypes.map((type) => (
-                <div className="form-group" key={type.id}>
+              {/* Individual edits: per-type values with a Fixed / % of basic
+                  mode selector for BOTH deductions and EARNINGS & ALLOWANCES. */}
+              {settings.deductionTypes.length > 0 ||
+              settings.earningTypes.length > 0 ? (
+                <div className="form-group md:col-span-2">
                   <label>
-                    {type.label} ({stationCurrencySymbol})
+                    Custom deductions &amp; earnings (individual edit)
                   </label>
-                  <input
-                    type="number"
-                    value={deductionAmountFor(
-                      employeeForm.customDeductions,
-                      type.id,
-                    )}
-                    onChange={(e) =>
-                      setEmployeeForm({
-                        ...employeeForm,
-                        customDeductions: setDeductionAmount(
-                          employeeForm.customDeductions,
-                          type.id,
-                          Number(e.target.value) || 0,
-                        ),
-                      })
-                    }
-                    min="0"
-                    step="0.01"
-                  />
+                  <div className="space-y-2">
+                    {(
+                      [
+                        ...settings.deductionTypes.map((t) => ({
+                          kind: "deduction" as const,
+                          type: t,
+                        })),
+                        ...settings.earningTypes.map((t) => ({
+                          kind: "earning" as const,
+                          type: t,
+                        })),
+                      ] as const
+                    ).map(({ kind, type }) => {
+                      const list =
+                        kind === "deduction"
+                          ? employeeForm.customDeductions
+                          : employeeForm.earnings;
+                      const entry = (list ?? []).find(
+                        (d) => d.typeId === type.id,
+                      );
+                      const mode: ColumnCalcMode =
+                        entry?.mode ?? type.calcMode ?? "fixed";
+                      const isPercent = mode === "percent";
+                      return (
+                        <div
+                          key={`${kind}:${type.id}`}
+                          className="flex items-center gap-2"
+                        >
+                          <span className="w-40 truncate text-sm">
+                            {type.label}
+                          </span>
+                          <select
+                            value={mode}
+                            onChange={(e) => {
+                              const m = e.target.value as ColumnCalcMode;
+                              const updated =
+                                kind === "deduction"
+                                  ? setDeductionAmount(
+                                      employeeForm.customDeductions,
+                                      type.id,
+                                      entry?.amount ?? 0,
+                                      m,
+                                    )
+                                  : setEarningAmount(
+                                      employeeForm.earnings,
+                                      type.id,
+                                      entry?.amount ?? 0,
+                                      m,
+                                    );
+                              setEmployeeForm(
+                                kind === "deduction"
+                                  ? {
+                                      ...employeeForm,
+                                      customDeductions: updated,
+                                    }
+                                  : { ...employeeForm, earnings: updated },
+                              );
+                            }}
+                            className="text-xs px-1 py-1 border border-gray-300 dark:border-gray-600 rounded bg-transparent w-24"
+                          >
+                            <option value="fixed">Fixed</option>
+                            <option value="percent">% of basic</option>
+                          </select>
+                          <input
+                            type="number"
+                            value={entry?.amount ?? 0}
+                            onChange={(e) => {
+                              const updated =
+                                kind === "deduction"
+                                  ? setDeductionAmount(
+                                      employeeForm.customDeductions,
+                                      type.id,
+                                      Number(e.target.value) || 0,
+                                      mode,
+                                    )
+                                  : setEarningAmount(
+                                      employeeForm.earnings,
+                                      type.id,
+                                      Number(e.target.value) || 0,
+                                      mode,
+                                    );
+                              setEmployeeForm(
+                                kind === "deduction"
+                                  ? {
+                                      ...employeeForm,
+                                      customDeductions: updated,
+                                    }
+                                  : { ...employeeForm, earnings: updated },
+                              );
+                            }}
+                            min="0"
+                            step="0.01"
+                            className="flex-1"
+                          />
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 w-24">
+                            {isPercent
+                              ? `≈ ${formatCurrency(
+                                  (Number.isFinite(entry?.amount)
+                                    ? entry!.amount
+                                    : 0) *
+                                    ((Number.isFinite(employeeForm.basicSalary)
+                                      ? employeeForm.basicSalary
+                                      : 0) /
+                                      100),
+                                )}`
+                              : stationCurrencySymbol}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+              ) : null}
             </div>
 
             <div className="form-group mt-4">
@@ -4706,43 +5299,211 @@ export default function PayrollSystem() {
         </div>
       )}
 
-      {/* Add Deduction Type Modal */}
-      {showDeductionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Add Deduction Column</h3>
-            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
-              Add a custom statutory/other deduction (e.g. HELB Loan, Union
-              Dues, Insurance). It appears as a column in the table and on every
-              employee's payslip under "STATUTORY &amp; OTHER DEDUCTIONS".
-            </p>
-            <div className="form-group">
-              <label>Deduction Name</label>
-              <input
-                type="text"
-                value={deductionLabel}
-                onChange={(e) => setDeductionLabel(e.target.value)}
-                placeholder="e.g. HELB Loan"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") addDeductionType();
-                }}
-              />
+      {/* Add / Edit Column Type Modal (deduction OR earning). Mode: fixed
+          amount / percent of basic salary / describe the rule (parsed). */}
+      {showColumnTypeModal &&
+        (() => {
+          const kind = columnModalKind;
+          const isEarning = kind === "earning";
+          const noun = isEarning ? "earning" : "deduction";
+          const isEdit = !!editingColumnType;
+          const parsedRule =
+            columnTypeMode === "describe"
+              ? parseDeductionRule(columnTypeRule)
+              : null;
+          const example =
+            kind === "deduction"
+              ? "HELB Loan, Union Dues, Insurance"
+              : "House Allowance, Transport Allowance, Overtime";
+          const section = isEarning
+            ? '"EARNINGS & ALLOWANCES"'
+            : '"STATUTORY & OTHER DEDUCTIONS"';
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <h3 className="text-xl font-bold mb-4">
+                  {isEdit ? "Edit" : "Add"}{" "}
+                  {isEarning ? "Earning" : "Deduction"} Column
+                </h3>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+                  {isEdit
+                    ? `Edit the "${editingColumnType.label}" ${noun} column. Set the mode (fixed amount, % of basic salary, or describe a rule) and choose whether to update every employee at once or keep individual values.`
+                    : `Add a custom ${noun} (e.g. ${example}). It appears as a column in the table and on every employee's payslip under ${section}.`}
+                </p>
+                <div className="form-group">
+                  <label>{isEarning ? "Earning" : "Deduction"} Name</label>
+                  <input
+                    type="text"
+                    value={columnTypeLabel}
+                    onChange={(e) => setColumnTypeLabel(e.target.value)}
+                    placeholder={
+                      isEarning ? "e.g. House Allowance" : "e.g. HELB Loan"
+                    }
+                    autoFocus
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>How is it calculated?</label>
+                  <div className="space-y-2">
+                    {(
+                      [
+                        {
+                          value: "fixed" as const,
+                          label: "Fixed amount",
+                          desc: "A flat amount each period (e.g. KSh 500).",
+                        },
+                        {
+                          value: "percent" as const,
+                          label: "Percent of basic salary",
+                          desc: "A percentage of each employee's basic salary (e.g. 5%).",
+                        },
+                        {
+                          value: "describe" as const,
+                          label: "Describe the rule",
+                          desc: 'Type a rule like "5% of basic salary" or "KSh 500" — the system parses it.',
+                        },
+                      ] as const
+                    ).map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-start gap-2 p-2 rounded border border-gray-200 dark:border-gray-600 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="columnTypeMode"
+                          checked={columnTypeMode === opt.value}
+                          onChange={() => setColumnTypeMode(opt.value)}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium">
+                            {opt.label}
+                          </span>
+                          <span className="block text-xs text-gray-500 dark:text-gray-400">
+                            {opt.desc}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {columnTypeMode === "fixed" && (
+                  <div className="form-group">
+                    <label>Default amount ({stationCurrencySymbol})</label>
+                    <input
+                      type="number"
+                      value={columnTypeValue}
+                      onChange={(e) => setColumnTypeValue(e.target.value)}
+                      placeholder="e.g. 500"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                )}
+                {columnTypeMode === "percent" && (
+                  <div className="form-group">
+                    <label>Percent of basic salary (%)</label>
+                    <input
+                      type="number"
+                      value={columnTypeValue}
+                      onChange={(e) => setColumnTypeValue(e.target.value)}
+                      placeholder="e.g. 5"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                    />
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      Each employee's amount = basic salary ×{" "}
+                      {columnTypeValue || "0"}%
+                    </p>
+                  </div>
+                )}
+                {columnTypeMode === "describe" && (
+                  <div className="form-group">
+                    <label>Describe the rule</label>
+                    <textarea
+                      value={columnTypeRule}
+                      onChange={(e) => setColumnTypeRule(e.target.value)}
+                      placeholder='e.g. "5% of basic salary" or "KSh 500 per month"'
+                      rows={2}
+                    />
+                    <p className="text-[10px] mt-1">
+                      {columnTypeRule.trim() ? (
+                        parsedRule ? (
+                          <span className="text-green-600 dark:text-green-400">
+                            Understood:{" "}
+                            {parsedRule.calcMode === "percent"
+                              ? `${parsedRule.percentRate}% of basic salary`
+                              : `flat ${formatCurrency(parsedRule.fixedAmount ?? 0)}`}
+                          </span>
+                        ) : (
+                          <span className="text-red-500">
+                            Couldn't understand — try "5% of basic salary" or
+                            "KSh 500".
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Type a rule and it will be parsed automatically.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {employees.length > 0 && (
+                  <label className="flex items-center gap-2 mt-3">
+                    <input
+                      type="checkbox"
+                      checked={columnTypeApplyAll}
+                      onChange={(e) => setColumnTypeApplyAll(e.target.checked)}
+                    />
+                    <span className="text-sm">
+                      Apply to ALL employees now{" "}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        ({employees.length} employees)
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {!columnTypeApplyAll && employees.length > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Individual employees keep their own values — edit them per
+                    cell in the table or in the employee form.
+                  </p>
+                )}
+
+                <div className="flex gap-4 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowColumnTypeModal(false);
+                      setEditingColumnType(null);
+                    }}
+                    className="btn btn-outline"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveColumnType()}
+                    disabled={saving}
+                    className="btn btn-primary"
+                  >
+                    {saving ? (
+                      <Loader2 className="animate-spin" size={14} />
+                    ) : null}
+                    {isEdit
+                      ? "Save Changes"
+                      : isEarning
+                        ? "Add Earning"
+                        : "Add Deduction"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-4 mt-6">
-              <button
-                onClick={() => setShowDeductionModal(false)}
-                className="btn btn-outline"
-              >
-                Cancel
-              </button>
-              <button onClick={addDeductionType} className="btn btn-primary">
-                Add Deduction
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* Remove Deduction Type Confirm */}
       {deductionToRemove && (
@@ -4764,6 +5525,35 @@ export default function PayrollSystem() {
               </button>
               <button
                 onClick={() => removeDeductionType(deductionToRemove)}
+                className="btn btn-danger"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Earning Type Confirm */}
+      {earningToRemove && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">
+              Remove "{earningToRemove.label}"?
+            </h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              This removes the earning column and deletes its amounts from every
+              employee and from future payslips. This cannot be undone.
+            </p>
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => setEarningToRemove(null)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => removeEarningType(earningToRemove)}
                 className="btn btn-danger"
               >
                 Remove
