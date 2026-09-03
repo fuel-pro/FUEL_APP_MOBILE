@@ -11311,3 +11311,46 @@ removed; account at baseline. Markers live: "Earnings & Allowances",
   payroll_settings.earning_types client-side fields).
 - Gates: tsc -b 0 errors, eslint 0 errors (1 pre-existing FAQ-warning),
   prettier clean, vitest 180/180 (19 in payroll-deductions.test.ts), build OK.
+
+## Session 2026-09-03 — Desktop .exe + Android .apk wrappers (DEPLOYED, commit e54288f)
+
+User requested .exe (Windows desktop) + .apk (Android) of the live site
+(fuel-app-mobile.vercel.app / fuel-app-mobile.pages.dev).
+
+**Desktop (.exe)** — Electron wrapper (repo already had electron-builder
+scaffolding; the electron/ sources + missing icon fix were new):
+- `electron/main.cjs`: loads https://fuel-app-mobile.pages.dev (Cloudflare
+  primary) -> fuel-app-mobile.vercel.app (fallback) -> bundled dist/index.html
+  (offline fallback). Context isolation ON, minimal preload, external links
+  (supabase/youtube/docs/exports) open in the system browser; in-app nav
+  restricted to the two prod hosts.
+- Fixed package.json electron-builder icon path (public/logo-small.png did
+  not exist -> public/icon-512.png).
+- npmRebuild disabled (the --win build tried to recompile native deps
+  e.g. tree-sitter, which fails cross-platform; the web wrapper needs none).
+- wine + wine32:i386 installed for NSIS signing on Linux; reset broken
+  ~/.wine prefix.
+- Output in release/ (gitignored): FuelPro Setup 1.0.0.exe (NSIS installer,
+  x64+ia32, 481MB) + FuelPro 1.0.0.exe (portable x64, 248MB).
+
+**Android (.apk)** — Capacitor (repo already had capacitor deps; project
+sources were new):
+- `npx cap init FuelPro com.fuelpro.app --web-dir dist`, then `cap add android`.
+- capacitor.config.ts server.url = https://fuel-app-mobile.pages.dev/ (live
+  remote, cleartext:false) so updates reach users without an app update.
+- Toolchain installed: default-jdk-headless (JDK21), Android SDK cmdline-tools
+  + android-34 + build-tools 34.0.0 under /opt/android-sdk.
+- Recurring duplicate-class conflict (kotlin-stdlib-jdk7/jdk8 1.6.x vs
+  1.8.22) fixed in android/app/build.gradle (exclude the older modules).
+- Signed release: fuelpro.keystore (CN=FuelPro, RSA 2048, 10y) gitignored;
+  signingConfigs.release wired into app/build.gradle.
+- Output in release/ (gitignored): FuelPro.apk (signed release, 5.9MB) +
+  FuelPro-debug.apk (developer-signed, 7.3MB). apksigner verify passed.
+
+**GitHub Release v1.0.0-desktop-android** with ALL 4 artifacts attached (user
+download page): https://github.com/fuelpropay/FUEL_APP_MOBILE/releases/tag/v1.0.0-desktop-android
+
+Notes for users: artifacts are self-signed / unsigned (no Microsoft/Google
+store certs) so Windows SmartScreen + Android 'unknown sources' prompts are
+expected. The wrappers launch the live production site with the Cloudflare
+Pages URL as primary and Vercel as fallback.
