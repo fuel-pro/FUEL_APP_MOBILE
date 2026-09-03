@@ -1,5 +1,41 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — PayHero connect (channels/wallet/test) + .exe launch-crash fix (commit 4bcf737)
+
+Task 1 (PayHero Kenya): new dispatcher actions `payhero-channels` (list
+payment channels) + `payhero-wallet` (wallet balance) in
+api/_lib/integrations-core.ts; client helpers payheroListChannels /
+payheroWalletBalance in integrations-client.ts; IntegrationsSettings
+PayheroSetup gained "Fetch from PayHero" (auto-fills Channel ID from the
+live account) + "Test Connection" (validates creds live, shows wallet
+balance + channels). Verified end-to-end with the user's real account
+(acct 4446, channel 5313 KCB PayBill 522522, wallet KES 3) via
+/api/integrations on BOTH hosts. NOTE: STK push currently returns PayHero-
+side `PERMISSION_DENIED: Merchant Account Inactive` (wallet_status
+PENDING) — account activation pending on the PayHero dashboard, NOT a
+code bug; the app's error passthrough surfaces it verbatim.
+
+Task 2 (.exe): ROOT CAUSE of the launch crash "Cannot find module
+electron-updater" — electron-updater was in devDependencies, so
+electron-builder stripped it from the packaged app and the top-level
+require() in electron/main.cjs killed the main process. Moved it to
+dependencies + guarded the require (app can never crash on it again);
+fixed the packaged icon path (extraResources -> process.resourcesPath/
+public); slimmed app.asar 702MB -> 12MB by excluding node_modules and
+re-including only the electron-updater closure (electron-updater,
+fs-extra, js-yaml, argparse, lazy-val, lodash.escaperegexp,
+lodash.isequal, semver, tiny-typed-emitter, builder-util-runtime, debug,
+ms, sax, graceful-fs, jsonfile, universalify). wrappers.yml now stamps
+version 1.0.<run_number> and uploads latest.yml so the exe auto-updater
+feed works. Verified with `npx electron-builder --dir`: updater resolves
+from the asar, icon + app-update.yml present. electron-builder --dir
+needs NO wine (only NSIS does) — good local smoke test.
+
+Gates: tsc -b 0 errors, vitest 180/180, eslint clean, prettier clean.
+Deployed: GitHub main 4bcf737; Cloudflare LIVE (3ae05a56,
+IntegrationHub-WRW3M76_.js + pos chunk markers confirmed); Vercel
+auto-deployed via GitHub integration (payhero-channels live).
+
 ## Session 2026-09-03 (cont.) — Staff Advances dropdown shows each employee's name (commit 0c0fa43)
 
 The Staff Advances & Loans employee dropdown showed 'Employee' for every option. Root cause: `employeeName()` only joined firstName + lastName, but payroll records are saved with a single `fullName` field (no separate first/last name) — every record fell back to the 'Employee' placeholder. New shared helper `resolveEmployeeName()` in payslip-security.ts tries fullName/full_name/name first, then firstName+lastName / first_name+last_name, falling back to 'Employee' only as a last resort. StaffAdvanceLoans uses it (exported from the lib to avoid a react-refresh warning). 6 new tests cover all name shapes. 161/161 tests pass. Deployed: GitHub main 0c0fa43; Cloudflare LIVE (909b914f, resolveEmployeeName marker confirmed in PayrollSystem + reports chunks); Vercel LIVE (prebuilt).
