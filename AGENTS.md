@@ -11217,3 +11217,52 @@ Re-enabled the reverted QuickSearch/AIChatbot (had been reverted in 9a3645d) wit
 - Deployed: GitHub main 25b16d9; Cloudflare Pages preview b3c0ed14 + main alias (index-DiJtyisX.js); Vercel production READY + aliased (index-DJuBeFpp.js) — prebuilt method.
 - Cloudflare token location note: API KEYS.txt line 68 ("API Token: cfat_..." — strip prefix + \r); line 67 is the Account ID. Extract with `sed -n '68p' "/workspace/API KEYS.txt" | sed 's/API Token: //' | tr -d '\r\n'`.
 - Verified live (pages.dev): QuickSearch "security" shows SUB-TABS & SETTINGS (Security -> 2fa/session/password) + MOVIES & TV + Navigation; sub-tab click deep-links to Settings -> Security; "avatar" movie click opens News -> Movies seeded; AIChatbot "watch avatar" opens News -> Movies with Avatar catalog; "open security" replies "Opening **Security** now..." and lands on Settings -> Security sub-tab.
+
+## Session 2026-09-03 — Payroll custom deduction columns + updateCell race fix (DEPLOYED LIVE)
+
+**Feature**: add/remove custom statutory & other deduction columns in Payroll System
+(commits 9de1533 feature + 954ff0f race fix + 37feb99 removal recalc).
+- `src/react-app/lib/payroll-deductions.ts` (NEW): DeductionType registry,
+  normalizeDeductionTypes/normalizeCustomDeductions (snake_case + camelCase),
+  calcNetPay (salary - advance - sha - nssf - sum(custom)), deductionAmountFor.
+- `PayrollSystem.tsx`: "+ Deduction" toolbar button -> Add Deduction Column
+  modal; dynamic per-type columns with trash-remove; Settings sub-tab
+  Deduction Types manager; per-deduction amount inputs in the Employee modal;
+  calcNetPay now subtracts custom deductions (saveEmployee, updateCell,
+  applyShaToAll, applyNssfToAll); employee CSV + combined payroll Excel gain
+  dynamic deduction columns; dashboard totals row adds "Other Deductions".
+- Payslip PDF ("STATUTORY & OTHER DEDUCTIONS" rows) already rendered
+  deduction rows generically -> custom deductions flow automatically.
+- `usePayrollDelivery` syncs deductionTypes into payslip PDF worker payload.
+- Tests: src/test/payroll-deductions.test.ts (10 cases).
+
+**Race fix (954ff0f)**: updateCell awaited a cloud read BEFORE updating
+local state, so rapid keystrokes raced the network and clobbered each other
+(a typed value could silently reset). Now local state updates synchronously
+FIRST + a monotonic per-(employee, field) sequence guard prevents an older
+keystroke's cloud write from overwriting a newer one. Applies to ALL
+editable payroll cells (SHA/NSSF/Advance/custom deductions/...).
+
+**Removal recalc fix (37feb99)**: removing a deduction column filtered the
+values off employees but left netPay stale — now both in-memory employees
+and cloud rows recalc netPay via calcNetPay on removal.
+
+**Verification (live, Cloudflare + Vercel)**: added "HELB Loan" column via
++ Deduction; typed 1000 into employee 1 -> Net recalculated 10,000->8,185,
+"Other Deductions: KSh 1,000.00"; reload -> value persisted (cloud);
+removed column -> Net recalculates to 9,185 (post-fix). QA account healed +
+left clean (test column removed, NSSF test value reset to 0).
+Markers in live chunks: "Add Deduction Column", `custom_deductions`,
+`net_pay`. Cloudflare MD5 match. Vercel GitHub integration auto-deployed
+37feb99 READY.
+
+**Deploy state**:
+- GitHub main: 9de1533 (feature) -> 954ff0f (race fix) -> 37feb99 (recalc).
+- Cloudflare Pages: LIVE (previews 0ecb7b5c -> 9c8a1b98 -> 4ff1021e +
+  main alias fuel-app-mobile.pages.dev).
+- Vercel: READY/LIVE (auto-deploy on push; PayrollSystem-PvRjKmbx.js).
+- Supabase: no schema changes (payroll_employees/payroll_settings cloud keys;
+  custom_deductions + deduction_types fields added client-side, compressed
+  envelope handles new fields transparently).
+- Gates: tsc -b 0 errors, eslint 0 errors (1 pre-existing exhaustive-deps
+  warning PayrollSystem.tsx:582), prettier clean, vitest 172/172, build OK.
