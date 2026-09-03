@@ -1,5 +1,19 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Compact payslip page size (commit e42c511)
+
+User: "the pdf is to big and has alot of empty space." The payslip was
+rendered on full A4 with ~130mm of empty space below the footer. The page
+is now sized exactly to the content via a jsPDF custom format: deduction
+rows are computed up-front (computeDeductions) so the height can be
+predicted; the document is created with format [contentHeight, 210] +
+orientation:"landscape" (jsPDF sorts raw format arrays — smallest first —
+so this ordering yields a 210mm-wide page whose height matches the
+content exactly, ~165mm for a 2-deduction payslip instead of 297mm).
+Verified by rendering (210 x 166.5mm, zero wasted space). Deployed:
+GitHub main e42c511; Cloudflare Pages LIVE (3c8c56df, landscape-format
+marker confirmed); Vercel production LIVE (prebuilt).
+
 ## Session 2026-09-02 (cont.) — Payslip exact template replica (commit 881c00d)
 
 User requested an exact pixel-faithful replica of the official HR payslip
