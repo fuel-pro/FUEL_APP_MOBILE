@@ -1,5 +1,9 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — Staff Advances dropdown shows each employee's name (commit 0c0fa43)
+
+The Staff Advances & Loans employee dropdown showed 'Employee' for every option. Root cause: `employeeName()` only joined firstName + lastName, but payroll records are saved with a single `fullName` field (no separate first/last name) — every record fell back to the 'Employee' placeholder. New shared helper `resolveEmployeeName()` in payslip-security.ts tries fullName/full_name/name first, then firstName+lastName / first_name+last_name, falling back to 'Employee' only as a last resort. StaffAdvanceLoans uses it (exported from the lib to avoid a react-refresh warning). 6 new tests cover all name shapes. 161/161 tests pass. Deployed: GitHub main 0c0fa43; Cloudflare LIVE (909b914f, resolveEmployeeName marker confirmed in PayrollSystem + reports chunks); Vercel LIVE (prebuilt).
+
 ## Session 2026-09-03 (cont.) — Authorizing Officer = role-holder NAME (commit d316af9)
 
 The payslip Authorizing Officer is now resolved to the actual NAME of whoever holds the authorizing role in the station's structure. Extracted into a testable helper `resolveAuthorizingOfficer()` in `payslip-security.ts` that picks by priority (most payroll-specific first), INDEPENDENT of employee array order: payroll manager → HR/human resource → accountant/finance → manager → owner. The payslip's own employee is excluded (can't authorize their own payslip); falls back to the org name. Officer's role captioned under the signature. Previously the inline `employees.find()` returned the FIRST matching employee in array order, not the highest-priority role. New test asserts priority ordering + self-exclusion + no-officer null. 155/155 tests pass. Deployed: GitHub main d316af9; Cloudflare LIVE (2e2ac2fb, officer-priorities marker confirmed); Vercel LIVE (prebuilt).
