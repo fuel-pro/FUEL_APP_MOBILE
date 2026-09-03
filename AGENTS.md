@@ -1,5 +1,15 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Payslip layout alignment fix (commit 962ef24)
+
+User-generated a payslip and reported the arrangement didn't match the
+reference. Fixed the personal-details box to use a two-column layout like
+the reference (name/RoD/Tax-PIN aligned to a right-side block at x=92;
+was name centered + Tax-PIN at x=70 + RoD flush-right) and underlined the
+bank/payment header line. Verified against a rendered sample (pymupdf).
+Deployed: GitHub main 962ef24; Cloudflare Pages LIVE (9c6fd309) with
+marker `text(<name>,92,` confirmed; Vercel production LIVE (prebuilt).
+
 ## Session 2026-09-02 (cont.) — Payslips sub-tab: official HR payslip format (commit 8ae0539)
 
 User supplied a reference payslip (Nairobi City County style) +
