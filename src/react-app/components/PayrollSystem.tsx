@@ -1006,13 +1006,23 @@ export default function PayrollSystem() {
     };
     setSettings(updated);
     saveSettings(updated);
-    const updatedEmployees = employees.map((emp) => ({
-      ...emp,
-      customDeductions: (emp.customDeductions ?? []).filter(
+    const recalc = (emp: Employee) => {
+      const customDeductions = (emp.customDeductions ?? []).filter(
         (d) => d.typeId !== type.id,
-      ),
-    }));
-    setEmployees(updatedEmployees);
+      );
+      return {
+        ...emp,
+        customDeductions,
+        netPay: calcNetPay({
+          basicSalary: emp.basicSalary,
+          advance: emp.advance,
+          sha: emp.sha,
+          nssf: emp.nssf,
+          customDeductions,
+        }),
+      };
+    };
+    setEmployees(employees.map(recalc));
     // Persist the cleaned employee list to cloud so the removed column's
     // values don't linger on other devices.
     try {
@@ -1021,12 +1031,22 @@ export default function PayrollSystem() {
           "payroll_employees",
           stationId,
         )) || [];
-      const cleaned = cloudData.map((e: any) => ({
-        ...e,
-        custom_deductions: Array.isArray(e.custom_deductions)
+      const cleaned = cloudData.map((e: any) => {
+        const custom_deductions = Array.isArray(e.custom_deductions)
           ? e.custom_deductions.filter((d: any) => d?.typeId !== type.id)
-          : [],
-      }));
+          : [];
+        return {
+          ...e,
+          custom_deductions,
+          net_pay: calcNetPay({
+            basicSalary: Number(e.basic_salary) || 0,
+            advance: Number(e.advance_amount) || 0,
+            sha: Number(e.sha_amount) || 0,
+            nssf: Number(e.nssf_amount) || 0,
+            customDeductions: custom_deductions,
+          }),
+        };
+      });
       await cloudStorageService.set("payroll_employees", cleaned, stationId);
       localStorage.setItem(
         "fuelpro_payroll_employees",
