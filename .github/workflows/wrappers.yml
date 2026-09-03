@@ -48,22 +48,17 @@ jobs:
 
       # Build the Android .apk (Capacitor remote wrapper).
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-      - name: Install Android SDK tools
+      - name: Install Android SDK packages (uses the runner's preinstalled SDK)
         run: |
-          sudo apt-get install -y unzip
-          mkdir -p $ANDROID_HOME
-          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
-          unzip -q /tmp/cmdtools.zip -d /tmp
-          mkdir -p $ANDROID_HOME/cmdline-tools/latest
-          mv /tmp/cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest/
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null
+          # The ubuntu-latest runner ships an Android SDK at ANDROID_HOME
+          # (default /usr/local/lib/android/sdk). Install ONLY the packages we
+          # need into THAT location so gradle doesn't get conflicting SDK paths.
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-        env:
-          ANDROID_HOME: /opt/android-sdk
       - name: Generate self-signed keystore (self-contained CI)
         run: |
           keytool -genkeypair -v \
@@ -78,8 +73,6 @@ jobs:
           ./gradlew assembleRelease assembleDebug
           cp app/build/outputs/apk/release/app-release.apk ../release/FuelPro.apk
           cp app/build/outputs/apk/debug/app-debug.apk ../release/FuelPro-debug.apk
-        env:
-          ANDROID_HOME: /opt/android-sdk
       - name: Publish wrappers to the continuously-updated release
         run: |
           gh release delete wrappers-latest --yes 2>/dev/null || true
