@@ -1,5 +1,20 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — Payslip exact Official Secure Pay Slip replica (commit 1c82f7d)
+
+User supplied the "Official Secure Pay Slip - July 2025" reference PDF and
+asked for that exact format. Rewrote the builder as an A5 secure pay slip:
+warm background + border frame, shield badge + org name + blue subtitle +
+QR "SCAN TO VERIFY" box, EMPLOYEE PARTICULARS table, side-by-side
+EARNINGS & ALLOWANCES (black) / STATUTORY & OTHER DEDUCTIONS (red negative
+amounts) tables with gross + total rows, NETT PAY red-bordered pill,
+scripted signatures with rules + captions, red VERIFIED seal ring,
+barcode, and DOC HASH + SECURE PRINT footer. Verified by rendering the
+reference's own employee data and comparing structure to the extracted
+text positions of the reference PDF. Deployed: GitHub main 1c82f7d;
+Cloudflare Pages LIVE (9deb1186, "EMPLOYEE PARTICULARS" marker
+confirmed); Vercel production LIVE (prebuilt).
+
 ## Session 2026-09-02 (cont.) — Compact payslip page size (commit e42c511)
 
 User: "the pdf is to big and has alot of empty space." The payslip was
