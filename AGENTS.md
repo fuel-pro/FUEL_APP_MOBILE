@@ -11422,3 +11422,35 @@ the icon on small screens). Desktop verified unchanged.
 
 **Deploy state**: GitHub main 9d43617; Cloudflare Pages LIVE (preview
 410b39af + main alias); Vercel auto-deploys. Supabase: no changes.
+
+## Session 2026-09-03 — Mobile clipping/overflow fixes (commit db7df7e, DEPLOYED)
+
+Second round of the APK/mobile visual fix (the News screenshot showing the
+SOURCE stat card clipped at "Curated" + general mobile overflow).
+
+**Root cause (class-wide)**: long text inside `flex` cards/stat grids without
+`min-w-0`/`truncate` → the value overflows the card edge and gets clipped.
+The audit found 62 files with the same pattern. Fixes:
+
+- `index.css` mobile safety net (@media max-width:640px):
+  - flex children in card-like containers get `min-width: 0` so values can
+    shrink;
+  - `.font-bold` values in cards truncate with an ellipsis (was clipping);
+  - tables scroll horizontally (`display:block; overflow-x:auto; min-width:
+    480px` on thead/tbody) instead of pushing the page;
+  - chips/filters wrap;
+  - `body { overflow-x: hidden }` + `img/video/canvas/svg { max-width:
+    100% }` + `pre/code` wraps;
+  - `p/span` in cards get `overflow:hidden; text-overflow:ellipsis`.
+- `News.tsx`: all 4 Quick Stats cards get `min-w-0` + `shrink-0` on the icon
+  wrapper + `truncate` on label/value (the screenshot bug).
+
+**Verified**: tsc -b 0 errors, 180/180 tests, build OK. Playwright mobile
+viewport (375×812) shows NO horizontal overflow (scrollWidth == clientWidth
+== 375). The CSS safety net covers the remaining 61 audit files generically
+(the specific News fix is the exemplar).
+
+**Deploy state**: GitHub main db7df7e; Cloudflare Pages LIVE (preview
+ac38c313 + main alias, verified rules present in live stylesheet: 8
+media-query blocks, 3 overflow-x:hidden, 6 min-width:0 rules); Vercel
+auto-deploys; Supabase: no changes.
