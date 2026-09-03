@@ -36,6 +36,14 @@ Deployed: GitHub main 4bcf737; Cloudflare LIVE (3ae05a56,
 IntegrationHub-WRW3M76_.js + pos chunk markers confirmed); Vercel
 auto-deployed via GitHub integration (payhero-channels live).
 
+Follow-up (commit fbbb968): wrappers CI released the fixed exe as
+`wrappers-latest` v1.0.10 — FuelPro-Setup-1.0.10.exe (194MB, was 481MB)
++ FuelPro-1.0.10.exe portable (104MB) + latest.yml + both APKs. GOTCHA:
+`gh release create` converts SPACES to DOTS in asset names, but
+latest.yml references the hyphenated filename — upload the hyphenated
+copies (`cp "FuelPro Setup ${VER}.exe" "FuelPro-Setup-${VER}.exe"`) or
+the auto-update download 404s. Verified the updater URL returns HTTP 200.
+
 ## Session 2026-09-03 (cont.) — Staff Advances dropdown shows each employee's name (commit 0c0fa43)
 
 The Staff Advances & Loans employee dropdown showed 'Employee' for every option. Root cause: `employeeName()` only joined firstName + lastName, but payroll records are saved with a single `fullName` field (no separate first/last name) — every record fell back to the 'Employee' placeholder. New shared helper `resolveEmployeeName()` in payslip-security.ts tries fullName/full_name/name first, then firstName+lastName / first_name+last_name, falling back to 'Employee' only as a last resort. StaffAdvanceLoans uses it (exported from the lib to avoid a react-refresh warning). 6 new tests cover all name shapes. 161/161 tests pass. Deployed: GitHub main 0c0fa43; Cloudflare LIVE (909b914f, resolveEmployeeName marker confirmed in PayrollSystem + reports chunks); Vercel LIVE (prebuilt).
