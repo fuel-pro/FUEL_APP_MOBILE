@@ -1582,20 +1582,18 @@ export default function PayrollSystem() {
     doc.setFont("helvetica", "bold");
     doc.text(`PF-Num: ${pfNum}`, L + 2, py);
     doc.setFont("helvetica", "normal");
-    doc.text(fullName, pageW / 2, py, { align: "center" });
+    doc.text(fullName, 92, py); // right-side block like the reference
     py += 5.5;
     doc.text(`Station: ${employee.department || "—"}`, L + 2, py);
+    if (employee.employmentDate) {
+      doc.text(`RoD: ${employee.employmentDate}`, 92, py);
+    }
     py += 5.5;
     doc.text(`Desig: ${(employee.role || "—").toUpperCase()}`, L + 2, py);
     py += 5.5;
     doc.text(`ID-Num: ${employee.idNo || "—"}`, L + 2, py);
     if (employee.kraPin) {
-      doc.text(`Tax-PIN: ${employee.kraPin}`, 70, py);
-    }
-    if (employee.employmentDate) {
-      doc.text(`RoD: ${employee.employmentDate}`, R - 2, py, {
-        align: "right",
-      });
+      doc.text(`Tax-PIN: ${employee.kraPin}`, 92, py);
     }
     py += 4;
     doc.setDrawColor(0, 0, 0);
@@ -1609,7 +1607,11 @@ export default function PayrollSystem() {
       .filter(Boolean)
       .join("  -  ");
     if (bankLine) {
-      doc.text(bankLine.toUpperCase(), pageW / 2, y, { align: "center" });
+      const bankUpper = bankLine.toUpperCase();
+      doc.text(bankUpper, pageW / 2, y, { align: "center" });
+      const bankW = doc.getTextWidth(bankUpper);
+      const bankX = pageW / 2 - bankW / 2;
+      doc.line(bankX, y + 1.2, bankX + bankW, y + 1.2); // underline like the reference
       y += 7;
     }
 
