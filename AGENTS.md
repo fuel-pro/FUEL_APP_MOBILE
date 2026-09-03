@@ -1,5 +1,18 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-02 (cont.) — Payslip exact template replica (commit 881c00d)
+
+User requested an exact pixel-faithful replica of the official HR payslip
+template (image-only reference PDF). Rewrote the builder: rounded outer
+border frame + light warm background, org name + red title + TWO build
+reference lines, PERSONAL DETAILS box with its label sitting on the top
+border (only the label span erased), PF-Num underlined + RoD/Tax-PIN
+underlined on the right-side block, underlined bank header, totals
+underlined, NETT PAY, HR footer. Verified by rendering the reference's
+Nairobi employee data and comparing structure via pymupdf render.
+Deployed: GitHub main 881c00d; Cloudflare Pages LIVE (e3ee1868) with
+roundedRect marker confirmed; Vercel production LIVE (prebuilt).
+
 ## Session 2026-09-02 (cont.) — Payslip layout alignment fix (commit 962ef24)
 
 User-generated a payslip and reported the arrangement didn't match the
