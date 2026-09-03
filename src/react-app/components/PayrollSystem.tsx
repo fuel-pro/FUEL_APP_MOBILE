@@ -73,6 +73,14 @@ import {
   type PayslipSecurityInput,
 } from "@/react-app/lib/payslip-security";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import {
+  calcNetPay,
+  deductionAmountFor,
+  normalizeCustomDeductions,
+  normalizeDeductionTypes,
+  setDeductionAmount,
+  type DeductionType,
+} from "@/react-app/lib/payroll-deductions";
 
 interface Employee {
   id?: number;
@@ -87,6 +95,8 @@ interface Employee {
   sha: number;
   nssf: number;
   advance: number;
+  /** Per-employee amounts for station-defined custom deduction types. */
+  customDeductions: { typeId: string; amount: number }[];
   netPay: number;
   bank: string;
   bankCode: string;
@@ -123,6 +133,8 @@ interface PayrollSettings {
   reference: string;
   shaPercentage: number;
   nssfAmount: number;
+  /** Station-defined custom deduction types (add/remove per station). */
+  deductionTypes: DeductionType[];
 }
 
 interface ColumnNames {
@@ -169,6 +181,9 @@ function normalizeEmployee(
     sha,
     nssf,
     advance,
+    customDeductions: normalizeCustomDeductions(
+      emp.custom_deductions ?? emp.customDeductions,
+    ),
     netPay,
     bank: emp.bank_name ?? emp.bank ?? "",
     bankCode: emp.bank_code ?? emp.bankCode ?? "",
@@ -261,6 +276,9 @@ function normalizePayrollSettings(
       fallback.shaPercentage,
     ),
     nssfAmount: num(s.nssf_amount ?? s.nssfAmount, fallback.nssfAmount),
+    deductionTypes: normalizeDeductionTypes(
+      s.deduction_types ?? s.deductionTypes ?? fallback.deductionTypes,
+    ),
   };
 }
 
@@ -293,6 +311,7 @@ const defaultSettings: PayrollSettings = {
   branchDao: isKenya ? "4021" : "",
   origCode: "",
   reference: "",
+  deductionTypes: [],
   shaPercentage: isKenya ? 2.75 : 0,
   nssfAmount: isKenya ? 480 : 0,
 };
@@ -362,6 +381,11 @@ export default function PayrollSystem() {
   const [showShaModal, setShowShaModal] = useState(false);
   const [showNssfModal, setShowNssfModal] = useState(false);
   const [showColumnModal, setShowColumnModal] = useState(false);
+  // Custom deduction types: add (modal) / remove (confirm) state.
+  const [showDeductionModal, setShowDeductionModal] = useState(false);
+  const [deductionLabel, setDeductionLabel] = useState("");
+  const [deductionToRemove, setDeductionToRemove] =
+    useState<DeductionType | null>(null);
 
   // Payslip delivery (email/WhatsApp) — config + log are cloud-synced
   // (station-scoped), so a schedule set on one device fires on every device.
@@ -431,6 +455,7 @@ export default function PayrollSystem() {
     advance: 0,
     sha: 0,
     nssf: 0,
+    customDeductions: [] as { typeId: string; amount: number }[],
     notes: "",
   });
 
@@ -444,22 +469,8 @@ export default function PayrollSystem() {
     return `${stationCurrencySymbol || settings.currency} ${formatNumber(amount)}`;
   };
 
-  // Single source of truth for net-pay calculation. Guards against NaN /
-  // Infinity (bad parse, missing field). Was duplicated inline in 4 places
-  // (saveEmployee, applyShaToAll, applyNssfToAll, updateCell) — each with a
-  // slightly different formula and none guarded against NaN.
-  const calcNetPay = (emp: {
-    basicSalary: number;
-    advance: number;
-    sha: number;
-    nssf: number;
-  }): number => {
-    const basic = Number.isFinite(emp.basicSalary) ? emp.basicSalary : 0;
-    const advance = Number.isFinite(emp.advance) ? emp.advance : 0;
-    const sha = Number.isFinite(emp.sha) ? emp.sha : 0;
-    const nssf = Number.isFinite(emp.nssf) ? emp.nssf : 0;
-    return Math.round((basic - advance - sha - nssf) * 100) / 100;
-  };
+  // calcNetPay is imported from @/react-app/lib/payroll-deductions (single
+  // source of truth, NaN/Infinity-guarded, includes custom deductions).
 
   // API calls
   const fetchEmployees = async () => {
@@ -547,6 +558,7 @@ export default function PayrollSystem() {
         orig_code: merged.origCode,
         reference_code: merged.reference,
         custom_roles: merged.customRoles?.join(", "),
+        deduction_types: merged.deductionTypes ?? [],
       };
       await cloudStorageService.set("payroll_settings", payload, stationId);
       localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
@@ -652,6 +664,7 @@ export default function PayrollSystem() {
       advance: 0,
       sha: 0,
       nssf: 0,
+      customDeductions: [],
       notes: "",
     });
     setShowEmployeeModal(true);
@@ -679,6 +692,7 @@ export default function PayrollSystem() {
       advance: employee.advance,
       sha: employee.sha,
       nssf: employee.nssf,
+      customDeductions: employee.customDeductions ?? [],
       notes: employee.notes,
     });
     setShowEmployeeModal(true);
@@ -708,6 +722,7 @@ export default function PayrollSystem() {
         advance: employeeForm.advance,
         sha: employeeForm.sha,
         nssf: employeeForm.nssf,
+        customDeductions: employeeForm.customDeductions,
       });
 
       const empData = {
@@ -731,6 +746,7 @@ export default function PayrollSystem() {
         advance_amount: employeeForm.advance,
         sha_amount: employeeForm.sha || 0,
         nssf_amount: employeeForm.nssf || 0,
+        custom_deductions: employeeForm.customDeductions ?? [],
         net_pay: computedNet,
         notes: employeeForm.notes,
       };
@@ -873,6 +889,7 @@ export default function PayrollSystem() {
             advance: emp.advance_amount || 0,
             sha: newSha,
             nssf: emp.nssf_amount || 0,
+            customDeductions: emp.custom_deductions ?? [],
           }),
         };
       });
@@ -918,6 +935,7 @@ export default function PayrollSystem() {
             advance: emp.advance_amount || 0,
             sha: emp.sha_amount || 0,
             nssf: nssfAmount,
+            customDeductions: emp.custom_deductions ?? [],
           }),
         };
       });
@@ -951,6 +969,76 @@ export default function PayrollSystem() {
     setShowColumnModal(true);
   };
 
+  // ── Custom deduction types (add/remove) ────────────────────────────────
+  const addDeductionType = () => {
+    const label = deductionLabel.trim();
+    if (!label) {
+      toastError("Enter a name for the deduction (e.g. HELB Loan).");
+      return;
+    }
+    const exists = settings.deductionTypes.some(
+      (t) => t.label.toLowerCase() === label.toLowerCase(),
+    );
+    if (exists) {
+      toastError(`A deduction named "${label}" already exists.`);
+      return;
+    }
+    const type: DeductionType = {
+      id: `ded_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      label,
+    };
+    const updated = {
+      ...settings,
+      deductionTypes: [...settings.deductionTypes, type],
+    };
+    setSettings(updated);
+    saveSettings(updated);
+    setShowDeductionModal(false);
+    setDeductionLabel("");
+    toastSuccess(`Deduction column "${label}" added.`);
+  };
+
+  const removeDeductionType = async (type: DeductionType) => {
+    // Strip the type from settings AND from every employee's deductions.
+    const updated = {
+      ...settings,
+      deductionTypes: settings.deductionTypes.filter((t) => t.id !== type.id),
+    };
+    setSettings(updated);
+    saveSettings(updated);
+    const updatedEmployees = employees.map((emp) => ({
+      ...emp,
+      customDeductions: (emp.customDeductions ?? []).filter(
+        (d) => d.typeId !== type.id,
+      ),
+    }));
+    setEmployees(updatedEmployees);
+    // Persist the cleaned employee list to cloud so the removed column's
+    // values don't linger on other devices.
+    try {
+      const cloudData =
+        (await cloudStorageService.get<any[]>(
+          "payroll_employees",
+          stationId,
+        )) || [];
+      const cleaned = cloudData.map((e: any) => ({
+        ...e,
+        custom_deductions: Array.isArray(e.custom_deductions)
+          ? e.custom_deductions.filter((d: any) => d?.typeId !== type.id)
+          : [],
+      }));
+      await cloudStorageService.set("payroll_employees", cleaned, stationId);
+      localStorage.setItem(
+        "fuelpro_payroll_employees",
+        JSON.stringify(cleaned),
+      );
+    } catch (err) {
+      console.error("Failed to clean removed deduction from cloud:", err);
+    }
+    setDeductionToRemove(null);
+    toastSuccess(`Deduction column "${type.label}" removed.`);
+  };
+
   const saveColumnName = () => {
     if (columnName.trim()) {
       const updated = {
@@ -973,17 +1061,31 @@ export default function PayrollSystem() {
     try {
       const updatedEmployee = { ...employee };
 
-      if (field === "sha" || field === "nssf" || field === "advance") {
+      const isCustomDeduction = field.startsWith("ded:");
+      if (
+        field === "sha" ||
+        field === "nssf" ||
+        field === "advance" ||
+        isCustomDeduction
+      ) {
         const numValue = parseFloat(value) || 0;
         if (field === "sha") updatedEmployee.sha = numValue;
         if (field === "nssf") updatedEmployee.nssf = numValue;
         if (field === "advance") updatedEmployee.advance = numValue;
+        if (isCustomDeduction) {
+          updatedEmployee.customDeductions = setDeductionAmount(
+            updatedEmployee.customDeductions,
+            field.slice(4),
+            numValue,
+          );
+        }
 
         updatedEmployee.netPay = calcNetPay({
           basicSalary: updatedEmployee.basicSalary,
           advance: updatedEmployee.advance,
           sha: updatedEmployee.sha,
           nssf: updatedEmployee.nssf,
+          customDeductions: updatedEmployee.customDeductions,
         });
       } else {
         (updatedEmployee as any)[field] = value;
@@ -1020,6 +1122,7 @@ export default function PayrollSystem() {
           advance_amount: updatedEmployee.advance,
           sha_amount: updatedEmployee.sha,
           nssf_amount: updatedEmployee.nssf,
+          custom_deductions: updatedEmployee.customDeductions ?? [],
           net_pay: updatedEmployee.netPay,
           notes: updatedEmployee.notes,
         };
@@ -1123,6 +1226,13 @@ export default function PayrollSystem() {
     (sum, emp) => sum + safeNum(emp.advance),
     0,
   );
+  // Sum of all station-defined custom deductions across employees.
+  const totalCustomDeductions = employees.reduce(
+    (sum, emp) =>
+      sum +
+      (emp.customDeductions ?? []).reduce((s, d) => s + safeNum(d.amount), 0),
+    0,
+  );
   const totalNet = employees.reduce((sum, emp) => sum + safeNum(emp.netPay), 0);
 
   // Export functions with backend integration
@@ -1141,6 +1251,8 @@ export default function PayrollSystem() {
       columnNames.sha,
       columnNames.nssf,
       columnNames.advance,
+      // Station-defined custom deduction columns (one per type).
+      ...settings.deductionTypes.map((t) => t.label),
       "Net Pay",
       columnNames.bank,
       columnNames.bankCode,
@@ -1160,6 +1272,11 @@ export default function PayrollSystem() {
         emp.sha,
         emp.nssf,
         emp.advance,
+        ...settings.deductionTypes.map(
+          (t) =>
+            (emp.customDeductions ?? []).find((d) => d.typeId === t.id)
+              ?.amount ?? 0,
+        ),
         emp.netPay,
         emp.bank,
         emp.bankCode,
@@ -1241,6 +1358,7 @@ export default function PayrollSystem() {
     const wb = XLSX.utils.book_new();
     const employees = data.employees || [];
     const settings = data.settings;
+    const customDeductionTypes = settings.deductionTypes ?? [];
 
     const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
@@ -1260,6 +1378,8 @@ export default function PayrollSystem() {
         "NSSF",
         "BANK CHARGES",
         "ADVANCE",
+        // Station-defined custom deduction columns (one per type).
+        ...customDeductionTypes.map((t) => t.label.toUpperCase()),
         "NET TOTAL",
       ],
       ...employees.map((emp, index) => [
@@ -1270,6 +1390,11 @@ export default function PayrollSystem() {
         emp.nssf,
         0, // Bank charges
         emp.advance,
+        ...customDeductionTypes.map(
+          (t) =>
+            (emp.customDeductions ?? []).find((d) => d.typeId === t.id)
+              ?.amount ?? 0,
+        ),
         emp.netPay,
       ]),
       [],
@@ -1281,6 +1406,15 @@ export default function PayrollSystem() {
         employees.reduce((sum, emp) => sum + emp.nssf, 0),
         0,
         employees.reduce((sum, emp) => sum + emp.advance, 0),
+        ...customDeductionTypes.map((t) =>
+          employees.reduce(
+            (sum, emp) =>
+              sum +
+              ((emp.customDeductions ?? []).find((d) => d.typeId === t.id)
+                ?.amount ?? 0),
+            0,
+          ),
+        ),
         employees.reduce((sum, emp) => sum + emp.netPay, 0),
       ],
     ];
@@ -1559,6 +1693,13 @@ export default function PayrollSystem() {
       });
     if (advance > 0)
       deductionRows.push({ label: "Salary Advance", amt: advance });
+    // Station-defined custom deductions (add/remove in the payroll table).
+    for (const cd of employee.customDeductions ?? []) {
+      const type = settings.deductionTypes.find((t) => t.id === cd.typeId);
+      const amt = Number.isFinite(cd.amount) ? cd.amount : 0;
+      if (amt > 0)
+        deductionRows.push({ label: type?.label || "Other Deduction", amt });
+    }
     const gross = earningsRows.reduce((s, r) => s + r.amt, 0);
     const totalDeductions = deductionRows.reduce((s, r) => s + r.amt, 0);
     const nett =
@@ -2683,6 +2824,18 @@ export default function PayrollSystem() {
             <Plus size={12} className="md:w-4 md:h-4" />
             <span className="hidden sm:inline ml-1">Add Employee</span>
           </button>
+
+          <button
+            onClick={() => {
+              setDeductionLabel("");
+              setShowDeductionModal(true);
+            }}
+            title="Add a custom statutory/other deduction column (e.g. HELB Loan, Union Dues)"
+            className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
+          >
+            <Plus size={12} className="md:w-4 md:h-4" />
+            <span className="hidden sm:inline ml-1">Deduction</span>
+          </button>
         </div>
       </div>
 
@@ -2737,6 +2890,26 @@ export default function PayrollSystem() {
                   </button>
                 </div>
               </th>
+              {/* Station-defined custom deduction columns (add/remove). */}
+              {settings.deductionTypes.map((type) => (
+                <th
+                  key={type.id}
+                  className="p-1 md:p-3 text-left text-xs md:text-base"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate" title={type.label}>
+                      {type.label}
+                    </span>
+                    <button
+                      onClick={() => setDeductionToRemove(type)}
+                      title={`Remove the "${type.label}" deduction column`}
+                      className="p-0.5 md:p-1 hover:bg-red-500/30 rounded"
+                    >
+                      <Trash2 size={10} className="md:w-3 md:h-3" />
+                    </button>
+                  </div>
+                </th>
+              ))}
               <th className="p-1 md:p-3 text-left text-xs md:text-base">Net</th>
               <th className="p-1 md:p-3 text-left text-xs md:text-base hidden md:table-cell">
                 <div className="flex items-center justify-between">
@@ -2816,6 +2989,25 @@ export default function PayrollSystem() {
                     className="w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
                   />
                 </td>
+                {/* Custom deduction amount cells (one per station type). */}
+                {settings.deductionTypes.map((type) => {
+                  const amt = deductionAmountFor(
+                    employee.customDeductions,
+                    type.id,
+                  );
+                  return (
+                    <td key={type.id} className="p-1 md:p-3">
+                      <input
+                        type="number"
+                        value={amt}
+                        onChange={(e) =>
+                          updateCell(employee, `ded:${type.id}`, e.target.value)
+                        }
+                        className="w-12 md:w-20 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
+                      />
+                    </td>
+                  );
+                })}
                 <td className="p-1 md:p-3 text-xs md:text-base">
                   {formatCurrency(employee.netPay)}
                 </td>
@@ -2916,6 +3108,14 @@ export default function PayrollSystem() {
             {formatCurrency(totalAdvances)}
           </span>
         </div>
+        {settings.deductionTypes.length > 0 && (
+          <div>
+            <strong>Other Deductions:</strong>{" "}
+            <span className="block md:inline">
+              {formatCurrency(totalCustomDeductions)}
+            </span>
+          </div>
+        )}
         <div className="col-span-2 md:col-span-1 font-bold text-green-600">
           <strong>Net:</strong>{" "}
           <span className="block md:inline">{formatCurrency(totalNet)}</span>
@@ -3341,6 +3541,52 @@ export default function PayrollSystem() {
         />
       </div>
 
+      {/* Statutory & Other Deductions — manage the custom deduction
+          columns that appear in the payroll table + on payslips. */}
+      <div className="form-group">
+        <label className="text-xs md:text-sm">
+          Statutory &amp; Other Deductions
+        </label>
+        <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 mb-2">
+          The built-in columns are SHA, NSSF and Advance. Add your own deduction
+          columns (e.g. HELB Loan, Union Dues, Insurance) — each appears in the
+          table, on payslips, and in exports.
+        </p>
+        <div className="space-y-2">
+          {settings.deductionTypes.length === 0 && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+              No custom deductions yet.
+            </p>
+          )}
+          {settings.deductionTypes.map((type) => (
+            <div
+              key={type.id}
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40"
+            >
+              <span className="text-xs md:text-sm font-medium truncate">
+                {type.label}
+              </span>
+              <button
+                onClick={() => setDeductionToRemove(type)}
+                title={`Remove "${type.label}"`}
+                className="p-1 rounded text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              setDeductionLabel("");
+              setShowDeductionModal(true);
+            }}
+            className="btn btn-secondary px-3 py-1.5 text-xs flex items-center gap-1"
+          >
+            <Plus size={12} /> Add Deduction
+          </button>
+        </div>
+      </div>
+
       <div className="flex gap-2 md:gap-4 mt-4 md:mt-8">
         <button
           onClick={async () => {
@@ -3364,6 +3610,7 @@ export default function PayrollSystem() {
               branchDao: "4021",
               origCode: "",
               reference: "",
+              deductionTypes: [],
               shaPercentage: 2.75,
               nssfAmount: 480,
             };
@@ -4214,6 +4461,35 @@ export default function PayrollSystem() {
                   step="0.01"
                 />
               </div>
+
+              {/* Custom deduction amounts for this employee (one per
+                  station-defined deduction type). */}
+              {settings.deductionTypes.map((type) => (
+                <div className="form-group" key={type.id}>
+                  <label>
+                    {type.label} ({stationCurrencySymbol})
+                  </label>
+                  <input
+                    type="number"
+                    value={deductionAmountFor(
+                      employeeForm.customDeductions,
+                      type.id,
+                    )}
+                    onChange={(e) =>
+                      setEmployeeForm({
+                        ...employeeForm,
+                        customDeductions: setDeductionAmount(
+                          employeeForm.customDeductions,
+                          type.id,
+                          Number(e.target.value) || 0,
+                        ),
+                      })
+                    }
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              ))}
             </div>
 
             <div className="form-group mt-4">
@@ -4392,6 +4668,73 @@ export default function PayrollSystem() {
               </button>
               <button onClick={saveColumnName} className="btn btn-primary">
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Deduction Type Modal */}
+      {showDeductionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Add Deduction Column</h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              Add a custom statutory/other deduction (e.g. HELB Loan, Union
+              Dues, Insurance). It appears as a column in the table and on every
+              employee's payslip under "STATUTORY &amp; OTHER DEDUCTIONS".
+            </p>
+            <div className="form-group">
+              <label>Deduction Name</label>
+              <input
+                type="text"
+                value={deductionLabel}
+                onChange={(e) => setDeductionLabel(e.target.value)}
+                placeholder="e.g. HELB Loan"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addDeductionType();
+                }}
+              />
+            </div>
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => setShowDeductionModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button onClick={addDeductionType} className="btn btn-primary">
+                Add Deduction
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Deduction Type Confirm */}
+      {deductionToRemove && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">
+              Remove "{deductionToRemove.label}"?
+            </h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              This removes the column and deletes its amounts from every
+              employee and from future payslips. This cannot be undone.
+            </p>
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => setDeductionToRemove(null)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => removeDeductionType(deductionToRemove)}
+                className="btn btn-danger"
+              >
+                Remove
               </button>
             </div>
           </div>
