@@ -11454,3 +11454,43 @@ viewport (375×812) shows NO horizontal overflow (scrollWidth == clientWidth
 ac38c313 + main alias, verified rules present in live stylesheet: 8
 media-query blocks, 3 overflow-x:hidden, 6 min-width:0 rules); Vercel
 auto-deploys; Supabase: no changes.
+
+## Session 2026-09-03 — Auto-fresh wrappers via CI + freshness rules in AI_README (DEPLOYED)
+
+User asked that the .exe/.apk always be up-to-date + never require manual
+download after each site update.
+
+**CI: `.github/workflows/wrappers.yml`** (triggered on EVERY push to main +
+daily cron) rebuilds BOTH wrappers and publishes to the continuously-updated
+`wrappers-latest` GitHub Release. So the wrappers can no longer drift from
+the site by accident. The desktop .exe reads from that feed via
+`electron-updater` (GitHub Releases provider in package.json); the Android
+.apk loads the live site via capacitor `server.url` (content always current).
+
+**AI_README**: added a non-negotiable "Wrapper Freshness / Update Guarantee"
+section — every session touching packaging MUST read it (uses the python
+mojibake workaround).
+
+**CI debugging + fixes (3 iterations)**:
+1. `setup-java@v4` -> v5 (deprecation). Node.js 20 actions warning: cosmetic.
+2. Runner already has an Android SDK at `/usr/local/lib/android/sdk`; our
+   custom SDK at `/opt/android-sdk` created conflicting ANDROID_HOME vs
+   ANDROID_SDK_ROOT -> gradle failed. Fixed to install only the needed
+   packages into the runner's SDK.
+3. Root `.gitignore` blanket `*.png` rule silently dropped launcher icons +
+   splash drawables from git -> release build failed
+   (`resource drawable/splash not found` -> `mipmap/ic_launcher_foreground
+   not found`). Scoped the rule to allow `android/**/res/**/*.png` +
+   `public/**/*.png` and force-added all launcher icons, mipmap xml, and
+   splash drawables.
+
+**Result**: CI build SUCCESSFUL. Release `wrappers-latest` now holds fresh
+.exe (NSIS installer + portable), .apk (signed) + .apk-debug. Future sessions
+can always link users to that ever-updated release instead of a one-off
+versioned tag. Recurring note: QA leftovers in '.agent_tmp/download_page' can
+be safely deleted.
+
+**Deploy state**: GitHub main 8b57ff9 (CI+res fixes) -> cce8d8e (splash) ->
+01177aa (SDK fix) -> 31a1f64 (wrappers yml + AI_README) -> 0a3fcbe; CI
+`wrappers` workflow SUCCESSFUL. AI_README freshness rule added. No Supabase
+changes.
