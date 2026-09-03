@@ -1,5 +1,9 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-03 (cont.) — Authorizing Officer = role-holder NAME (commit d316af9)
+
+The payslip Authorizing Officer is now resolved to the actual NAME of whoever holds the authorizing role in the station's structure. Extracted into a testable helper `resolveAuthorizingOfficer()` in `payslip-security.ts` that picks by priority (most payroll-specific first), INDEPENDENT of employee array order: payroll manager → HR/human resource → accountant/finance → manager → owner. The payslip's own employee is excluded (can't authorize their own payslip); falls back to the org name. Officer's role captioned under the signature. Previously the inline `employees.find()` returned the FIRST matching employee in array order, not the highest-priority role. New test asserts priority ordering + self-exclusion + no-officer null. 155/155 tests pass. Deployed: GitHub main d316af9; Cloudflare LIVE (2e2ac2fb, officer-priorities marker confirmed); Vercel LIVE (prebuilt).
+
 ## Session 2026-09-03 (cont.) — Payslip seal placement + role-aware officer (commit 8e2e461)
 
 Fixed the VERIFIED/HRIS seal placement: it now sits BELOW the authorizing-officer signature block, centered over the officer column on the right (was overlapping the center/employee signature). The Authorizing Officer is now role-aware — resolved from the station's own employees (payroll manager / HR / accountant / finance / manager / owner, priority order, excluding the payslip's own employee), with the officer's role captioned under the signature (e.g. '(Payroll Manager)'), falling back to the organization name. Deployed: GitHub main 8e2e461; Cloudflare LIVE (ccb0d37d, AUTHORIZING OFFICER marker confirmed); Vercel LIVE (prebuilt).
