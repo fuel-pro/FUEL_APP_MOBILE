@@ -229,7 +229,9 @@ export default function Promotions() {
           />
           <button
             onClick={saveRule}
-            className="h-12 px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium flex items-center justify-center gap-1"
+            className="h-12 px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium flex items-center justify-center gap-1 fp-icon-only"
+            title="Confirm"
+            aria-label="Confirm"
           >
             {editingId ? (
               <Check className="w-4 h-4" />

@@ -177,7 +177,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
       {showLeftArrow && (
         <button
           onClick={scrollLeft}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-r from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-r from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all fp-icon-only"
           aria-label="Scroll tabs left"
         >
           <ChevronLeft
@@ -237,7 +237,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
       {showRightArrow && (
         <button
           onClick={scrollRight}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-l from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-full flex items-center justify-center bg-gradient-to-l from-white/95 dark:from-gray-900/90 to-transparent hover:from-white dark:hover:from-gray-900 transition-all fp-icon-only"
           aria-label="Scroll tabs right"
         >
           <ChevronRight

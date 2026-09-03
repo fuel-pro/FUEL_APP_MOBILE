@@ -887,9 +887,10 @@ export default function Communication() {
             disabled={contacts.length === 0}
             className="btn px-4 py-2 flex items-center gap-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50"
             title="Export contacts as CSV"
+            aria-label="Export contacts as CSV"
           >
             <Download size={18} />
-            <span className="hidden sm:inline">Export</span>
+            <span>Export</span>
           </button>
         </div>
       </div>
@@ -2032,7 +2033,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50"
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50 fp-icon-only"
+          title="Download"
+          aria-label="Download"
         >
           <Download size={16} />
           {saving ? "Saving…" : "Save Settings"}

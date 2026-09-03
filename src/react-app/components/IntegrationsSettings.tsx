@@ -220,6 +220,8 @@ function IntegrationCard({
             ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
             : "bg-green-600 hover:bg-green-700 text-white"
         }`}
+        title="Next"
+        aria-label="Next"
       >
         {connected ? "Configure" : "Setup"}
         <ChevronRight size={16} />

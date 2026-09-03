@@ -611,9 +611,10 @@ export default function AdvancedAnalytics() {
                 disabled={salesData.length === 0}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-gray-900 dark:text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 title="Export data as CSV"
+                aria-label="Export data as CSV"
               >
                 <Download size={16} />
-                <span className="hidden sm:inline">Export CSV</span>
+                <span>Export</span>
               </button>
             </div>
           </div>

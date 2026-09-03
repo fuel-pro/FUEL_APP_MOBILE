@@ -433,14 +433,16 @@ export default function OnboardingTutorial(_: Props) {
                 <button
                   onClick={goPrev}
                   disabled={index === 0}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300 fp-icon-only"
                   aria-label="Previous"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <button
                   onClick={goNext}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white text-sm font-medium transition-colors fp-icon-only"
+                  title="Next"
+                  aria-label="Next"
                 >
                   {isLast ? (
                     <>

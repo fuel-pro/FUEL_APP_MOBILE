@@ -497,7 +497,9 @@ export default function POSCheckout({
             (paymentMethod === "cash" &&
               (!amountPaid || parseFloat(amountPaid) < sale.total))
           }
-          className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 fp-icon-only"
+          title="Print"
+          aria-label="Print"
         >
           <Printer className="w-5 h-5" />
           {isProcessing ? "Processing..." : "Complete Sale & Print"}

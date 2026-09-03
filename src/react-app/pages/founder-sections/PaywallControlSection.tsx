@@ -520,7 +520,9 @@ export default function PaywallControlSection({ logAudit }: Props) {
               />
               <button
                 onClick={addFeature}
-                className="px-2.5 py-1.5 bg-amber-500/15 text-amber-300 text-xs rounded-lg border border-amber-500/20"
+                className="px-2.5 py-1.5 bg-amber-500/15 text-amber-300 text-xs rounded-lg border border-amber-500/20 fp-icon-only"
+                title="Add"
+                aria-label="Add"
               >
                 <Plus size={12} />
               </button>

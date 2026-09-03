@@ -827,7 +827,9 @@ export default function StationAccess() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50 fp-icon-only"
+            title="Sign in"
+            aria-label="Sign in"
           >
             <LogIn size={18} />
             {loading ? "Logging in…" : "Access Station"}

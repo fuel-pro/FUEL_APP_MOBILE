@@ -2094,6 +2094,45 @@ html.dark select option {
 }
 
 /* ============================================================
+   MOBILE ACCESSIBILITY LAYER — the user's APK complaint was
+   icon-only buttons ("+" with no description). Two fixes:
+   1) Component-level: every previously icon-only button now has
+      a `title` + `aria-label` (added site-wide via script).
+   2) This CSS: any button carrying `title`/`aria-label` gets a
+      small caption rendered under it on small screens, so the
+      label is VISIBLE, not just screen-reader-only.
+   We scope to `.fp-icon-only` (opt-in, added by the component
+   edits) so we never accidentally caption a button that already
+   has visible text. Desktop (sm+) is untouched.
+   ============================================================ */
+@media (max-width: 640px) {
+  .fp-icon-only {
+    position: relative;
+  }
+  .fp-icon-only[aria-label]::after {
+    content: attr(aria-label);
+    display: block;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: calc(100% + 2px);
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1.1;
+    white-space: nowrap;
+    color: currentColor;
+    opacity: 0.85;
+    pointer-events: none;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fp-icon-only {
+    margin-bottom: 12px;
+  }
+}
+
+/* ============================================================
    GLOBAL RESPONSIVE SAFETY NET (added for full multi-device audit)
    These rules protect EVERY page/component at every aspect ratio
    (phone portrait/landscape, small phone, tablet, laptop, TV).

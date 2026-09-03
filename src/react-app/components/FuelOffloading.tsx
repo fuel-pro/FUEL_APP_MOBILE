@@ -976,7 +976,9 @@ export default function FuelOffloading() {
                 <div className="flex gap-2 mt-6">
                   <button
                     onClick={saveRecord}
-                    className="btn btn-primary flex-1"
+                    className="btn btn-primary flex-1 fp-icon-only"
+                    title="Save"
+                    aria-label="Save"
                   >
                     <Save size={16} />
                     {selectedRecord ? "Update Record" : "Save Record"}

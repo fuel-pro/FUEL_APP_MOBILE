@@ -92,7 +92,9 @@ export default function DipToLitresCalculator() {
             />
             <button
               onClick={addPoint}
-              className="bg-amber-500 text-gray-900 rounded px-2 py-1.5 text-sm font-medium"
+              className="bg-amber-500 text-gray-900 rounded px-2 py-1.5 text-sm font-medium fp-icon-only"
+              title="Add"
+              aria-label="Add"
             >
               <Plus size={14} />
             </button>

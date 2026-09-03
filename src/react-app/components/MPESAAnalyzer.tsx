@@ -1217,6 +1217,8 @@ export default function MPESAAnalyzer() {
                 ? "bg-gray-400 text-gray-900 dark:text-white cursor-not-allowed"
                 : "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-gray-900 dark:text-white shadow-lg"
             }`}
+            title="Refresh"
+            aria-label="Refresh"
           >
             {isProcessing ? (
               <>
@@ -1271,6 +1273,8 @@ export default function MPESAAnalyzer() {
                   ? "bg-gray-400 text-gray-900 dark:text-white cursor-not-allowed"
                   : "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-gray-900 dark:text-white shadow-lg"
               }`}
+              title="Refresh"
+              aria-label="Refresh"
             >
               {isProcessing ? (
                 <>
@@ -1320,6 +1324,8 @@ export default function MPESAAnalyzer() {
                 ? "bg-gray-400 text-gray-900 dark:text-white cursor-not-allowed"
                 : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-gray-900 dark:text-white shadow-lg"
             }`}
+            title="Refresh"
+            aria-label="Refresh"
           >
             {isProcessing ? (
               <>

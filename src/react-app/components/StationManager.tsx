@@ -1100,7 +1100,9 @@ function QRModal({ station, onClose }: { station: any; onClose: () => void }) {
           </button>
           <button
             onClick={handleCopy}
-            className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm flex items-center justify-center gap-2 fp-icon-only"
+            title="Confirm"
+            aria-label="Confirm"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? "Copied!" : "Copy Station ID"}
@@ -2178,13 +2180,15 @@ export default function StationManager({ onClose }: StationManagerProps) {
               <button
                 onClick={handleSyncNow}
                 disabled={syncing || isBackendSyncing}
+                aria-label="Sync now"
+                title="Sync now"
                 className="px-3 py-2 bg-sky-500/20 text-sky-300 rounded-lg text-sm flex items-center gap-2 hover:bg-sky-500/30 transition-colors disabled:opacity-50"
               >
                 <RefreshCw
                   size={14}
                   className={syncing || isBackendSyncing ? "animate-spin" : ""}
                 />
-                <span className="hidden sm:inline">Sync Now</span>
+                <span>Sync</span>
               </button>
             )}
           </div>

@@ -1286,25 +1286,35 @@ export default function SalesTracking() {
               onClick={() => switchToTab("pos")}
               className="btn btn-outline"
               title="Record a sale in Point of Sale"
+              aria-label="Record a sale in Point of Sale"
             >
               <Tag size={16} />
-              <span className="hidden sm:inline">Sell in POS</span>
+              <span>POS</span>
             </button>
             <button
               onClick={() => switchToTab("fuelsalesreport")}
               className="btn btn-outline"
               title="View consolidated fuel sales report"
+              aria-label="View consolidated fuel sales report"
             >
               <BarChart3 size={16} />
-              <span className="hidden sm:inline">Reports</span>
+              <span>Reports</span>
             </button>
-            <button onClick={saveSalesData} className="btn btn-primary">
+            <button
+              onClick={saveSalesData}
+              className="btn btn-primary"
+              aria-label="Save sales data"
+            >
               <Save size={16} />
-              <span className="hidden sm:inline">Save</span>
+              <span>Save</span>
             </button>
-            <button onClick={clearSalesData} className="btn btn-outline">
+            <button
+              onClick={clearSalesData}
+              className="btn btn-outline"
+              aria-label="Clear sales data"
+            >
               <Trash2 size={16} />
-              <span className="hidden sm:inline">Clear</span>
+              <span>Clear</span>
             </button>
           </div>
         </div>

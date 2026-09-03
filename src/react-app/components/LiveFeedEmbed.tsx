@@ -858,7 +858,7 @@ function ChannelPlayer({
             onClick={onNext}
             title="Next channel"
             aria-label="Next channel"
-            className="p-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors fp-icon-only"
           >
             <SkipForward size={12} />
           </button>

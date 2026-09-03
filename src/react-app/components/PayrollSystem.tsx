@@ -3108,10 +3108,11 @@ export default function PayrollSystem() {
           <div className="relative inline-block">
             <button
               onClick={() => setShowExportOptions(!showExportOptions)}
+              aria-label="Export options"
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 text-xs md:text-sm font-medium rounded-xl transition-all active:scale-[0.98]"
             >
               <Download size={14} />
-              <span className="hidden sm:inline">Export</span>
+              <span>Export</span>
               <svg
                 className={`w-3 h-3 transition-transform duration-200 ${showExportOptions ? "rotate-180" : ""}`}
                 fill="none"
@@ -3200,36 +3201,46 @@ export default function PayrollSystem() {
           <button
             onClick={downloadImportTemplate}
             title="Download a blank Excel template with the columns the importer understands"
+            aria-label="Download Excel template"
             className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
           >
             <Download size={12} className="md:w-4 md:h-4" />
-            <span className="hidden sm:inline ml-1">Template</span>
+            <span className="ml-1">
+              <span className="hidden sm:inline">Template</span>
+              <span className="sm:hidden">Tpl</span>
+            </span>
           </button>
 
           <button
             onClick={openAddEmployeeModal}
+            aria-label="Add employee"
             className="btn btn-primary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
           >
             <Plus size={12} className="md:w-4 md:h-4" />
-            <span className="hidden sm:inline ml-1">Add Employee</span>
+            <span className="ml-1">
+              <span className="hidden sm:inline">Add Employee</span>
+              <span className="sm:hidden">Employee</span>
+            </span>
           </button>
 
           <button
             onClick={() => openColumnTypeModal("deduction")}
             title="Add a custom statutory/other deduction column (e.g. HELB Loan, Union Dues)"
+            aria-label="Add deduction column"
             className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
           >
             <Plus size={12} className="md:w-4 md:h-4" />
-            <span className="hidden sm:inline ml-1">Deduction</span>
+            <span className="ml-1">Deduction</span>
           </button>
 
           <button
             onClick={() => openColumnTypeModal("earning")}
             title="Add an EARNINGS & ALLOWANCES column (e.g. House Allowance, Transport Allowance, Overtime)"
+            aria-label="Add earnings/allowance column"
             className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
           >
             <Plus size={12} className="md:w-4 md:h-4" />
-            <span className="hidden sm:inline ml-1">Earning</span>
+            <span className="ml-1">Earning</span>
           </button>
         </div>
       </div>

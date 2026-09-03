@@ -564,7 +564,9 @@ export default function ImageCropper({
         </button>
         <button
           onClick={handleConfirmCrop}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-gray-900 dark:text-white rounded-lg font-semibold transition-colors shadow-lg"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-gray-900 dark:text-white rounded-lg font-semibold transition-colors shadow-lg fp-icon-only"
+          title="Confirm"
+          aria-label="Confirm"
         >
           <Check className="w-5 h-5" />
           {cropArea && cropArea.width > 20 ? "Crop & Scan" : "Scan Image"}

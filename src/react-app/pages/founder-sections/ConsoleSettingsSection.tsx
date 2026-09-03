@@ -310,7 +310,9 @@ export default function ConsoleSettingsSection({
               />
               <button
                 onClick={addFlagCat}
-                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg border border-amber-500/20"
+                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg border border-amber-500/20 fp-icon-only"
+                title="Add"
+                aria-label="Add"
               >
                 <Plus size={13} />
               </button>
@@ -345,7 +347,9 @@ export default function ConsoleSettingsSection({
               />
               <button
                 onClick={addSecretCat}
-                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg border border-amber-500/20"
+                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg border border-amber-500/20 fp-icon-only"
+                title="Add"
+                aria-label="Add"
               >
                 <Plus size={13} />
               </button>

@@ -248,7 +248,9 @@ const AdjustmentForm = ({
           <button
             onClick={addAdjustment}
             disabled={!selectedProduct}
-            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl"
+            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl fp-icon-only"
+            title="Add"
+            aria-label="Add"
           >
             <Plus size={20} />
           </button>
@@ -661,7 +663,9 @@ const CountForm = ({
           <button
             onClick={addCount}
             disabled={!selectedProduct}
-            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl"
+            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl fp-icon-only"
+            title="Add"
+            aria-label="Add"
           >
             <Plus size={20} />
           </button>

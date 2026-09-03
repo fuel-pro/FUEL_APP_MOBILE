@@ -561,7 +561,9 @@ export default function FuelPriceLocator() {
           <button
             onClick={fetchNearbyPrices}
             disabled={loading || preciseLocationLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white py-3.5 px-4 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white py-3.5 px-4 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 fp-icon-only"
+            title="Fuel"
+            aria-label="Fuel"
           >
             {loading ? (
               <>
