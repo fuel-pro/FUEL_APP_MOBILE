@@ -773,6 +773,72 @@ export async function payheroStkPush(body: {
   }
 }
 
+export async function payheroChannels(body: {
+  creds: Pick<PayheroCreds, "apiUsername" | "apiPassword">;
+}): Promise<IntegrationResult> {
+  const { creds } = body;
+  if (!creds?.apiUsername || !creds?.apiPassword) {
+    return err(
+      "PayHero credentials are incomplete (apiUsername, apiPassword required).",
+    );
+  }
+  try {
+    const auth = toBase64(`${creds.apiUsername}:${creds.apiPassword}`);
+    const res = await fetch(`${PAYHERO_BASE}/payment_channels`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: "application/json" },
+    });
+    const data = await readJson(res);
+    if (!res.ok) {
+      return err(
+        (data.error_message as string) ||
+          (data.message as string) ||
+          `PayHero channel list failed (HTTP ${res.status})`,
+      );
+    }
+    return {
+      success: true,
+      channels: data.payment_channels || [],
+      pagination: data.pagination,
+    };
+  } catch (e) {
+    return err(`PayHero channel list failed: ${(e as Error).message}`);
+  }
+}
+
+export async function payheroWallet(body: {
+  creds: Pick<PayheroCreds, "apiUsername" | "apiPassword">;
+}): Promise<IntegrationResult> {
+  const { creds } = body;
+  if (!creds?.apiUsername || !creds?.apiPassword) {
+    return err(
+      "PayHero credentials are incomplete (apiUsername, apiPassword required).",
+    );
+  }
+  try {
+    const auth = toBase64(`${creds.apiUsername}:${creds.apiPassword}`);
+    const res = await fetch(`${PAYHERO_BASE}/wallets`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: "application/json" },
+    });
+    const data = await readJson(res);
+    if (!res.ok) {
+      return err(
+        (data.error_message as string) ||
+          (data.message as string) ||
+          `PayHero wallet query failed (HTTP ${res.status})`,
+      );
+    }
+    return {
+      success: true,
+      wallet: data,
+      balance: data.available_balance,
+      currency: data.currency,
+      walletStatus: data.wallet_status,
+    };
+  } catch (e) {
+    return err(`PayHero wallet query failed: ${(e as Error).message}`);
+  }
+}
+
 export async function payheroStatus(body: {
   creds: PayheroCreds;
   reference: string;
@@ -1046,6 +1112,10 @@ export async function dispatchIntegration(
       return payheroStkPush(body as never);
     case "payhero-status":
       return payheroStatus(body as never);
+    case "payhero-channels":
+      return payheroChannels(body as never);
+    case "payhero-wallet":
+      return payheroWallet(body as never);
     case "sms-send":
       return sendSms(body as never);
     case "email-send":
