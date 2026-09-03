@@ -187,7 +187,9 @@ export default function MobileBottomNav({
 
   return (
     <>
-      {/* More Menu Overlay - backdrop */}
+      {/* More Menu Overlay - dim backdrop. Must NOT intercept a tap that
+          belongs to a sheet button — it's ultra-dim and closes on a tap
+          outside the sheet. */}
       {showMoreMenu && (
         <div
           className="fixed inset-0 bg-black/60 z-[55] md:hidden"
@@ -196,11 +198,13 @@ export default function MobileBottomNav({
         />
       )}
 
-      {/* More Menu Sheet - slides up */}
+      {/* More Menu Sheet - slides up. stopPropagation so tapping a button
+          inside the sheet never reaches the backdrop's close handler. */}
       {showMoreMenu && (
         <div
           className="fixed bottom-[72px] left-2 right-2 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl z-[60] md:hidden border border-gray-200 dark:border-gray-700 overflow-hidden"
           style={{ maxHeight: "60vh", overflowY: "auto" }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="sticky top-0 bg-white dark:bg-gray-800 p-3 border-b border-gray-200 dark:border-gray-700 z-10">
             <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">

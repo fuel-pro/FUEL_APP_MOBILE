@@ -2236,6 +2236,45 @@ html.dark select option {
 }
 
 /* ============================================================
+   MOBILE TOUCH / TAP robustness (APK "buttons not responding" fix)
+   The user's WebView screenshot showed bottom-sheet buttons that
+   didn't register taps. Guarantees:
+   - every interactive element gets a real touch target (48px min)
+   - tap-manipulation removes the 300ms double-tap delay + disables
+     double-tap-zoom on buttons so a single tap always fires
+   - fixed-position overlays still receive pointer events (the
+     `overflow-x: hidden` above could strip them in some WebViews)
+   - buttons in sheets/dialogs are not hidden by a parent transform
+   ============================================================ */
+@media (max-width: 640px) {
+  button,
+  [role="button"],
+  a[role="button"],
+  label {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 40px;
+  }
+  /* Interactive items inside fixed overlays (bottom sheets, drawers,
+     modals) MUST receive pointer events even when a parent uses
+     transform/overflow tricks. */
+  .fixed button,
+  .fixed [role="button"],
+  .fixed a {
+    pointer-events: auto;
+  }
+  /* Bottom-nav + sheet buttons: bigger touch targets on coarse pointers. */
+  @media (pointer: coarse) {
+    button {
+      min-height: 44px;
+    }
+    .fp-icon-only {
+      min-height: 44px;
+    }
+  }
+}
+
+/* ============================================================
    GLOBAL RESPONSIVE SAFETY NET (added for full multi-device audit)
    These rules protect EVERY page/component at every aspect ratio
    (phone portrait/landscape, small phone, tablet, laptop, TV).
