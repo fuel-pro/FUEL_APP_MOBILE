@@ -22,6 +22,43 @@
 14. [Access Credentials](#-access-credentials)
 15. [Security Guidelines](#-security-guidelines)
 
+## ⚠ Wrapper Freshness / Update Guarantee (non-negotiable)
+
+## Why this exists
+The .exe (Electron desktop) and .apk (Capacitor Android) wrappers load the
+live site, so content updates reach users instantly — BUT app-shell updates
+sometimes were buried because the wrappers were only rebuilt manually. This
+section is mandatory reading for any session that touches packaging.
+
+### The freshness rules (enforced in CI)
+1. `.github/workflows/wrappers.yml` rebuilds BOTH wrappers on EVERY push to
+   main AND daily on a cron, publishing to the continuously-updated
+   `wrappers-latest` GitHub Release. Never rely on a manual local build —
+   the CI keeps wrappers fresh automatically.
+2. The desktop .exe reads its updates via `electron-updater` from the
+   GitHub Releases feed. It downloads the new installer in the background
+   and installs on next quit, so users never have to re-download. The
+   publish config lives in `package.json` (`build.win.publish`).
+3. The Android .apk loads the live site via Capacitor `server.url =
+   https://fuel-app-mobile.pages.dev/` (in `capacitor.config.ts`), so its
+   content is always current. Only app-shell changes require a new build,
+   which the CI now publishes on every push.
+4. If you must build manually, ALWAYS `npm run build` (Vite) before
+   `electron-builder` / `gradlew`, and `npm ci --legacy-peer-deps` first —
+   stale build caches are the #1 cause of a 'stale wrapper' report.
+5. NEVER commit the `release/` output or `android/fuelpro.keystore` — they
+   are gitignored (build artifacts + a self-signed sideload key). The CI
+   generates its own keystore on the runner.
+
+### Docs / user guidance to keep current
+- Release page `.github/workflows/wrappers.yml` publishes
+  `wrappers-latest` — point users to THAT (not the one-off v1.0.0 release).
+- Play Protect block on Android: expected for a first-time self-signed cert;
+  tell users 'Install anyway' is safe; a real Play listing removes it.
+
+Remember: if you didn't rebuild the wrapper when you changed the site, the
+wrapper is stale — and the CI will rebuild it on the next push anyway.
+
 ---
 
 ## 🏢 Repository Overview
