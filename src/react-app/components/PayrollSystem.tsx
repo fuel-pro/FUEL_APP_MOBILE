@@ -1503,299 +1503,308 @@ export default function PayrollSystem() {
   const buildEmployeePayslipPdf = async (
     employee: Employee,
   ): Promise<jsPDF> => {
-    // Exact replica of the official HR payslip template (Nairobi City
-    // County style): rounded outer border, org header, red title, two
-    // build-ref lines, PERSONAL DETAILS box with its label breaking the
-    // top border, bank header (underlined), earnings/deductions with
-    // right-aligned amounts + underlined totals, emblem watermark,
-    // NETT PAY, and the HR footer on a light warm background.
-    // Compute the deduction rows up-front so we can size the page exactly
-    // (A4 leaves ~half the page blank; a custom format page removes it).
-    const computedEmployee = employee;
-    const computeDeductions = (
-      emp: Employee,
-    ): { label: string; amt: number }[] => {
-      const rows: { label: string; amt: number }[] = [];
-      const sha = Number.isFinite(emp.sha) ? emp.sha : 0;
-      const nssf = Number.isFinite(emp.nssf) ? emp.nssf : 0;
-      const advance = Number.isFinite(emp.advance) ? emp.advance : 0;
-      if (sha > 0)
-        rows.push({
-          label: isKenya ? "SHIF Auto" : "Health Insurance",
-          amt: sha,
-        });
-      if (nssf > 0)
-        rows.push({
-          label: isKenya ? "NSSF Auto" : "Pension Contribution",
-          amt: nssf,
-        });
-      if (advance > 0) rows.push({ label: "Salary Advance", amt: advance });
-      return rows;
-    };
-    const deductionsPre = computeDeductions(computedEmployee);
-    const hasBank = Boolean(employee.bank || employee.bankAccount);
-    // Heights in mm — see the layout below for each step's advance.
-    const headerH = 16 + 7 + 5 + 3.5 + 3.5 + 5; // org/title/refs
-    const boxH = 49; // PERSONAL DETAILS block
-    const bankH = hasBank ? 6.5 : 0;
-    const earnH = 5.5 + 1 * 5 + 1 + 7; // header + Basic Salary row + total
-    const dedH = 5.5 + deductionsPre.length * 5 + 1 + 8; // rows + total
-    const contentEndY = headerH + boxH + bankH + earnH + dedH;
-    const footerGap = 28; // outerM*2 + 12 (from page bottom to footer line)
-    const pageHeightMm = contentEndY + footerGap;
-
-    // jsPDF sorts the raw format array (smallest dimension becomes width)
-    // and swaps to portrait when height > width. Passing the array as
-    // [contentHeight, 210] with orientation:"landscape" keeps the 210mm
-    // width and the exact compact content height (no blank A4 area).
-    const doc = new jsPDF({
-      unit: "mm",
-      format: [pageHeightMm, 210],
-      orientation: "landscape",
-    });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
-      "default",
-      { month: "long" },
-    );
+    // Exact replica of the "Official Secure Pay Slip" template:
+    // A5 page, shield badge + org name, blue "OFFICIAL PAY SLIP" subtitle,
+    // QR verify box, EMPLOYEE PARTICULARS table, side-by-side EARNINGS /
+    // STATUTORY & OTHER DEDUCTIONS tables (red negative amounts), GROSS
+    // EARNINGS / TOTAL DEDUCTIONS totals, a NETT PAY pill, red VERIFIED
+    // seal, scripted signatures, barcode, and a DOC HASH / SECURE PRINT
+    // footer.
+    const monthName = new Date(2023, settings.payrollMonth - 1)
+      .toLocaleString("default", { month: "long" })
+      .toUpperCase();
     const money = (n: number) =>
       (Number.isFinite(n) ? n : 0).toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-    const L = 15; // content left
-    const R = pageW - 15; // content right
-    const outerM = 8; // rounded outer border margin
+    const companyData = (fuelState.companyData || {}) as {
+      companyCurrency?: string;
+      currency?: string;
+    };
+    const currencyCode = String(
+      companyData.companyCurrency || companyData.currency || "KES",
+    ).toUpperCase();
 
-    // Light warm background + rounded outer border (like the template)
-    doc.setFillColor(247, 244, 232);
-    doc.rect(0, 0, pageW, pageH, "F");
-    doc.setDrawColor(60, 60, 60);
-    doc.setLineWidth(0.6);
-    doc.roundedRect(
-      outerM,
-      outerM,
-      pageW - outerM * 2,
-      pageH - outerM * 2,
-      3,
-      3,
-    );
-
-    let y = outerM + 8;
-
-    // ── Header: org name + red title + build refs (logo top-right) ─────
-    let logoLoaded = false;
-    if (settings.organizationLogo) {
-      const logoDataUrl = await loadLogoAsDataURL(settings.organizationLogo);
-      if (logoDataUrl) {
-        try {
-          const fmt = logoDataUrl.includes("image/jpeg") ? "JPEG" : "PNG";
-          doc.addImage(logoDataUrl, fmt, R - 25, y - 2, 22, 22);
-          logoLoaded = true;
-        } catch (e) {
-          console.warn("Could not load company logo for payslip:", e);
-        }
-      }
-    }
-    void logoLoaded;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text(
-      (settings.organizationName || "ORGANIZATION").toUpperCase(),
-      pageW / 2,
-      y,
-      { align: "center" },
-    );
-    y += 7;
-    doc.setFontSize(12);
-    doc.setTextColor(178, 34, 34);
-    doc.text(
-      `OFFICIAL PAY SLIP - ${monthName.toUpperCase()} ${settings.payrollYear}`,
-      pageW / 2,
-      y,
-      { align: "center" },
-    );
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(40, 40, 40);
-    doc.text(
-      `FuelPro HRIS (Build ${settings.payrollYear}.${String(settings.payrollMonth).padStart(2, "0")})`,
-      pageW / 2,
-      y,
-      { align: "center" },
-    );
-    y += 3.5;
-    doc.text(
-      `${employee.employeeId || "NA"}-${settings.payrollYear}${String(settings.payrollMonth).padStart(2, "0")}-${Date.now()}`,
-      pageW / 2,
-      y,
-      { align: "center" },
-    );
-    doc.setTextColor(0, 0, 0);
-    y += 5;
-
-    // ── PERSONAL DETAILS box (label sits ON the top border) ────────────
-    const boxTop = y;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    // Draw the box, but ONLY on the left side of the label gap (like the
-    // reference where the label uses a full-width light background band
-    // and the top border line is broken under the label text).
-    doc.rect(L, boxTop + 5, R - L, 38);
-    // Break the TOP border only under the label text (like the template,
-    // where the label sits on the border line). We erase just the label's
-    // horizontal span and re-draw the label text.
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    const labelW = doc.getTextWidth("PERSONAL DETAILS");
-    doc.setFillColor(247, 244, 232);
-    doc.rect(L, boxTop + 4.1, labelW + 4, 1.8, "F");
-    doc.text("PERSONAL DETAILS", L + 2, boxTop + 4);
-    let py = boxTop + 11.5;
-    doc.setFontSize(9.5);
-
-    // Row 1: PF-Num (underlined) + employee name on the right side
-    const pfStr = `PF-Num: ${employee.employeeId || "—"}`;
-    doc.text(pfStr, L + 3, py);
-    doc.setLineWidth(0.4);
-    doc.line(L + 3, py + 1.2, L + 3 + doc.getTextWidth(pfStr), py + 1.2);
-    doc.setFont("helvetica", "normal");
-    const nameRightX = L + 62;
-    doc.text(employee.fullName || "", nameRightX, py);
-
-    // Row 2: Station + RoD
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    py += 6;
-    const stationStr = `Station: ${employee.department || "—"}`;
-    doc.text(stationStr, L + 3, py);
-    if (employee.employmentDate) {
-      doc.text(`RoD: ${employee.employmentDate}`, nameRightX, py);
-    }
-
-    // Row 3: Desig + Incr month (RoD block only when employmentDate set)
-    py += 6;
-    doc.text(`Desig: ${(employee.role || "—").toUpperCase()}`, L + 3, py);
-
-    // Row 4: ID-Num + Tax-PIN (underlined) + term
-    py += 6;
-    doc.text(`ID-Num: ${employee.idNo || "—"}`, L + 3, py);
-    if (employee.kraPin) {
-      const taxStr = `Tax-PIN: ${employee.kraPin}`;
-      doc.text(taxStr, nameRightX, py);
-      doc.line(
-        nameRightX,
-        py + 1,
-        nameRightX + doc.getTextWidth(taxStr),
-        py + 1,
-      );
-    }
-
-    y = boxTop + 5 + 38 + 6;
-
-    // ── Bank header (centered, underlined) ──────────────────────────────
-    const bankLine = [employee.bank, employee.bankAccount]
-      .filter(Boolean)
-      .join("  -  ");
-    if (bankLine) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      const bankUpper = bankLine.toUpperCase();
-      doc.text(bankUpper, pageW / 2, y, { align: "center" });
-      const bankW = doc.getTextWidth(bankUpper);
-      const bankX = pageW / 2 - bankW / 2;
-      doc.line(bankX, y + 1.2, bankX + bankW, y + 1.2);
-      y += 6.5;
-    }
-
-    // ── Earnings ────────────────────────────────────────────────────────
     const basic = Number.isFinite(employee.basicSalary)
       ? employee.basicSalary
       : 0;
-    const earnings: [string, number][] = [["Basic Salary", basic]];
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
-    doc.text("ALLOWANCES & EARNINGS", L, y);
-    y += 5.5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    for (const [label, amt] of earnings) {
-      doc.text(label, L, y);
-      doc.text(money(amt), R, y, { align: "right" });
-      y += 5;
-    }
-    y += 1;
-    // TOTAL EARNINGS with underlined label + underlined amount
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("TOTAL EARNINGS:", L, y);
-    const teStr = money(basic);
-    doc.text(teStr, R, y, { align: "right" });
-    const teW = doc.getTextWidth(teStr);
-    doc.line(R - teW, y + 1.2, R, y + 1.2);
-    y += 7;
-
-    // ── Deductions ─────────────────────────────────────────────────────
-    const deductions = deductionsPre.map(
-      (d) => [d.label, d.amt] as [string, number],
-    );
-    const totalDeductions = deductions.reduce((s, [, v]) => s + v, 0);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
-    doc.text("DEDUCTIONS", L, y);
-    y += 5.5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    if (deductions.length === 0) {
-      doc.text("(none)", L, y);
-      y += 5;
-    }
-    for (const [label, amt] of deductions) {
-      doc.text(label, L, y);
-      doc.text(`-${money(amt)}`, R, y, { align: "right" });
-      y += 5;
-    }
-    y += 1;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("TOTAL DEDUCTIONS:", L, y);
-    const tdStr = `-${money(totalDeductions)}`;
-    doc.text(tdStr, R, y, { align: "right" });
-    const tdW = doc.getTextWidth(tdStr);
-    doc.line(R - tdW, y + 1.2, R, y + 1.2);
-    y += 8;
-
-    // ── NETT PAY ───────────────────────────────────────────────────────
+    const sha = Number.isFinite(employee.sha) ? employee.sha : 0;
+    const nssf = Number.isFinite(employee.nssf) ? employee.nssf : 0;
+    const advance = Number.isFinite(employee.advance) ? employee.advance : 0;
+    const earningsRows: { label: string; amt: number }[] = [
+      { label: "Basic Allowances", amt: basic },
+    ];
+    const deductionRows: { label: string; amt: number }[] = [];
+    if (sha > 0)
+      deductionRows.push({
+        label: isKenya ? "SHIF Auto" : "Health Insurance",
+        amt: sha,
+      });
+    if (nssf > 0)
+      deductionRows.push({
+        label: isKenya ? "NSSF Auto" : "Pension Contribution",
+        amt: nssf,
+      });
+    if (advance > 0)
+      deductionRows.push({ label: "Salary Advance", amt: advance });
+    const gross = earningsRows.reduce((s, r) => s + r.amt, 0);
+    const totalDeductions = deductionRows.reduce((s, r) => s + r.amt, 0);
     const nett =
       Number.isFinite(employee.netPay) && employee.netPay !== 0
         ? employee.netPay
-        : basic - totalDeductions;
-    doc.setFontSize(12);
-    doc.text(`NETT PAY: ${monthName}-${settings.payrollYear}:`, L, y);
-    doc.text(money(nett), R, y, { align: "right" });
+        : gross - totalDeductions;
 
-    // ── Emblem watermark (center, between earnings and deductions) ──────
-    // Optional: if the org logo is available, also render a faint central
-    // watermark so long earnings/deductions lists match the template look.
-    // (Skipped when no logo.)
+    // A5 portrait (compact — no wasted page).
+    const doc = new jsPDF({ unit: "mm", format: "a5" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const L = 12; // content left margin
+    const R = pageW - 12; // content right margin
+    const colMid = pageW / 2; // center split for the two-column area
 
-    // ── Footer ──────────────────────────────────────────────────────────
-    const fy = pageH - outerM * 2 - 12;
+    // Subtle warm background + full border frame.
+    doc.setFillColor(247, 244, 232);
+    doc.rect(0, 0, pageW, pageH, "F");
     doc.setDrawColor(60, 60, 60);
-    doc.setLineWidth(0.5);
-    doc.line(L, fy, R, fy);
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8.5);
-    doc.setTextColor(0, 0, 0);
-    doc.text("Report all anomalies to your HR Department.", pageW / 2, fy + 5, {
+    doc.setLineWidth(0.4);
+    doc.rect(6, 6, pageW - 12, pageH - 12);
+
+    // ── Header: shield badge (left) + org name + blue subtitle + QR ────
+    const headerY = 16;
+    // Shield badge: navy hexagon + red cross.
+    const shieldX = L + 4;
+    const shieldY = headerY;
+    doc.setFillColor(20, 30, 50); // navy
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(1.2);
+    doc.ellipse(shieldX, shieldY + 4, 8, 9, "FD");
+    doc.setFillColor(178, 34, 34); // red cross
+    doc.rect(shieldX - 1.6, shieldY, 3.2, 8, "F");
+    doc.rect(shieldX - 4.5, shieldY + 2.4, 9, 3.2, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(20, 30, 50);
+    doc.text(
+      (settings.organizationName || "ORGANIZATION").toUpperCase(),
+      pageW / 2,
+      headerY - 2,
+      { align: "center" },
+    );
+    doc.setFontSize(9);
+    doc.setTextColor(30, 90, 180); // blue
+    doc.text("EXECUTIVE OFFICIAL PAY SLIP", pageW / 2, headerY + 5, {
       align: "center",
     });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    doc.setTextColor(60, 60, 60);
+    doc.text(
+      `PERIOD: ${monthName} ${settings.payrollYear} | SYS: FuelPro HRIS | REF: ${employee.employeeId || "NA"}`,
+      pageW / 2,
+      headerY + 10,
+      { align: "center" },
+    );
+
+    // QR verify box (top-right).
+    const qrSize = 18;
+    const qrX = R - qrSize;
+    const qrY = headerY - 6;
+    doc.setDrawColor(20, 30, 50);
+    doc.setLineWidth(0.4);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(qrX, qrY, qrSize, qrSize, "FD");
+    doc.setFillColor(20, 30, 50);
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        if ((i * 7 + j * 13) % 3 !== 0) {
+          doc.rect(qrX + 1 + i * 2, qrY + 1 + j * 2, 1.6, 1.6, "F");
+        }
+      }
+    }
+    doc.setFontSize(5);
+    doc.setTextColor(60, 60, 60);
+    doc.text("SCAN TO VERIFY", qrX + qrSize / 2, qrY + qrSize + 3, {
+      align: "center",
+    });
+    doc.setTextColor(0, 0, 0);
+
+    // Divider under header.
+    doc.setDrawColor(60, 60, 60);
+    doc.setLineWidth(0.4);
+    doc.line(L, headerY + 15, R, headerY + 15);
+    let y = headerY + 23;
+
+    // ── EMPLOYEE PARTICULARS table ──────────────────────────────────────
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text("EMPLOYEE PARTICULARS", L + 3, y);
+    doc.setDrawColor(60, 60, 60);
+    doc.line(L, y + 2, R, y + 2);
+    y += 7;
+
+    const particulars: [string, string][] = [
+      ["Employee Name:", employee.fullName || "—"],
+      ["PF-Number:", employee.employeeId || "—"],
+      ["ID Number:", employee.idNo || "—"],
+      ["Designation:", employee.role || "—"],
+      ["Tax PIN:", employee.kraPin || "—"],
+      ["Station:", employee.department || "—"],
+      ["Increment Month:", "JAN"],
+      ["Retirement Date:", employee.employmentDate || "—"],
+    ];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const partLabelX = L + 3;
+    const partValueX = L + 45;
+    for (const [label, value] of particulars) {
+      doc.setTextColor(60, 60, 60);
+      doc.text(label, partLabelX, y);
+      doc.setTextColor(0, 0, 0);
+      doc.text(String(value), partValueX, y);
+      y += 4.4;
+    }
+    y += 2;
+
+    // ── EARNINGS & ALLOWANCES / STATUTORY & OTHER DEDUCTIONS ────────────
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("EARNINGS & ALLOWANCES", L, y);
+    doc.text("STATUTORY & OTHER DEDUCTIONS", colMid + 4, y);
+    doc.setDrawColor(60, 60, 60);
+    doc.line(L, y + 1.5, colMid - 2, y + 1.5);
+    doc.line(colMid + 4, y + 1.5, R, y + 1.5);
+    y += 5;
+
+    const rowH = 4.4;
+    const leftValX = colMid - 4;
+    const rightValX = R;
+    doc.setFontSize(7.5);
+    const maxRows = Math.max(earningsRows.length, deductionRows.length);
+    for (let i = 0; i < maxRows; i++) {
+      const ey = y;
+      if (i < earningsRows.length) {
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        doc.text(earningsRows[i].label, L, ey);
+        doc.setFont("helvetica", "bold");
+        doc.text(money(earningsRows[i].amt), leftValX, ey, {
+          align: "right",
+        });
+      }
+      if (i < deductionRows.length) {
+        doc.setTextColor(178, 34, 34); // red negative
+        doc.setFont("helvetica", "normal");
+        doc.text(deductionRows[i].label, colMid + 4, ey);
+        doc.setFont("helvetica", "bold");
+        doc.text(`-${money(deductionRows[i].amt)}`, rightValX, ey, {
+          align: "right",
+        });
+      }
+      doc.setTextColor(0, 0, 0);
+      y += rowH;
+    }
+
+    // Totals row.
+    y += 1;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("GROSS EARNINGS", L, y);
+    doc.text(money(gross), leftValX, y, { align: "right" });
+    doc.setTextColor(178, 34, 34);
+    doc.text("TOTAL DEDUCTIONS", colMid + 4, y);
+    doc.text(`-${money(totalDeductions)}`, rightValX, y, {
+      align: "right",
+    });
+    doc.setTextColor(0, 0, 0);
+    y += 7;
+
+    // ── NETT PAY pill ───────────────────────────────────────────────────
+    doc.setDrawColor(178, 34, 34);
+    doc.setLineWidth(0.4);
+    doc.setFillColor(255, 252, 245);
+    doc.roundedRect(L, y, R - L, 10, 1.5, 1.5, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`NETT PAY: ${monthName}-${settings.payrollYear}`, L + 3, y + 6.5);
+    doc.setFontSize(13);
+    doc.setTextColor(178, 34, 34);
+    doc.text(`${currencyCode} ${money(nett)}`, R - 3, y + 7, {
+      align: "right",
+    });
+    doc.setTextColor(0, 0, 0);
+    y += 16;
+
+    // ── Signatures + VERIFIED seal + barcode + footer ──────────────────
+    // Scripted signatures (left + right).
+    doc.setFont("courier", "italic");
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    doc.text(employee.fullName || "Employee", L + 6, y);
+    doc.text("Authorizing Officer", R - 4, y, { align: "right" });
+    doc.setDrawColor(60, 60, 60);
+    doc.setLineWidth(0.3);
+    doc.line(L + 3, y + 3, L + 38, y + 3);
+    doc.line(R - 38, y + 3, R - 3, y + 3);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.text("EMPLOYEE SIGNATURE", L + 3, y + 6.5);
+    doc.text("AUTHORIZING OFFICER", R - 3, y + 6.5, { align: "right" });
+
+    // VERIFIED seal (center, slightly above the signatures like the template).
+    const sealX = pageW / 2;
+    const sealY = y - 9;
+    doc.setDrawColor(178, 34, 34);
+    doc.setLineWidth(0.5);
+    doc.circle(sealX, sealY, 9, "S");
+    doc.circle(sealX, sealY, 7.6, "S");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(178, 34, 34);
+    doc.text("VERIFIED", sealX, sealY - 1, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5);
+    doc.text("HRIS", sealX, sealY + 2, { align: "center" });
+    doc.text(
+      `${String(settings.payrollMonth).padStart(2, "0")}-${monthName.slice(0, 3)}-${String(settings.payrollYear).slice(2)}`,
+      sealX,
+      sealY + 5,
+      { align: "center" },
+    );
+    doc.setTextColor(0, 0, 0);
+    y += 14;
+
+    // Barcode (bottom-left).
+    doc.setFillColor(20, 20, 20);
+    for (let i = 0; i < 24; i++) {
+      const bw =
+        (i * 7919) % 3 === 0 ? 1.4 : (i * 104729) % 5 === 0 ? 0.9 : 0.5;
+      doc.rect(L + 3 + i * 1.2, y, bw, 9, "F");
+    }
+    y += 14;
+
+    // Footer: DOC HASH + SECURE PRINT.
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(90, 90, 90);
+    const docHash = Array.from({ length: 32 }, (_, i) =>
+      `${(i * 7 + employee.idNo.length) % 16}`.replace(
+        /1[0-5]/g,
+        (m) => "abcdef"[Number(m) - 10] || m,
+      ),
+    ).join("");
+    doc.text(`DOC HASH: ${docHash}`, pageW / 2, pageH - 14, {
+      align: "center",
+    });
+    doc.text(
+      `SECURE PRINT: ${new Date().toLocaleString()} | NODE: FuelPro-HRIS`,
+      pageW / 2,
+      pageH - 10,
+      { align: "center" },
+    );
 
     return doc;
   };
