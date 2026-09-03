@@ -83,9 +83,15 @@ jobs:
         run: |
           gh release delete wrappers-latest --yes 2>/dev/null || true
           VER=$(node -p "require('./package.json').version")
+          # The auto-updater downloads the file named in latest.yml
+          # (space-free, hyphenated). gh converts spaces to dots in asset
+          # names, which would 404 the update download — so upload the
+          # hyphenated filenames that latest.yml references.
+          cp "release/FuelPro Setup ${VER}.exe" "release/FuelPro-Setup-${VER}.exe"
+          cp "release/FuelPro ${VER}.exe" "release/FuelPro-${VER}.exe"
           gh release create wrappers-latest \
-            "release/FuelPro Setup ${VER}.exe" \
-            "release/FuelPro ${VER}.exe" \
+            "release/FuelPro-Setup-${VER}.exe" \
+            "release/FuelPro-${VER}.exe" \
             "release/latest.yml" \
             "release/FuelPro.apk" \
             "release/FuelPro-debug.apk" \
