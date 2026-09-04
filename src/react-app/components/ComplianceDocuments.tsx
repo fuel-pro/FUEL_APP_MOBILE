@@ -51,6 +51,10 @@ import {
   type ComplianceDocument,
   type ComplianceDocStatus,
 } from "@/react-app/lib/compliance-documents";
+import {
+  extractFromComplianceFile,
+  mergeExtractedIntoDoc,
+} from "@/react-app/lib/compliance-doc-parser";
 
 const BUCKET = "fuelpro-files";
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -145,6 +149,8 @@ export default function ComplianceDocuments({
   const [editorFile, setEditorFile] = useState<File | null>(null);
   const [editorNoExpiry, setEditorNoExpiry] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [autoFilled, setAutoFilled] = useState<string[]>([]);
 
   const [preview, setPreview] = useState<{
     doc: ComplianceDocument;
@@ -346,13 +352,45 @@ export default function ComplianceDocuments({
   );
 
   // ── actions ────────────────────────────────────────────────────────────
+  // Auto-feed empty fields from the uploaded file's contents.
+  const handleEditorFile = async (f: File | null) => {
+    setEditorFile(f);
+    setAutoFilled([]);
+    if (!f || !editor) return;
+    setExtracting(true);
+    try {
+      const ex = await extractFromComplianceFile(f, requiredPermits);
+      setEditor((cur) => {
+        if (!cur) return cur;
+        const { doc, filled } = mergeExtractedIntoDoc(cur, ex);
+        setAutoFilled(filled);
+        if (
+          ex.expiryDate &&
+          !cur.expiryDate &&
+          !editorNoExpiry &&
+          ex.expiryDate <= new Date().toISOString().slice(0, 10)
+        ) {
+          // extracted expiry already past — flag it so the user notices
+          toastError(
+            `This document appears to have expired on ${ex.expiryDate}.`,
+          );
+        }
+        return doc;
+      });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const openAdd = (permitType = "") => {
+    setAutoFilled([]);
     setEditor(newComplianceDoc({ permitType }));
     setEditorFile(null);
     setEditorNoExpiry(false);
   };
 
   const openEdit = (doc: ComplianceDocument) => {
+    setAutoFilled([]);
     setEditor({ ...doc });
     setEditorFile(null);
     setEditorNoExpiry(!doc.expiryDate);
@@ -1210,9 +1248,24 @@ export default function ComplianceDocuments({
                 <input
                   type="file"
                   accept=".pdf,image/*,.txt,.csv,.doc,.docx"
-                  onChange={(e) => setEditorFile(e.target.files?.[0] || null)}
+                  onChange={(e) =>
+                    void handleEditorFile(e.target.files?.[0] || null)
+                  }
                   className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
+                {extracting && (
+                  <p className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    <Loader2 size={12} className="animate-spin" />
+                    Reading document to auto-fill the details…
+                  </p>
+                )}
+                {!extracting && autoFilled.length > 0 && (
+                  <p className="flex items-start gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                    <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
+                    Auto-filled from the document: {autoFilled.join(", ")}.
+                    Please review before saving.
+                  </p>
+                )}
                 {editor.fileName && !editorFile && (
                   <p className="text-xs text-gray-400 mt-1">
                     Current file: {editor.fileName} (choose a file to replace)
