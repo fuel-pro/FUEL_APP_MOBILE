@@ -1,5 +1,49 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-04 — Country/region-aware payroll labels (commits 9a94ac8 + 28126a7)
+
+All payroll statutory terminology was hardcoded to Kenya (KRA PIN / SHA /
+NSSF) — the Add Employee form, payslip PDF, Excel/CSV exports, sheet
+names, Edit-for-All modals, settings, toolbar buttons, dashboard summary
+totals, and the tax-PIN field was even HIDDEN for non-Kenya stations.
+Now everything adapts per country from ONE constant.
+
+New `src/react-app/lib/payroll-localization.ts`: `getPayrollLabels(country)`
+maps 26 country codes to local terminology — taxPin (KRA PIN / TIN / TRN /
+ITN / SSN / NINO / PAN / TFN / Steuer-ID / IRD Number / ...), medicalCover
+(SHA / SHU / NHIF / NHIS / NHS / PhilHealth / Medicare / Health Insurance /
+...), socialFund (NSSF / RSSB / SSNIT / PENCOM / UIF / 401(k) / EPF / GOSI /
+SSS / Superannuation / KiwiSaver / ...). Generic Tax PIN / Medical Cover /
+Social Security fallback for unknown countries.
+
+PayrollSystem.tsx derives `PAYROLL_LABELS = getPayrollLabels(countryCode)`
+once (module scope, `getDetectedCountryCode()` + station.country) and every
+surface uses it: employee form labels (tax field now shows for ALL
+countries), payslip particulars + STATUTORY & OTHER DEDUCTIONS rows
+(matches the form), export headers/sheet names/file names (STAFF <X> LIST),
+"Export <X> List" + "Edit <X> for All" buttons, settings + modal labels,
+summary totals, toasts. Kenya behaviour is byte-identical (KE -> KRA
+PIN/SHA/NSSF).
+
+Importer round-trip preserved: `payroll-import.ts` COLUMN_MAPPING aliases
+extended with the localized terms (tin/ssn/trn/tax id/health insurance/
+medical cover/401(k)/pension/social security/ssnit/epf/rrsp/kiwisaver/
+super/napsa/eobi/gosi/uif/...) so a non-Kenya station's own export
+re-imports cleanly. New `src/test/payroll-localization.test.ts` (7 tests:
+registry + US-localized workbook round-trip + Kenya back-compat). 190/190
+tests pass.
+
+Repair note: the bulk-replace approach mangled JSX (unbalanced braces +
+a quote-mismatched template literal); fixed by hand. Lesson: do targeted
+file_editor edits, not bulk python string surgery on JSX.
+
+Gates: tsc -b 0 errors, vitest 190/190, eslint 0 errors (1 pre-existing
+exhaustive-deps warning), prettier clean, build success. Deployed: GitHub
+main 9a94ac8 + 28126a7; Cloudflare Pages LIVE (previews 3296ed97 +
+66bc1af7 + main alias). Browser-verified on the US QA station: table
+headers "Health Insurance"/"401(k)", buttons "Edit Health Insurance for
+All"/"Export 401(k) List". Supabase: no schema changes.
+
 ## Session 2026-09-04 (cont.) — Payroll "Clear All" employees with 2FA (commit d96d015)
 
 Payroll System > Employees toolbar gained a red "Clear All" button
