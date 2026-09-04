@@ -1,5 +1,49 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-04 — Payroll Import Excel multi-sheet merge (commit ea93c94)
+
+User report: Payroll System > Employees > "Import Excel" was not extracting
+all necessary data; supplied THE_PUBLICAN_ENERGY_AUGUST_2026_PAYROLL.xlsx
+(4 sheets) as the example.
+
+**Root cause**: parseEmployeeWorkbook read ONLY the single best-matching
+sheet. Kenyan payroll workbooks (incl. the app's OWN export format) split
+one employee's data across sheets: Payroll Payment (amounts), SHA List
+(national ID + SHA member numbers), NSSF List (NSSF numbers), CPC
+Centralized (bank name/account/branch code). So imports silently dropped
+id_number, sha_number, nssf_number, bank_*.
+
+**Fix (lib/payroll-import.ts)**: parse EVERY sheet (parseEmployeeSheet),
+merge rows by normalized name key (nameKey strips non-alphanumerics).
+Primary sheet = most mapped columns (ties -> more rows); secondary sheets
+fill EMPTY fields only (MERGEABLE_STRING_FIELDS/MERGEABLE_NUMBER_FIELDS);
+persons found only on a secondary sheet are still imported. Reference
+sheets without an identity column are ignored. COLUMN_MAPPING: bankName
+gains "bank branch"; FIELD_EXCLUSIONS gains "originator" so CPC
+"ORIGINATOR ACCOUNT"/"ORIG CODE" (company source account) is never read
+as the employee's. ParseResult gains sheetsUsed; the import confirm dialog
+reports all merged sheets.
+
+**Verified against the real fixture** (src/test/fixtures-publican-payroll
+.xlsx — committed as a test fixture): all 10 employees with exact values
+(EKAL HEBREWS: ID 33847994, SHA CR2665367732646-5, NSSF 2061523639, KCB
+LODWAR 1335159843/01144, basic 10000, SHA 275, NSSF 540, net 9185);
+TOTALS footers skipped; string NSSF numbers (205545492X) preserved;
+per-employee banks preserved (PATRICK KIVENGA = EQUITY 300190948511);
+OBADIAH (absent from CPC sheet) correctly keeps empty bank fields.
+
+Tests: src/test/payroll-import.test.ts 15/15 (3 new: multi-sheet fixture
+merge, secondary-sheet-only employee, reference-sheet rejection). Gates:
+tsc -b 0, vitest 183/183, eslint 0 errors (1 pre-existing
+exhaustive-deps warning), prettier clean, build OK.
+
+Deployed: GitHub main ea93c94; Cloudflare LIVE (66276946, sheetsUsed
+marker in PayrollSystem-BVpphIlg.js); Vercel auto-deploys via GitHub
+integration. NOTE: git remote URL had an expired ghu_ token again
+(prompted "Password for ...") — fixed with
+`git remote set-url origin https://$GITHUB_TOKEN@github.com/...` before
+push (recurring issue; check first on any push failure).
+
 ## Session 2026-09-03 (cont.) — PayHero connect (channels/wallet/test) + .exe launch-crash fix (commit 4bcf737)
 
 Task 1 (PayHero Kenya): new dispatcher actions `payhero-channels` (list
