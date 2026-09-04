@@ -29,6 +29,7 @@ import { PDFDocument } from "pdf-lib";
 import { zipSync } from "fflate";
 import Commissions from "@/react-app/components/Commissions";
 import StaffAdvanceLoans from "@/react-app/components/StaffAdvanceLoans";
+import PayslipPdfPreview from "@/react-app/components/PayslipPdfPreview";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -493,7 +494,7 @@ export default function PayrollSystem() {
   // not the current settings period).
   const [payslipPreview, setPayslipPreview] = useState<{
     employee: Employee;
-    url: string;
+    bytes: Uint8Array;
     filename: string;
     periodLabel: string;
     periodOverride?: { month: number; year: number };
@@ -509,14 +510,6 @@ export default function PayrollSystem() {
   const [recordMonth, setRecordMonth] = useState<number | "">("");
   const [recordYear, setRecordYear] = useState<number | "">("");
   const [showRecords, setShowRecords] = useState(false);
-
-  // Revoke the preview blob URL when the preview closes or the component
-  // unmounts (memory hygiene — blob URLs otherwise leak).
-  useEffect(() => {
-    return () => {
-      if (payslipPreview) URL.revokeObjectURL(payslipPreview.url);
-    };
-  }, [payslipPreview]);
 
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<number | null>(null);
@@ -2897,7 +2890,6 @@ export default function PayrollSystem() {
   // ─── Payslip preview (before download/send) ────────────────────────────
 
   const closePayslipPreview = () => {
-    if (payslipPreview) URL.revokeObjectURL(payslipPreview.url);
     setPayslipPreview(null);
   };
 
@@ -2909,14 +2901,13 @@ export default function PayrollSystem() {
     setPreviewLoading(true);
     try {
       const doc = await buildEmployeePayslipPdf(employee, periodOverride);
-      const blob = doc.output("blob");
-      const url = URL.createObjectURL(blob);
+      const bytes = new Uint8Array(doc.output("arraybuffer"));
       const label = periodOverride
         ? payrollPeriodLabel(periodOverride.month, periodOverride.year)
         : periodLabelForSettings();
       setPayslipPreview({
         employee,
-        url,
+        bytes,
         filename: payslipFilename(employee, periodOverride),
         periodLabel: label,
         periodOverride,
@@ -5621,11 +5612,7 @@ export default function PayrollSystem() {
               </button>
             </div>
             <div className="flex-1 min-h-0 bg-gray-100 dark:bg-gray-900">
-              <iframe
-                src={payslipPreview.url}
-                title={`Payslip preview for ${payslipPreview.employee.fullName}`}
-                className="w-full h-full min-h-[60vh]"
-              />
+              <PayslipPdfPreview bytes={payslipPreview.bytes} />
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <button
