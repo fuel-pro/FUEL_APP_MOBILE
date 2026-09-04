@@ -1,3 +1,22 @@
+## Session 2026-09-04 (cont.) — Payslip preview blank fix (commit 08f60c4)
+
+User report: the new Payslip Preview modal opened blank (no document
+content). TWO root causes: (1) the site CSP `frame-src` did not allow
+`blob:` URLs, so the `<iframe src="blob:...">` was blocked by the browser;
+(2) Android WebView / Safari cannot display PDFs in iframes at all, so the
+blob-iframe preview was blank on the APK/mobile regardless of CSP.
+
+Fix: new `src/react-app/components/PayslipPdfPreview.tsx` renders the
+generated PDF to canvas pages with pdfjs-dist (local bundled worker via
+`pdf.worker.min.mjs?url` — CSP `worker-src 'self'` compliant; do NOT use
+the unpkg CDN worker — `worker-src` blocks it). Preview state now carries
+the PDF bytes (Uint8Array) instead of a blob URL (no createObjectURL/
+revokeObjectURL lifecycle). Also added `blob:` to CSP frame-src as
+defense-in-depth. Verified LIVE on pages.dev: the modal renders the full
+payslip (particulars, earnings/deductions, NETT PAY: AUGUST-2026, seal,
+barcode). Cloudflare LIVE (da619cfa); Vercel LIVE (prebuilt,
+PayrollSystem-dgUDV_K-.js). Gates: tsc 0, 212/212 tests, eslint clean.
+
 
 ## Session 2026-09-04 — Payroll 4-task batch: settings period + ZIP batch + records + preview (commit 4129333)
 
