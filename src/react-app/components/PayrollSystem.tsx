@@ -20,7 +20,13 @@ import {
   CheckCircle2,
   XCircle,
   Coins,
+  Eye,
+  FileArchive,
+  X,
+  History,
 } from "lucide-react";
+import { PDFDocument } from "pdf-lib";
+import { zipSync } from "fflate";
 import Commissions from "@/react-app/components/Commissions";
 import StaffAdvanceLoans from "@/react-app/components/StaffAdvanceLoans";
 import { useFuel } from "@/react-app/context/FuelContext";
@@ -30,8 +36,6 @@ import { useStations } from "@/react-app/context/StationContext";
 import {
   PAYSLIP_CONFIG_KEY,
   PAYSLIP_LOG_KEY,
-  currentPeriodKey,
-  currentPeriodLabel,
   createPayslipShortlink,
   defaultPayslipConfig,
   deliverPayslip,
@@ -45,6 +49,16 @@ import {
   type PayslipSendLogEntry,
   type PayslipWebFallback,
 } from "@/react-app/lib/payslip-delivery";
+import {
+  PAYSLIP_RECORDS_KEY,
+  buildPayslipRecord,
+  filterPayslipRecords,
+  payrollPeriodKey,
+  payrollPeriodLabel,
+  payslipRecordYears,
+  upsertPayslipRecord,
+  type PayslipRecord,
+} from "@/react-app/lib/payslip-records";
 import {
   navigateToTab,
   type ExpensePrefill,
@@ -473,6 +487,37 @@ export default function PayrollSystem() {
     null,
   );
 
+  // Payslip preview (Task 4): a modal iframe rendering the generated PDF
+  // before the owner downloads or sends it. `periodOverride` is set when
+  // previewing a stored record (so the PDF shows the RECORD's month/year,
+  // not the current settings period).
+  const [payslipPreview, setPayslipPreview] = useState<{
+    employee: Employee;
+    url: string;
+    filename: string;
+    periodLabel: string;
+    periodOverride?: { month: number; year: number };
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Payslip records (Task 3): durable, searchable history of every
+  // generated payslip per (employee, month, year) — cloud-synced.
+  const [payslipRecords, setPayslipRecords] = useState<PayslipRecord[]>([]);
+  const payslipRecordsRef = useRef(payslipRecords);
+  payslipRecordsRef.current = payslipRecords;
+  const [recordSearch, setRecordSearch] = useState("");
+  const [recordMonth, setRecordMonth] = useState<number | "">("");
+  const [recordYear, setRecordYear] = useState<number | "">("");
+  const [showRecords, setShowRecords] = useState(false);
+
+  // Revoke the preview blob URL when the preview closes or the component
+  // unmounts (memory hygiene — blob URLs otherwise leak).
+  useEffect(() => {
+    return () => {
+      if (payslipPreview) URL.revokeObjectURL(payslipPreview.url);
+    };
+  }, [payslipPreview]);
+
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<number | null>(null);
   const [employeeToDeleteId, setEmployeeToDeleteId] = useState<string>("");
@@ -693,6 +738,12 @@ export default function PayrollSystem() {
             stationId,
           );
           if (Array.isArray(log)) setPayslipLog(log);
+          // Payslip records (searchable history) — station-scoped.
+          const recs = await cloudStorageService.get<PayslipRecord[]>(
+            PAYSLIP_RECORDS_KEY,
+            stationId,
+          );
+          if (Array.isArray(recs)) setPayslipRecords(recs);
           // Shared gateway config (Communication → Settings, no double entry).
           const gw = await cloudStorageService.get<CommGatewayConfig>(
             "comm_integration_config",
@@ -2338,9 +2389,12 @@ export default function PayrollSystem() {
   };
 
   // Individual payslip PDF generation — returns the jsPDF doc so it can be
-  // downloaded, emailed, or sent over WhatsApp.
+  // downloaded, previewed, emailed, or sent over WhatsApp. `periodOverride`
+  // lets a stored payslip RECORD be re-rendered with its own month/year
+  // (record keeping) instead of the current settings period.
   const buildEmployeePayslipPdf = async (
     employee: Employee,
+    periodOverride?: { month: number; year: number },
   ): Promise<jsPDF> => {
     // Replica of the "Official Secure Pay Slip" template with REAL,
     // verifiable security features: the QR code encodes a genuine
@@ -2350,10 +2404,12 @@ export default function PayrollSystem() {
     // any barcode reader), and the DOC HASH footer is a real SHA-256 of
     // the canonical payslip contents — any tampered figure changes all
     // three. The badge is the station's uploaded logo (shield fallback).
-    const monthName = new Date(2023, settings.payrollMonth - 1)
+    const periodMonth = periodOverride?.month ?? settings.payrollMonth;
+    const periodYear = periodOverride?.year ?? settings.payrollYear;
+    const monthName = new Date(2023, periodMonth - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
-    const period = `${monthName}-${settings.payrollYear}`;
+    const period = `${monthName}-${periodYear}`;
     const money = (n: number) =>
       (Number.isFinite(n) ? n : 0).toLocaleString("en-US", {
         minimumFractionDigits: 2,
@@ -2517,7 +2573,7 @@ export default function PayrollSystem() {
     doc.setFontSize(6);
     doc.setTextColor(60, 60, 60);
     doc.text(
-      `PERIOD: ${monthName} ${settings.payrollYear} | SYS: FuelPro HRIS | REF: ${employee.employeeId || "NA"}`,
+      `PERIOD: ${monthName} ${periodYear} | SYS: FuelPro HRIS | REF: ${employee.employeeId || "NA"}`,
       pageW / 2,
       headerY + 10,
       { align: "center" },
@@ -2705,7 +2761,7 @@ export default function PayrollSystem() {
     doc.setFontSize(5);
     doc.text("HRIS", sealX, sealY + 2, { align: "center" });
     doc.text(
-      `${String(settings.payrollMonth).padStart(2, "0")}-${monthName.slice(0, 3)}-${String(settings.payrollYear).slice(2)}`,
+      `${String(periodMonth).padStart(2, "0")}-${monthName.slice(0, 3)}-${String(periodYear).slice(2)}`,
       sealX,
       sealY + 5,
       { align: "center" },
@@ -2759,20 +2815,208 @@ export default function PayrollSystem() {
     return doc;
   };
 
-  // Download the payslip PDF for a single employee (the pre-existing
-  // behaviour that used to live inline here).
-  const exportEmployeePayslip = async (employee: Employee) => {
-    const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
-      "default",
-      { month: "long" },
-    );
-    const doc = await buildEmployeePayslipPdf(employee);
-    doc.save(
-      `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`,
+  /** Filename used for a payslip of a given period (settings by default). */
+  const payslipFilename = (
+    employee: Employee,
+    periodOverride?: { month: number; year: number },
+  ) => {
+    const label = periodOverride
+      ? payrollPeriodLabel(periodOverride.month, periodOverride.year)
+      : periodLabelForSettings();
+    const [monthName, year] = label.split(" ");
+    return `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${year}.pdf`;
+  };
+
+  // ─── Payslip records (record keeping) ──────────────────────────────────
+  // Every generated payslip (single export, batch export, send) is recorded
+  // per (employee, month, year) so the owner can search + re-download an
+  // EXACT historical copy later, even after the payroll row is edited.
+
+  const persistPayslipRecords = async (records: PayslipRecord[]) => {
+    setPayslipRecords(records);
+    try {
+      await cloudStorageService.set(PAYSLIP_RECORDS_KEY, records, stationId);
+    } catch (e) {
+      console.warn("[payslip-records] save failed:", e);
+    }
+  };
+
+  const buildRecordFor = (
+    employee: Employee,
+    source: PayslipRecord["source"],
+    fileUrl?: string,
+    periodOverride?: { month: number; year: number },
+  ): PayslipRecord => {
+    const month = periodOverride?.month ?? settings.payrollMonth;
+    const year = periodOverride?.year ?? settings.payrollYear;
+    const basic = Number.isFinite(employee.basicSalary)
+      ? employee.basicSalary
+      : 0;
+    const gross =
+      basic +
+      (employee.earnings || []).reduce(
+        (s, e) => s + resolveEarningAmount(e, basic),
+        0,
+      );
+    const deductions =
+      (Number.isFinite(employee.sha) ? employee.sha : 0) +
+      (Number.isFinite(employee.nssf) ? employee.nssf : 0) +
+      (Number.isFinite(employee.advance) ? employee.advance : 0) +
+      (employee.customDeductions || []).reduce(
+        (s, d) => s + resolveDeductionAmount(d, basic),
+        0,
+      );
+    return buildPayslipRecord({
+      employeeId: employee.employeeId || String(employee.id || ""),
+      employeeName: employee.fullName || "Employee",
+      month,
+      year,
+      grossPay: gross,
+      totalDeductions: deductions,
+      netPay: Number.isFinite(employee.netPay) ? employee.netPay : 0,
+      source,
+      fileUrl,
+      employee: { ...employee },
+    });
+  };
+
+  const recordPayslip = async (
+    employee: Employee,
+    source: PayslipRecord["source"],
+    fileUrl?: string,
+    periodOverride?: { month: number; year: number },
+  ) => {
+    await persistPayslipRecords(
+      upsertPayslipRecord(
+        payslipRecordsRef.current,
+        buildRecordFor(employee, source, fileUrl, periodOverride),
+      ),
     );
   };
 
+  // ─── Payslip preview (before download/send) ────────────────────────────
+
+  const closePayslipPreview = () => {
+    if (payslipPreview) URL.revokeObjectURL(payslipPreview.url);
+    setPayslipPreview(null);
+  };
+
+  const previewPayslip = async (
+    employee: Employee,
+    periodOverride?: { month: number; year: number },
+  ) => {
+    if (previewLoading) return;
+    setPreviewLoading(true);
+    try {
+      const doc = await buildEmployeePayslipPdf(employee, periodOverride);
+      const blob = doc.output("blob");
+      const url = URL.createObjectURL(blob);
+      const label = periodOverride
+        ? payrollPeriodLabel(periodOverride.month, periodOverride.year)
+        : periodLabelForSettings();
+      setPayslipPreview({
+        employee,
+        url,
+        filename: payslipFilename(employee, periodOverride),
+        periodLabel: label,
+        periodOverride,
+      });
+    } catch (e) {
+      toastError(
+        "Could not build the payslip preview: " + (e as Error).message,
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Download the payslip PDF for a single employee (the pre-existing
+  // behaviour that used to live inline here).
+  const exportEmployeePayslip = async (
+    employee: Employee,
+    periodOverride?: { month: number; year: number },
+    source: PayslipRecord["source"] = "export",
+  ) => {
+    const doc = await buildEmployeePayslipPdf(employee, periodOverride);
+    doc.save(payslipFilename(employee, periodOverride));
+    void recordPayslip(employee, source, undefined, periodOverride);
+  };
+
+  /**
+   * Batch export (Task 2): build every employee's payslip, merge them all
+   * into ONE combined PDF (one page per employee), then compress that PDF
+   * into a single .zip download. No more popup-blocked multi-downloads.
+   */
+  const exportAllPayslipsZipped = async () => {
+    if (employees.length === 0) return;
+    setSaving(true);
+    try {
+      const merged = await PDFDocument.create();
+      const batchRecords: PayslipRecord[] = [];
+      for (const employee of employees) {
+        // Small yield so the UI stays responsive during a large batch.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const doc = await buildEmployeePayslipPdf(employee);
+        const bytes = doc.output("arraybuffer");
+        const src = await PDFDocument.load(bytes);
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        for (const page of pages) merged.addPage(page);
+        batchRecords.push(buildRecordFor(employee, "batch"));
+      }
+      // One cloud write for the whole batch (not one per employee).
+      await persistPayslipRecords(
+        batchRecords.reduce(
+          (list, rec) => upsertPayslipRecord(list, rec),
+          payslipRecordsRef.current,
+        ),
+      );
+      const mergedBytes = await merged.save();
+      const periodSlug = periodLabelForSettings().replace(/\s+/g, "_");
+      const pdfName = `All_Payslips_${periodSlug}.pdf`;
+      const zipBytes = zipSync(
+        {
+          [pdfName]: [
+            new Uint8Array(
+              mergedBytes.buffer.slice(
+                mergedBytes.byteOffset,
+                mergedBytes.byteOffset + mergedBytes.byteLength,
+              ),
+            ),
+            { level: 9 },
+          ],
+        },
+        { level: 9 },
+      );
+      const zipBlob = new Blob([zipBytes.buffer as ArrayBuffer], {
+        type: "application/zip",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = `All_Payslips_${periodSlug}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+      toastSuccess(
+        `Combined ${employees.length} payslip(s) into one PDF (${pdfName}) inside ${link.download}.`,
+      );
+    } catch (e) {
+      toastError("Batch export failed: " + (e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ─── Payslip delivery (email / WhatsApp) ────────────────────────────────
+
+  // The payslip period ALWAYS comes from Payroll Settings
+  // (payrollMonth/payrollYear) — never the current calendar month. Sending
+  // in September for the August payroll must say "August 2026" everywhere:
+  // the PDF, the message text, the short-link metadata and the send log.
+  const periodLabelForSettings = () =>
+    payrollPeriodLabel(settings.payrollMonth, settings.payrollYear);
+  const periodKeyForSettings = () =>
+    payrollPeriodKey(settings.payrollMonth, settings.payrollYear);
 
   const savePayslipConfig = async (patch: Partial<PayslipDeliveryConfig>) => {
     const merged = { ...payslipConfigRef.current, ...patch };
@@ -2826,17 +3070,16 @@ export default function PayrollSystem() {
     employee: Employee,
     manual = true,
     openWebFallback = false,
+    periodOverride?: { month: number; year: number },
   ): Promise<{
     entry: PayslipSendLogEntry;
     fallbacks: PayslipWebFallback[];
   }> => {
     const cfg = payslipConfigRef.current;
-    const periodLabel = currentPeriodLabel();
-    const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
-      "default",
-      { month: "long" },
-    );
-    const filename = `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`;
+    const periodLabel = periodOverride
+      ? payrollPeriodLabel(periodOverride.month, periodOverride.year)
+      : periodLabelForSettings();
+    const filename = payslipFilename(employee, periodOverride);
     const recipient =
       cfg.channel === "email"
         ? employee.email
@@ -2860,7 +3103,7 @@ export default function PayrollSystem() {
 
     try {
       // 1. Build the PDF (no download).
-      const doc = await buildEmployeePayslipPdf(employee);
+      const doc = await buildEmployeePayslipPdf(employee, periodOverride);
       const pdfBlob = doc.output("blob");
       const pdfBase64 = doc.output("datauristring").split(",")[1] || "";
 
@@ -2870,6 +3113,11 @@ export default function PayrollSystem() {
         user?.id || "unknown",
         filename,
       );
+
+      // 2a. Record keeping: the payslip was generated for the SETTINGS
+      // period (or the record's own period on a re-send) — store an exact,
+      // re-downloadable snapshot.
+      void recordPayslip(employee, "send", url, periodOverride);
 
       // 2b. Register a short opaque link (/p/<code>) for user-visible text:
       // the raw storage URL (which leaks owner uid + filename + storage path)
@@ -2989,7 +3237,7 @@ export default function PayrollSystem() {
             id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             employeeId: employee.employeeId || String(employee.id || ""),
             employeeName: employee.fullName || "Employee",
-            period: currentPeriodLabel(),
+            period: periodLabelForSettings(),
             channel: payslipConfigRef.current.channel,
             recipient: "",
             status: "failed",
@@ -3014,7 +3262,7 @@ export default function PayrollSystem() {
             id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             employeeId: employee.employeeId || String(employee.id || ""),
             employeeName: employee.fullName || "Employee",
-            period: currentPeriodLabel(),
+            period: periodLabelForSettings(),
             channel: payslipConfigRef.current.channel,
             recipient: maskRecipient(employee.email || employee.phone || ""),
             status: "failed",
@@ -3103,7 +3351,7 @@ export default function PayrollSystem() {
       if (!user || employees.length === 0) return;
       const today = new Date();
       if (today.getDate() < cfg.sendDay) return;
-      const period = currentPeriodKey();
+      const period = periodKeyForSettings();
       if (cfg.lastAutoSentPeriod === period) return;
       void (async () => {
         await sendAllPayslips(false);
@@ -4991,8 +5239,18 @@ export default function PayrollSystem() {
               </div>
             </div>
 
-            {/* Export + Send Buttons */}
+            {/* Preview + Export + Send Buttons */}
             <div className="flex gap-2">
+              <button
+                onClick={() => void previewPayslip(employee)}
+                disabled={previewLoading}
+                className="btn btn-secondary px-3 py-2 text-xs md:text-sm flex items-center justify-center gap-1"
+                title={`Preview ${employee.fullName}'s payslip before downloading or sending`}
+                aria-label={`Preview payslip for ${employee.fullName}`}
+              >
+                <Eye size={14} />
+                <span className="hidden lg:inline">Preview</span>
+              </button>
               <button
                 onClick={() => exportEmployeePayslip(employee)}
                 className="flex-1 btn btn-primary px-3 py-2 text-xs md:text-sm flex items-center justify-center gap-2"
@@ -5066,40 +5324,197 @@ export default function PayrollSystem() {
         </div>
       )}
 
-      {/* Batch Export */}
+      {/* Batch Export — one combined PDF, zipped */}
       {employees.length > 0 && (
         <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <h4 className="font-semibold mb-3">Batch Export Options</h4>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  for (const employee of employees) {
-                    await new Promise((resolve) => setTimeout(resolve, 50)); // Small yield to prevent browser blocking
-                    exportEmployeePayslip(employee);
-                  }
-                } finally {
-                  setSaving(false);
-                }
-              }}
+              onClick={() => void exportAllPayslipsZipped()}
               disabled={saving}
               className="btn btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+              title="Merge every payslip into ONE combined PDF, compressed into a single ZIP download"
             >
               {saving ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
-                <FileText size={16} />
+                <FileArchive size={16} />
               )}
-              Export All Payslips (PDF)
+              Export All Payslips (ZIP)
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Note: Batch export will download all payslips as individual PDF
-            files. Please allow popups for this site.
+            Batch export combines all payslips into ONE PDF (one page per
+            employee) and downloads it as a single compressed ZIP file — no
+            popups needed. Every payslip is also saved to Records below.
           </p>
         </div>
       )}
+
+      {/* ── Payslip Records (record keeping) ─────────────────────────── */}
+      <div className="mt-8 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+        <button
+          onClick={() => setShowRecords((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+          aria-expanded={showRecords}
+        >
+          <span className="flex items-center gap-2 font-semibold text-sm md:text-base">
+            <History size={16} className="text-amber-500" />
+            Payslip Records
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+              ({payslipRecords.length} stored)
+            </span>
+          </span>
+          <span className="text-xs text-gray-500">
+            {showRecords ? "Hide" : "Show"}
+          </span>
+        </button>
+
+        {showRecords && (
+          <div className="px-4 pb-4">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Every payslip you export or send is stored here per employee per
+              month/year — search and re-download an exact copy any time.
+            </p>
+
+            {/* Search + period filters */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Search employee, ID or period…"
+                value={recordSearch}
+                onChange={(e) => setRecordSearch(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <select
+                value={recordMonth}
+                onChange={(e) =>
+                  setRecordMonth(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="">All months</option>
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(2023, i).toLocaleString("default", {
+                      month: "long",
+                    })}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={recordYear}
+                onChange={(e) =>
+                  setRecordYear(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="">All years</option>
+                {payslipRecordYears(payslipRecords).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {(() => {
+              const filtered = filterPayslipRecords(payslipRecords, {
+                search: recordSearch,
+                month: recordMonth === "" ? undefined : recordMonth,
+                year: recordYear === "" ? undefined : recordYear,
+              });
+              if (filtered.length === 0) {
+                return (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+                    {payslipRecords.length === 0
+                      ? "No payslips recorded yet — export or send one and it will appear here."
+                      : "No records match your search / filters."}
+                  </p>
+                );
+              }
+              return (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {filtered.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="flex flex-wrap items-center gap-2 p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-40">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          {rec.employeeName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {rec.periodLabel} · ID: {rec.employeeId || "N/A"} ·
+                          Net: {formatCurrency(rec.netPay)}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {rec.source === "send"
+                            ? "Sent"
+                            : rec.source === "batch"
+                              ? "Batch export"
+                              : "Exported"}{" "}
+                          · {new Date(rec.generatedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() =>
+                            void previewPayslip(rec.employee as Employee, {
+                              month: rec.month,
+                              year: rec.year,
+                            })
+                          }
+                          disabled={previewLoading}
+                          className="btn btn-secondary px-2.5 py-1.5 text-xs flex items-center gap-1"
+                          title={`Preview ${rec.employeeName}'s ${rec.periodLabel} payslip`}
+                        >
+                          <Eye size={12} /> Preview
+                        </button>
+                        <button
+                          onClick={() =>
+                            void exportEmployeePayslip(
+                              rec.employee as Employee,
+                              { month: rec.month, year: rec.year },
+                            )
+                          }
+                          className="btn btn-primary px-2.5 py-1.5 text-xs flex items-center gap-1"
+                          title={`Download ${rec.employeeName}'s ${rec.periodLabel} payslip PDF`}
+                        >
+                          <Download size={12} /> PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete the ${rec.periodLabel} payslip record for ${rec.employeeName}?`,
+                              )
+                            ) {
+                              void persistPayslipRecords(
+                                payslipRecordsRef.current.filter(
+                                  (r) => r.id !== rec.id,
+                                ),
+                              );
+                            }
+                          }}
+                          className="btn btn-secondary px-2.5 py-1.5 text-xs text-red-500 flex items-center gap-1"
+                          title="Delete this record"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -5176,6 +5591,104 @@ export default function PayrollSystem() {
         {activeTab === "advances" && <StaffAdvanceLoans />}
         {activeTab === "settings" && renderSettingsTab()}
       </div>
+
+      {/* Payslip Preview Modal — review the exact PDF before
+          downloading or sending it. */}
+      {payslipPreview && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-2 md:p-6 z-50"
+          onClick={closePayslipPreview}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[95vh] flex flex-col shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="min-w-0">
+                <h3 className="text-sm md:text-lg font-bold truncate">
+                  Payslip Preview — {payslipPreview.employee.fullName}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {payslipPreview.periodLabel} · {payslipPreview.filename}
+                </p>
+              </div>
+              <button
+                onClick={closePayslipPreview}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Close preview"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 bg-gray-100 dark:bg-gray-900">
+              <iframe
+                src={payslipPreview.url}
+                title={`Payslip preview for ${payslipPreview.employee.fullName}`}
+                className="w-full h-full min-h-[60vh]"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={closePayslipPreview}
+                className="btn btn-secondary px-4 py-2 text-sm"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  const emp = payslipPreview.employee;
+                  const override = payslipPreview.periodOverride;
+                  closePayslipPreview();
+                  void exportEmployeePayslip(emp, override);
+                }}
+                className="btn btn-primary px-4 py-2 text-sm flex items-center gap-2"
+              >
+                <Download size={14} /> Download PDF
+              </button>
+              <button
+                onClick={async () => {
+                  const emp = payslipPreview.employee;
+                  const override = payslipPreview.periodOverride;
+                  closePayslipPreview();
+                  if (!payslipConfig.enabled) {
+                    toastError(
+                      'Enable "Payslip Delivery" above before sending (optionally configure an API gateway in Communication → Settings).',
+                    );
+                    return;
+                  }
+                  setSaving(true);
+                  try {
+                    const { entry } = await sendPayslipToEmployee(
+                      emp,
+                      true,
+                      true,
+                      override,
+                    );
+                    await appendPayslipLog([entry]);
+                    if (entry.status === "sent") {
+                      toastSuccess(
+                        entry.method === "web"
+                          ? `Opened ${entry.channel === "whatsapp" ? "WhatsApp" : "email app"} for ${emp.fullName} — hit Send there to deliver.`
+                          : `Payslip sent to ${emp.fullName} via ${entry.channel}.`,
+                      );
+                    } else {
+                      toastError(
+                        `Failed to send to ${emp.fullName}: ${entry.error || "unknown error"}`,
+                      );
+                    }
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+                className="btn btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+              >
+                <Send size={14} /> Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Employee Modal */}
       {showEmployeeModal && (
