@@ -210,7 +210,14 @@ export function filterComplianceDocs(
       if (!matchExpiry && !matchIssue && !matchCreated) return false;
     }
     if (opts.status) {
-      if (computeDocStatus(d, now).status !== opts.status) return false;
+      const status = computeDocStatus(d, now).status;
+      // "Expired" is the umbrella view: anything past its expiry date,
+      // including docs whose renewal request is still pending.
+      if (opts.status === "expired") {
+        if (status !== "expired" && status !== "renewal-pending") return false;
+      } else if (status !== opts.status) {
+        return false;
+      }
     }
     return true;
   });

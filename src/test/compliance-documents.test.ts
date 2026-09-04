@@ -177,6 +177,22 @@ describe("filterComplianceDocs (period records)", () => {
     const r = filterComplianceDocs(docs, { status: "expired" }, NOW);
     expect(r.map((d) => d.id)).toEqual(["1"]);
   });
+
+  it("expired filter includes renewal-pending docs (past expiry)", () => {
+    const pending = doc({
+      id: "4",
+      name: "Renewal-pending permit",
+      expiryDate: "2026-08-31",
+      autoRenewedFor: "2026-08-31",
+      renewalRequestedAt: "2026-09-01T00:00:00Z",
+    });
+    const list = [...docs, pending];
+    const r = filterComplianceDocs(list, { status: "expired" }, NOW);
+    expect(r.map((d) => d.id).sort()).toEqual(["1", "4"]);
+    // the narrower "Renewal pending" filter only matches pending docs
+    const r2 = filterComplianceDocs(list, { status: "renewal-pending" }, NOW);
+    expect(r2.map((d) => d.id)).toEqual(["4"]);
+  });
 });
 
 describe("rollExpiry", () => {
