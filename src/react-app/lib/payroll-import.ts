@@ -42,6 +42,22 @@ export interface ParsedEmployee {
   employment_date: string;
   advance_amount: number;
   notes: string;
+  /** "bank" | "cash" | "" — "" means unspecified (defaults to bank). */
+  payment_method: string;
+}
+
+/** Normalizes a free-text payment-mode value ("Cash", "CASH PAYMENT",
+ *  "Bank Transfer", "EFT", ...) into the canonical "cash" | "bank" |
+ *  "" (unknown). Used by the importer and the payroll UI. */
+export function normalizePaymentMethod(value: unknown): "cash" | "bank" | "" {
+  const v = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!v) return "";
+  if (/cash|hand\s*money|petty/.test(v)) return "cash";
+  if (/bank|transfer|eft|rtgs|cheque|check|deposit|account/.test(v))
+    return "bank";
+  return "";
 }
 
 export interface ParseResult {
@@ -258,6 +274,17 @@ const COLUMN_MAPPING: Record<string, string[]> = {
     "deduction",
   ],
   notes: ["notes", "remarks", "comments", "description"],
+  paymentMethod: [
+    "payment method",
+    "payment mode",
+    "mode of payment",
+    "payment type",
+    "pay method",
+    "pay mode",
+    "paid via",
+    "pay via",
+    "payment",
+  ],
 };
 
 /** Fields that identify a person — at least one must map for the sheet to
@@ -424,6 +451,7 @@ const MERGEABLE_STRING_FIELDS = [
   "email",
   "employment_date",
   "notes",
+  "payment_method",
 ] as const;
 const MERGEABLE_NUMBER_FIELDS = [
   "basic_salary",
@@ -521,6 +549,7 @@ function parseEmployeeSheet(
       employment_date: parseDateValue(get(row, "employmentDate")),
       advance_amount: parseAmount(get(row, "advance")),
       notes: cellText(get(row, "notes")),
+      payment_method: normalizePaymentMethod(get(row, "paymentMethod")),
     };
 
     // De-duplicate within the sheet itself.
@@ -565,7 +594,16 @@ export function parseEmployeeWorkbook(workbook: XLSX.WorkBook): ParseResult {
     const ws = workbook.Sheets[sheetName];
     if (!ws) continue;
     const p = parseEmployeeSheet(ws, sheetName);
-    if (p) parsed.push(p);
+    if (!p) continue;
+    // A sheet literally named "CASH PAYMENTS" lists the cash-paid staff
+    // (common in Kenyan payroll workbooks) — mark its rows as cash unless
+    // a row-level payment-method column says otherwise.
+    if (/cash\s*payments?/i.test(sheetName)) {
+      for (const emp of p.employees) {
+        if (!emp.payment_method) emp.payment_method = "cash";
+      }
+    }
+    parsed.push(p);
   }
 
   if (parsed.length === 0) {

@@ -55,6 +55,7 @@ import {
   readWorkbookFile,
   employeeDedupKey,
   buildTemplateWorkbook,
+  normalizePaymentMethod,
 } from "@/react-app/lib/payroll-import";
 import jsPDF from "jspdf";
 import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
@@ -113,6 +114,10 @@ interface Employee {
   /** Per-employee amounts for station-defined earnings/allowance types. */
   earnings: { typeId: string; amount: number; mode?: ColumnCalcMode }[];
   netPay: number;
+  /** How this employee is paid: "bank" (bank transfer, included in the CPC
+   *  Centralized bank processing sheet) or "cash" (paid in cash — excluded
+   *  from CPC, listed on the Cash Payments sheet instead). */
+  paymentMethod: "bank" | "cash";
   bank: string;
   bankCode: string;
   idNo: string;
@@ -203,6 +208,10 @@ function normalizeEmployee(
     ),
     earnings: normalizeCustomEarnings(emp.custom_earnings ?? emp.earnings),
     netPay,
+    paymentMethod:
+      normalizePaymentMethod(emp.payment_method ?? emp.paymentMethod) === "cash"
+        ? "cash"
+        : "bank",
     bank: emp.bank_name ?? emp.bank ?? "",
     bankCode: emp.bank_code ?? emp.bankCode ?? "",
     idNo: emp.id_number ?? emp.idNo ?? "",
@@ -494,6 +503,7 @@ export default function PayrollSystem() {
     kraPin: "",
     shaNo: "",
     nssfNo: "",
+    paymentMethod: "bank" as "bank" | "cash",
     bankAccount: "",
     bankName: "",
     bankCode: "",
@@ -713,6 +723,7 @@ export default function PayrollSystem() {
       kraPin: "",
       shaNo: "",
       nssfNo: "",
+      paymentMethod: "bank" as "bank" | "cash",
       bankAccount: "",
       bankName: "",
       bankCode: "",
@@ -742,6 +753,7 @@ export default function PayrollSystem() {
       kraPin: employee.kraPin,
       shaNo: employee.shaNo,
       nssfNo: employee.nssfNo,
+      paymentMethod: employee.paymentMethod ?? "bank",
       bankAccount: employee.bankAccount,
       bankName: employee.bank,
       bankCode: employee.bankCode,
@@ -797,6 +809,7 @@ export default function PayrollSystem() {
         kra_pin: employeeForm.kraPin,
         sha_number: employeeForm.shaNo,
         nssf_number: employeeForm.nssfNo,
+        payment_method: employeeForm.paymentMethod ?? "bank",
         bank_account: employeeForm.bankAccount,
         bank_name: employeeForm.bankName,
         bank_code: employeeForm.bankCode,
@@ -1662,6 +1675,13 @@ export default function PayrollSystem() {
     0,
   );
   const totalNet = employees.reduce((sum, emp) => sum + safeNum(emp.netPay), 0);
+  // Cash-paid employees (paid in cash — excluded from the CPC bank file).
+  const cashEmployeeCount = employees.filter(
+    (e) => e.paymentMethod === "cash",
+  ).length;
+  const totalCashNet = employees
+    .filter((e) => e.paymentMethod === "cash")
+    .reduce((sum, emp) => sum + safeNum(emp.netPay), 0);
 
   // Export functions with backend integration
   const exportToExcel = () => {
@@ -1683,6 +1703,7 @@ export default function PayrollSystem() {
       ...settings.deductionTypes.map((t) => t.label),
       ...settings.earningTypes.map((t) => t.label),
       "Net Pay",
+      "Payment Method",
       columnNames.bank,
       columnNames.bankCode,
     ];
@@ -1720,8 +1741,9 @@ export default function PayrollSystem() {
           ),
         ),
         emp.netPay,
-        emp.bank,
-        emp.bankCode,
+        emp.paymentMethod === "cash" ? "CASH" : "BANK",
+        emp.paymentMethod === "cash" ? "CASH" : emp.bank,
+        emp.paymentMethod === "cash" ? "" : emp.bankCode,
       ]),
     ];
 
@@ -1781,8 +1803,23 @@ export default function PayrollSystem() {
         "payroll_settings",
         stationId,
       );
+      const allEmps = normalizeEmployees(cloudEmployees);
+      // CPC is a BANK TRANSFER processing file — cash-paid employees can't
+      // be on it (they're on the Cash Payments sheet instead).
+      const bankEmps = allEmps.filter((e) => e.paymentMethod !== "cash");
+      if (bankEmps.length === 0) {
+        toastError(
+          "No bank-paid employees — all employees are marked as Cash Payment. Switch an employee's payment method to Bank Transfer to include them in the CPC file.",
+        );
+        return;
+      }
+      if (bankEmps.length < allEmps.length) {
+        toastSuccess(
+          `CPC export: ${bankEmps.length} bank-paid employee(s); ${allEmps.length - bankEmps.length} cash-paid excluded (see the Cash Payments sheet in the full PAYROLL export).`,
+        );
+      }
       generateCPCExcel({
-        employees: normalizeEmployees(cloudEmployees),
+        employees: bankEmps,
         settings: normalizePayrollSettings(cloudSettings, settings),
       });
     } catch (error) {
@@ -1798,7 +1835,15 @@ export default function PayrollSystem() {
     settings: PayrollSettings;
   }) => {
     const wb = XLSX.utils.book_new();
-    const employees = data.employees || [];
+    const allEmployees = data.employees || [];
+    // Split by payment method (mirrors real payroll workbooks): bank-paid
+    // staff go on the Salary Payment + CPC Centralized sheets; cash-paid
+    // staff go on a dedicated Cash Payments sheet (no bank transfer). The
+    // statutory SHA/NSSF lists include EVERYONE.
+    const employees = allEmployees.filter((e) => e.paymentMethod !== "cash");
+    const cashEmployees = allEmployees.filter(
+      (e) => e.paymentMethod === "cash",
+    );
     const settings = data.settings;
     const customDeductionTypes = settings.deductionTypes ?? [];
     const customEarningTypes = settings.earningTypes ?? [];
@@ -1908,6 +1953,106 @@ export default function PayrollSystem() {
     ];
     XLSX.utils.book_append_sheet(wb, payrollWS, "Payroll Payment");
 
+    // Sheet 1b: Cash Payments (only when at least one employee is paid in
+    // cash — mirrors the reference payroll workbook's "CASH PAYMENTS"
+    // sheet; these employees receive cash, not a bank transfer).
+    if (cashEmployees.length > 0) {
+      const cashData = [
+        [`CASH PAYMENT ${monthName} ${year}`],
+        [],
+        [
+          "S/NO.",
+          "NAME",
+          "BASIC AMOUNT",
+          PAYROLL_LABELS.medicalCover.toUpperCase(),
+          PAYROLL_LABELS.socialFund.toUpperCase(),
+          "BANK CHARGES",
+          "ADVANCE",
+          ...customDeductionTypes.map((t) => t.label.toUpperCase()),
+          ...customEarningTypes.map((t) => t.label.toUpperCase()),
+          "NET TOTAL",
+        ],
+        ...cashEmployees.map((emp, index) => [
+          index + 1,
+          (emp.fullName || "").toUpperCase(),
+          emp.basicSalary,
+          emp.sha,
+          emp.nssf,
+          0, // Bank charges
+          emp.advance,
+          ...customDeductionTypes.map((t) =>
+            resolveDeductionAmount(
+              (emp.customDeductions ?? []).find((d) => d.typeId === t.id) ?? {
+                typeId: t.id,
+                amount: 0,
+              },
+              emp.basicSalary,
+            ),
+          ),
+          ...customEarningTypes.map((t) =>
+            resolveEarningAmount(
+              (emp.earnings ?? []).find((d) => d.typeId === t.id) ?? {
+                typeId: t.id,
+                amount: 0,
+              },
+              emp.basicSalary,
+            ),
+          ),
+          emp.netPay,
+        ]),
+        [],
+        [
+          "TOTALS",
+          "",
+          cashEmployees.reduce((sum, emp) => sum + emp.basicSalary, 0),
+          cashEmployees.reduce((sum, emp) => sum + emp.sha, 0),
+          cashEmployees.reduce((sum, emp) => sum + emp.nssf, 0),
+          0,
+          cashEmployees.reduce((sum, emp) => sum + emp.advance, 0),
+          ...customDeductionTypes.map((t) =>
+            cashEmployees.reduce(
+              (sum, emp) =>
+                sum +
+                resolveDeductionAmount(
+                  (emp.customDeductions ?? []).find(
+                    (d) => d.typeId === t.id,
+                  ) ?? { typeId: t.id, amount: 0 },
+                  emp.basicSalary,
+                ),
+              0,
+            ),
+          ),
+          ...customEarningTypes.map((t) =>
+            cashEmployees.reduce(
+              (sum, emp) =>
+                sum +
+                resolveEarningAmount(
+                  (emp.earnings ?? []).find((d) => d.typeId === t.id) ?? {
+                    typeId: t.id,
+                    amount: 0,
+                  },
+                  emp.basicSalary,
+                ),
+              0,
+            ),
+          ),
+          cashEmployees.reduce((sum, emp) => sum + emp.netPay, 0),
+        ],
+      ];
+      const cashWS = XLSX.utils.aoa_to_sheet(cashData);
+      cashWS["!cols"] = [
+        { wch: 8 },
+        { wch: 25 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 15 },
+      ];
+      XLSX.utils.book_append_sheet(wb, cashWS, "Cash Payments");
+    }
+
     // Sheet 2: SHA List
     const shaData = [
       [
@@ -1922,7 +2067,7 @@ export default function PayrollSystem() {
         "BASIC SALARY",
         `${PAYROLL_LABELS.medicalCover.toUpperCase()} AMOUNT`,
       ],
-      ...employees.map((emp, index) => [
+      ...allEmployees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -1936,8 +2081,8 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum, emp) => sum + emp.basicSalary, 0),
-        employees.reduce((sum, emp) => sum + emp.sha, 0),
+        allEmployees.reduce((sum, emp) => sum + emp.basicSalary, 0),
+        allEmployees.reduce((sum, emp) => sum + emp.sha, 0),
       ],
     ];
 
@@ -1969,7 +2114,7 @@ export default function PayrollSystem() {
         `${PAYROLL_LABELS.socialFund.toUpperCase()} NO.`,
         "AMOUNT",
       ],
-      ...employees.map((emp, index) => [
+      ...allEmployees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -1982,7 +2127,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum, emp) => sum + emp.nssf * 2, 0),
+        allEmployees.reduce((sum, emp) => sum + emp.nssf * 2, 0),
       ],
     ];
 
@@ -2954,10 +3099,16 @@ export default function PayrollSystem() {
         result.sheetsUsed.length > 1
           ? ` across ${result.sheetsUsed.length} sheets (${result.sheetsUsed.join(", ")}) — bank details, ID/${PAYROLL_LABELS.medicalCover}/${PAYROLL_LABELS.socialFund} numbers merged`
           : ` in sheet "${result.sheetName}"`;
+      const cashCount = result.employees.filter(
+        (emp) => emp.payment_method === "cash",
+      ).length;
       const confirmImport = confirm(
         `Found ${result.employees.length} employee(s)${sheetInfo}` +
           (preview
             ? `: ${preview}${result.employees.length > 3 ? ", …" : ""}`
+            : "") +
+          (cashCount > 0
+            ? `\n${cashCount} will be marked as CASH PAYMENT (excluded from the CPC bank file).`
             : "") +
           `.\n\nThis will add them to your existing employee list. Continue?`,
       );
@@ -3182,6 +3333,7 @@ export default function PayrollSystem() {
         PAYROLL_LABELS.socialFund.toUpperCase(),
         "ADVANCE",
         "NET PAY",
+        "PAYMENT METHOD",
         "BANK",
         "ACCOUNT NUMBER",
       ],
@@ -3196,8 +3348,9 @@ export default function PayrollSystem() {
         emp.nssf,
         emp.advance,
         emp.netPay,
-        (emp.bank || "").toUpperCase(),
-        emp.bankAccount,
+        emp.paymentMethod === "cash" ? "CASH" : "BANK",
+        emp.paymentMethod === "cash" ? "CASH" : (emp.bank || "").toUpperCase(),
+        emp.paymentMethod === "cash" ? "" : emp.bankAccount,
       ]),
     ];
 
@@ -3673,14 +3826,23 @@ export default function PayrollSystem() {
                   {formatCurrency(employee.netPay)}
                 </td>
                 <td className="p-1 md:p-3 hidden md:table-cell">
-                  <input
-                    type="text"
-                    value={employee.bank}
-                    onChange={(e) =>
-                      updateCell(employee, "bank", e.target.value)
-                    }
-                    className="w-16 md:w-28 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
-                  />
+                  {employee.paymentMethod === "cash" ? (
+                    <span
+                      className="inline-block px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-semibold rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                      title="Paid in cash — excluded from the CPC bank processing sheet (change via Edit)"
+                    >
+                      CASH
+                    </span>
+                  ) : (
+                    <input
+                      type="text"
+                      value={employee.bank}
+                      onChange={(e) =>
+                        updateCell(employee, "bank", e.target.value)
+                      }
+                      className="w-16 md:w-28 px-1 md:px-2 py-0.5 md:py-1 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded bg-transparent"
+                    />
+                  )}
                 </td>
                 <td className="p-1 md:p-3 hidden lg:table-cell">
                   <input
@@ -3789,6 +3951,17 @@ export default function PayrollSystem() {
           <strong>Net:</strong>{" "}
           <span className="block md:inline">{formatCurrency(totalNet)}</span>
         </div>
+        {cashEmployeeCount > 0 && (
+          <div
+            className="col-span-2 md:col-span-1 font-bold text-emerald-600"
+            title={`${cashEmployeeCount} employee(s) paid in cash — excluded from the CPC bank processing file, listed on the Cash Payments export sheet`}
+          >
+            <strong>Cash:</strong>{" "}
+            <span className="block md:inline">
+              {formatCurrency(totalCashNet)} ({cashEmployeeCount})
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Headcount by Department */}
@@ -5102,46 +5275,76 @@ export default function PayrollSystem() {
               </div>
 
               <div className="form-group">
-                <label>Bank Account</label>
-                <input
-                  type="text"
-                  value={employeeForm.bankAccount}
+                <label>Payment Method</label>
+                <select
+                  value={employeeForm.paymentMethod}
                   onChange={(e) =>
                     setEmployeeForm({
                       ...employeeForm,
-                      bankAccount: e.target.value,
+                      paymentMethod: e.target.value as "bank" | "cash",
                     })
                   }
-                />
+                >
+                  <option value="bank">Bank Transfer</option>
+                  <option value="cash">Cash Payment</option>
+                </select>
               </div>
 
-              <div className="form-group">
-                <label>Bank Name</label>
-                <input
-                  type="text"
-                  value={employeeForm.bankName}
-                  onChange={(e) =>
-                    setEmployeeForm({
-                      ...employeeForm,
-                      bankName: e.target.value,
-                    })
-                  }
-                />
-              </div>
+              {employeeForm.paymentMethod !== "cash" && (
+                <>
+                  <div className="form-group">
+                    <label>Bank Account</label>
+                    <input
+                      type="text"
+                      value={employeeForm.bankAccount}
+                      onChange={(e) =>
+                        setEmployeeForm({
+                          ...employeeForm,
+                          bankAccount: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>Bank Code</label>
-                <input
-                  type="text"
-                  value={employeeForm.bankCode}
-                  onChange={(e) =>
-                    setEmployeeForm({
-                      ...employeeForm,
-                      bankCode: e.target.value,
-                    })
-                  }
-                />
-              </div>
+                  <div className="form-group">
+                    <label>Bank Name</label>
+                    <input
+                      type="text"
+                      value={employeeForm.bankName}
+                      onChange={(e) =>
+                        setEmployeeForm({
+                          ...employeeForm,
+                          bankName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Bank Code</label>
+                    <input
+                      type="text"
+                      value={employeeForm.bankCode}
+                      onChange={(e) =>
+                        setEmployeeForm({
+                          ...employeeForm,
+                          bankCode: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+
+              {employeeForm.paymentMethod === "cash" && (
+                <div className="form-group md:col-span-2 -mt-1">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded px-2 py-1.5">
+                    Paid in cash — no bank details needed. This employee is
+                    excluded from the CPC Centralized bank processing sheet and
+                    listed on the Cash Payments sheet instead.
+                  </p>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Phone</label>
