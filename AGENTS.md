@@ -1,5 +1,43 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-04 — Payroll statutory-list zero exclusion + custom deduction sheets (commit 654c3cd)
+
+Task 1 — 0 contribution ⇒ not listed: the SHA List / NSSF List sheets in
+the combined PAYROLL export now include only contributors (`safeNum > 0`),
+mirroring real remittance lists (the reference workbook's trailing
+"OBADIAH … 0" row was the complaint). Standalone Export SHA/NSSF List
+buttons apply the same rule, toast the excluded count, and refuse cleanly
+when nobody contributes.
+
+Task 2 — custom deductions get their own sheets: every station-added
+custom statutory & other deduction type now produces a "<Label> List"
+sheet in the combined PAYROLL export (same S/NO./NAME/ID NO./BASIC
+SALARY/AMOUNT + TOTALS format as SHA/NSSF). Only contributors (resolved
+amount > 0; percent-mode resolved vs basic salary) are listed; a type
+with zero contributors gets no sheet.
+
+New testable helpers in `payroll-deductions.ts`: `sanitizeSheetName()`
+(Excel 31-char cap, strips []:*?/\, dedupes " (2)" against reserved
+sheets — a custom "SHA" type becomes "SHA List (2)") +
+`buildCustomDeductionListSheets()`. 6 new vitest cases (203/203 pass).
+
+Gotcha found during QA: `cloudStorageService.get(key, stationId)` prefers
+the station-scoped row when it EXISTS and only falls back to the legacy
+user-scoped row when it doesn't — so payroll_employees can resolve via
+the legacy row while payroll_settings resolves via the station-scoped
+row. When hand-writing cloud test data, write to BOTH scoped rows.
+
+Verified LIVE via Playwright E2E (login works headless now; the earlier
+"Supabase DNS unreachable" no longer applies — but note `has-text("Sign
+In")` matches "Sign in with Google" too; use `button[type=submit]`):
+downloaded PAYROLL workbook for a 2-employee station (John contributes
+SHA/NSSF/Union Dues; Sarah all zeros) → Health Insurance + 401(k) lists
+contain ONLY John, new "Union Dues List" sheet contains ONLY John. QA
+data restored after the run.
+
+Deployed: GitHub main 654c3cd; Cloudflare Pages LIVE (preview 347b1dc5 +
+main alias, PayrollSystem chunk MD5 match); Vercel auto-deploys.
+
 ## Session 2026-09-04 — Payroll CASH PAYMENT option (commit c5e675a)
 
 Employees can now be paid in CASH instead of by bank transfer, matching
