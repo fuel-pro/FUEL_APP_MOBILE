@@ -1,3 +1,49 @@
+
+## Session 2026-09-04 — Payroll 4-task batch: settings period + ZIP batch + records + preview (commit 4129333)
+
+Task 1 — Send period fix: the payslip SEND message/shortlink/log used
+currentPeriodLabel() (calendar month) so sending the August payroll in
+September said "September 2026". New periodLabelForSettings() +
+periodKeyForSettings() in src/react-app/lib/payslip-records.ts read
+settings.payrollMonth/payrollYear; buildEmployeePayslipPdf /
+sendPayslipToEmployee / sendAllPayslips / autoSend accept an optional
+periodOverride so records replay uses the record's own period.
+
+Task 2 — Batch export: was genAllPayslips downloading N separate PDFs
+(popup storm). Now merges ALL payslips into ONE PDF via pdf-lib
+(PDFDocument.copyPages) and downloads a single compressed ZIP via
+fflate zipSync (level 9). Button label "Export All Payslips (ZIP)",
+note explains no popups needed. Batch records are persisted in ONE
+cloud write (reduce, not N await-writes).
+
+Task 3 — Payslip Records: new lib src/react-app/lib/payslip-records.ts
+(PAYSLIP_RECORDS_KEY = "payroll_payslip_records", station-scoped;
+buildPayslipRecord snapshot per employee+month+year incl. gross/net/
+deductions/source + full employee snapshot; upsert/filter/delete).
+Panel in Payslips sub-tab: text search + month + year dropdowns (years
+derived from data), preview/download/delete per record, empty state.
+Records created on send/export/batch/auto.
+
+Task 4 — Preview: eye button on every payslip card + every record;
+modal with iframe blob URL (title, filename, period), Close/Download/
+Send. blob URL revoked via useEffect cleanup.
+
+Gates: tsc -b 0, vitest 212/212 (9 new payslip-records.test.ts cases),
+eslint 0 errors (1 pre-existing exhaustive-deps warning), prettier
+clean. Smoke-tested merge+zip round-trip in node (3 PDFs -> zip ->
+unzip -> page count preserved). pdf-lib + fflate added.
+
+Verified LIVE (pages.dev browser E2E, founder QA): Preview modal
+labelled August 2026 (settings period, NOT September — task 1
+visible in UI); ZIP batch created 2 records; search "john" filters;
+records survive full page reload (cloud persistence confirmed);
+QA records deleted after test, account at baseline.
+
+Deployed: GitHub main 4129333; Cloudflare Pages LIVE (a8a68c19 +
+main alias, chunk PayrollSystem-BYRWPAtV.js markers); Vercel
+prebuilt deploy aliased to fuel-app-mobile.vercel.app (chunk
+PayrollSystem-DDOIpnb7.js markers). Supabase: no schema changes
+(records use app_kv station-scoped key).
 # FuelPro Mobile — Repository Knowledge
 
 ## Session 2026-09-04 — Payroll statutory-list zero exclusion + custom deduction sheets (commit 654c3cd)
