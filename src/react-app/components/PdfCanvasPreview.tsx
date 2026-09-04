@@ -3,12 +3,12 @@ import { Loader2 } from "lucide-react";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 /**
- * Renders a generated PDF (jsPDF bytes) to canvas pages via pdfjs-dist.
+ * Renders PDF bytes (jsPDF output or any uploaded PDF) to canvas pages via pdfjs-dist.
  * Works in every browser — including Android WebView and Safari, which
  * cannot display PDFs inside an <iframe> (the previous blob-URL iframe
  * approach rendered blank there).
  */
-export default function PayslipPdfPreview({ bytes }: { bytes: Uint8Array }) {
+export default function PdfCanvasPreview({ bytes }: { bytes: Uint8Array }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

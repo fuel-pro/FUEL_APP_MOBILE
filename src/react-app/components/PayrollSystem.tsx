@@ -29,7 +29,7 @@ import { PDFDocument } from "pdf-lib";
 import { zipSync } from "fflate";
 import Commissions from "@/react-app/components/Commissions";
 import StaffAdvanceLoans from "@/react-app/components/StaffAdvanceLoans";
-import PayslipPdfPreview from "@/react-app/components/PayslipPdfPreview";
+import PdfCanvasPreview from "@/react-app/components/PdfCanvasPreview";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -5612,7 +5612,7 @@ export default function PayrollSystem() {
               </button>
             </div>
             <div className="flex-1 min-h-0 bg-gray-100 dark:bg-gray-900">
-              <PayslipPdfPreview bytes={payslipPreview.bytes} />
+              <PdfCanvasPreview bytes={payslipPreview.bytes} />
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <button

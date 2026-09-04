@@ -29,7 +29,8 @@ import { normalizeFuelType } from "@/react-app/config/pricing";
 interface NotificationItem {
   id: string;
   type: "warning" | "danger" | "info";
-  category: "stock" | "credit" | "shift" | "tank" | "invoice" | "access";
+  category:
+    "stock" | "credit" | "shift" | "tank" | "invoice" | "access" | "compliance";
   title: string;
   message: string;
   tabId?: string;
@@ -207,6 +208,47 @@ export default function NotificationCenter() {
           // shift data may not exist
         }
 
+        // 6. Compliance document expiry (permits/licenses tracked in the
+        // Compliance tab — cloud key `compliance_documents`)
+        try {
+          const complianceDocs = await cloudStorageService.get<any[]>(
+            "compliance_documents",
+            stationId,
+          );
+          if (Array.isArray(complianceDocs)) {
+            for (const doc of complianceDocs) {
+              if (!doc?.expiryDate) continue;
+              const exp = new Date(`${doc.expiryDate}T23:59:59`).getTime();
+              if (Number.isNaN(exp)) continue;
+              const daysLeft = Math.floor((exp - now) / (1000 * 60 * 60 * 24));
+              const reminderDays = Number(doc.reminderDays) || 30;
+              if (daysLeft < 0) {
+                items.push({
+                  id: `compliance-${doc.id}`,
+                  type: "danger",
+                  category: "compliance",
+                  title: `Expired: ${doc.name || "Compliance document"}`,
+                  message: `${doc.permitType || "Permit"} expired ${-daysLeft} day(s) ago${doc.autoRenew ? " — auto-renewal request generated" : ""}`,
+                  tabId: "compliance",
+                  timestamp: exp,
+                });
+              } else if (daysLeft <= reminderDays) {
+                items.push({
+                  id: `compliance-${doc.id}`,
+                  type: "warning",
+                  category: "compliance",
+                  title: `Expiring: ${doc.name || "Compliance document"}`,
+                  message: `${doc.permitType || "Permit"} expires in ${daysLeft} day(s) (${doc.expiryDate})`,
+                  tabId: "compliance",
+                  timestamp: exp,
+                });
+              }
+            }
+          }
+        } catch {
+          // compliance documents may not exist
+        }
+
         // Sort by timestamp descending
         items.sort((a, b) => b.timestamp - a.timestamp);
         setNotifications(items);
@@ -259,6 +301,8 @@ export default function NotificationCenter() {
         return <FileText size={16} className="text-red-500" />;
       case "access":
         return <Users size={16} className="text-indigo-500" />;
+      case "compliance":
+        return <FileText size={16} className="text-amber-600" />;
     }
   };
 

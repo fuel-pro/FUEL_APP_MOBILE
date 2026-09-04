@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import SafetyInspectionLog from "@/react-app/components/SafetyInspectionLog";
 import HsePermitToWorkLog from "@/react-app/components/HsePermitToWorkLog";
+import ComplianceDocuments from "@/react-app/components/ComplianceDocuments";
 import {
   getComplianceConfig,
   getAllComplianceCountries,
@@ -85,6 +86,11 @@ export default function Compliance() {
     { id: "tax", label: "Tax & Revenue", icon: Shield },
     { id: "fuel", label: "Fuel Regulation", icon: Fuel },
     { id: "permits", label: "Required Permits & Licenses", icon: FileCheck },
+    {
+      id: "documents",
+      label: "My Documents & Records",
+      icon: Upload,
+    },
     { id: "receipts", label: "Receipt & Invoice Rules", icon: Receipt },
     { id: "features", label: "Compliance Features", icon: CheckCircle2 },
     { id: "payments", label: "Payment Compliance", icon: Landmark },
@@ -274,6 +280,11 @@ export default function Compliance() {
                   {section.id === "fuel" && <FuelSection config={config} />}
                   {section.id === "permits" && (
                     <PermitsSection config={config} />
+                  )}
+                  {section.id === "documents" && (
+                    <ComplianceDocuments
+                      requiredPermits={config.requiredPermits}
+                    />
                   )}
                   {section.id === "receipts" && (
                     <ReceiptsSection config={config} />
