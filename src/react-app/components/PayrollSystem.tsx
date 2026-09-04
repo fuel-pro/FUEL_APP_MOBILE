@@ -90,6 +90,7 @@ import {
   type ColumnCalcMode,
   type DeductionType,
   type EarningType,
+  buildCustomDeductionListSheets,
 } from "@/react-app/lib/payroll-deductions";
 
 interface Employee {
@@ -2053,7 +2054,9 @@ export default function PayrollSystem() {
       XLSX.utils.book_append_sheet(wb, cashWS, "Cash Payments");
     }
 
-    // Sheet 2: SHA List
+    // Sheet 2: SHA List — contributors only (an employee with a 0 SHA
+    // contribution is NOT listed, mirroring real payroll remittance lists).
+    const shaContributors = allEmployees.filter((emp) => safeNum(emp.sha) > 0);
     const shaData = [
       [
         `${orgName} STAFF ${PAYROLL_LABELS.medicalCover.toUpperCase()} LIST ${monthName} ${year}`,
@@ -2067,7 +2070,7 @@ export default function PayrollSystem() {
         "BASIC SALARY",
         `${PAYROLL_LABELS.medicalCover.toUpperCase()} AMOUNT`,
       ],
-      ...allEmployees.map((emp, index) => [
+      ...shaContributors.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -2081,8 +2084,8 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        allEmployees.reduce((sum, emp) => sum + emp.basicSalary, 0),
-        allEmployees.reduce((sum, emp) => sum + emp.sha, 0),
+        shaContributors.reduce((sum, emp) => sum + emp.basicSalary, 0),
+        shaContributors.reduce((sum, emp) => sum + emp.sha, 0),
       ],
     ];
 
@@ -2101,7 +2104,11 @@ export default function PayrollSystem() {
       `${PAYROLL_LABELS.medicalCover} List`,
     );
 
-    // Sheet 3: NSSF List (with doubled amount as per requirement)
+    // Sheet 3: NSSF List (with doubled amount as per requirement) —
+    // contributors only (0 NSSF => not listed).
+    const nssfContributors = allEmployees.filter(
+      (emp) => safeNum(emp.nssf) > 0,
+    );
     const nssfData = [
       [
         `${orgName} STAFF ${PAYROLL_LABELS.socialFund.toUpperCase()} LIST ${monthName} ${year}`,
@@ -2114,7 +2121,7 @@ export default function PayrollSystem() {
         `${PAYROLL_LABELS.socialFund.toUpperCase()} NO.`,
         "AMOUNT",
       ],
-      ...allEmployees.map((emp, index) => [
+      ...nssfContributors.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -2127,7 +2134,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        allEmployees.reduce((sum, emp) => sum + emp.nssf * 2, 0),
+        nssfContributors.reduce((sum, emp) => sum + emp.nssf * 2, 0),
       ],
     ];
 
@@ -2144,6 +2151,49 @@ export default function PayrollSystem() {
       nssfWS,
       `${PAYROLL_LABELS.socialFund} List`,
     );
+
+    // Sheets: one "<Label> List" per custom deduction type (station-added
+    // statutory & other deductions — e.g. "Union Dues List"). Only
+    // contributors (resolved amount > 0) are listed, same rule as SHA/NSSF;
+    // a type with zero contributors gets no sheet.
+    const customListSheets = buildCustomDeductionListSheets(
+      allEmployees,
+      customDeductionTypes,
+      [
+        "Payroll Payment",
+        "Cash Payments",
+        `${PAYROLL_LABELS.medicalCover} List`,
+        `${PAYROLL_LABELS.socialFund} List`,
+        "CPC Centralized",
+      ],
+    );
+    for (const sheet of customListSheets) {
+      const listData = [
+        [
+          `${orgName} STAFF ${sheet.label.toUpperCase()} LIST ${monthName} ${year}`,
+        ],
+        [],
+        [
+          "S/NO.",
+          "NAME",
+          "ID NO.",
+          "BASIC SALARY",
+          `${sheet.label.toUpperCase()} AMOUNT`,
+        ],
+        ...sheet.rows,
+        [],
+        ["TOTALS", "", "", sheet.totalBasic, sheet.totalAmount],
+      ];
+      const listWS = XLSX.utils.aoa_to_sheet(listData);
+      listWS["!cols"] = [
+        { wch: 8 },
+        { wch: 25 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 12 },
+      ];
+      XLSX.utils.book_append_sheet(wb, listWS, sheet.sheetName);
+    }
 
     // Sheet 4: CPC Centralized Processing
     const cpcData = [
@@ -3211,6 +3261,20 @@ export default function PayrollSystem() {
     const monthName = new Date(2023, settings.payrollMonth - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
+    // Contributors only — a 0 contribution means the employee is not on the
+    // remittance list.
+    const contributors = employees.filter((emp) => safeNum(emp.sha) > 0);
+    if (contributors.length < employees.length) {
+      toastSuccess(
+        `${employees.length - contributors.length} employee(s) with 0 ${PAYROLL_LABELS.medicalCover} contribution excluded from the list.`,
+      );
+    }
+    if (contributors.length === 0) {
+      toastError(
+        `No employees have a ${PAYROLL_LABELS.medicalCover} contribution — nothing to export.`,
+      );
+      return;
+    }
 
     const shaData = [
       [
@@ -3225,7 +3289,7 @@ export default function PayrollSystem() {
         "BASIC SALARY",
         `${PAYROLL_LABELS.medicalCover.toUpperCase()} AMOUNT`,
       ],
-      ...employees.map((emp, index) => [
+      ...contributors.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -3239,8 +3303,8 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum, emp) => sum + emp.basicSalary, 0),
-        employees.reduce((sum, emp) => sum + emp.sha, 0),
+        contributors.reduce((sum, emp) => sum + emp.basicSalary, 0),
+        contributors.reduce((sum, emp) => sum + emp.sha, 0),
       ],
     ];
 
@@ -3265,6 +3329,20 @@ export default function PayrollSystem() {
     const monthName = new Date(2023, settings.payrollMonth - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
+    // Contributors only — a 0 contribution means the employee is not on the
+    // remittance list.
+    const contributors = employees.filter((emp) => safeNum(emp.nssf) > 0);
+    if (contributors.length < employees.length) {
+      toastSuccess(
+        `${employees.length - contributors.length} employee(s) with 0 ${PAYROLL_LABELS.socialFund} contribution excluded from the list.`,
+      );
+    }
+    if (contributors.length === 0) {
+      toastError(
+        `No employees have a ${PAYROLL_LABELS.socialFund} contribution — nothing to export.`,
+      );
+      return;
+    }
 
     const nssfData = [
       [
@@ -3278,7 +3356,7 @@ export default function PayrollSystem() {
         `${PAYROLL_LABELS.socialFund.toUpperCase()} NO.`,
         "AMOUNT",
       ],
-      ...employees.map((emp, index) => [
+      ...contributors.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
         emp.idNo,
@@ -3291,7 +3369,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum, emp) => sum + emp.nssf * 2, 0),
+        contributors.reduce((sum, emp) => sum + emp.nssf * 2, 0),
       ],
     ];
 
