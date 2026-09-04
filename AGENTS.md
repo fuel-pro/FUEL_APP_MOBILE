@@ -1,3 +1,49 @@
+## Session 2026-09-04 (cont.) — Compliance upload auto-fills the form from the document (commits 29b808f + eb28a74)
+
+User: when a station/user uploads a permit/compliance file, auto-feed the
+data from the document into the empty fields.
+
+New `src/react-app/lib/compliance-doc-parser.ts`:
+- `extractTextFromPdf(file)` — pdfjs-dist (already bundled for the
+  PdfCanvasPreview) extracts text from the first 5 pages.
+- `extractComplianceFieldsFromText(text, requiredPermits)` — pure/testable:
+  labelled + unlabelled date parsing in any common format ("12 March 2026",
+  "March 5, 2026", ISO, dd/mm/yyyy with day-first default + >12 flip),
+  permit-type guessing (verbatim required-permit mention wins, else first
+  "X Certificate/Licence/Permit…" phrase), issuer ("Issued by …"), authority
+  email regex, licence/permit/certificate reference number. Issuer cut at
+  the next field label so pdfjs line-merging doesn't bleed "Contact: x@y"
+  into it (commit eb28a74).
+- `extractFromFilename` fallback for scans/images (OCR can be layered later).
+- `mergeExtractedIntoDoc(doc, ex)` — fills EMPTY fields only (never
+  overwrites user-typed values), appends "Ref: X" to notes, returns the
+  list of filled labels.
+- ComplianceDocuments.tsx: the file input now runs extraction (spinner
+  "Reading document to auto-fill the details…"), then a green banner lists
+  "Auto-filled from the document: name, permit type, …" and warns if the
+  extracted expiry is already past.
+- 9 new vitest cases (247/247 pass).
+
+Verified LIVE via Playwright E2E (system chromium at /usr/bin/chromium with
+--no-sandbox; npx playwright browsers NOT installed here — use the system
+binary): uploaded a generated EPA certificate PDF → name, permit type,
+issuer, authority email, issue date, expiry date + reference ALL auto-filled
+correctly, banner listed them. Screenshot /tmp/autofill_e2e.png.
+
+Gotchas: changeTab CustomEvent detail must be the tab id STRING ("regional"
+= Compliance tab id), not `{tab}` (React error #31 otherwise). npx vercel
+prompted to install v59.11.7 — warm the cache with `yes | npx vercel@59.11.7
+--version` first. STALE `.vercel/output` AGAIN: the first prebuilt deploy
+served the old Compliance chunk (404) because `vercel build` had timed out
+before producing fresh output — always `rm -rf .vercel/output` + rebuild +
+check the chunk exists in `.vercel/output/static/assets/` BEFORE deploying.
+
+Deploy state: GitHub main eb28a74; Cloudflare Pages LIVE (preview a5f01353
++ main alias, Compliance-DTPSASM4.js MD5 match); Vercel production LIVE
+(prebuilt pgxpisowh aliased, Compliance-BDfmGYBX.js marker confirmed — note
+Vercel's build env produces a different chunk hash than local; verify by
+marker not hash). Supabase: no schema changes.
+
 ## Session 2026-09-04 (cont.) — Compliance re-organized + required-docs coverage on upload (commit 76a8a28)
 
 User asked to "re-organize everything perfectly" and to check uploads against
