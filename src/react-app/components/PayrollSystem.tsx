@@ -2829,8 +2829,12 @@ export default function PayrollSystem() {
         .slice(0, 3)
         .map((emp) => `${emp.first_name} ${emp.last_name}`.trim())
         .join(", ");
+      const sheetInfo =
+        result.sheetsUsed.length > 1
+          ? ` across ${result.sheetsUsed.length} sheets (${result.sheetsUsed.join(", ")}) — bank details, ID/SHA/NSSF numbers merged`
+          : ` in sheet "${result.sheetName}"`;
       const confirmImport = confirm(
-        `Found ${result.employees.length} employee(s) in sheet "${result.sheetName}"` +
+        `Found ${result.employees.length} employee(s)${sheetInfo}` +
           (preview
             ? `: ${preview}${result.employees.length > 3 ? ", …" : ""}`
             : "") +
