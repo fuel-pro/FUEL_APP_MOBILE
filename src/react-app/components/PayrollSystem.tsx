@@ -1054,7 +1054,10 @@ export default function PayrollSystem() {
       // Was only console.error — the user saw the modal close with no SHA
       // applied and no explanation.
       console.error("Error updating SHA:", error);
-      toastError("Failed to apply SHA: " + (error as Error).message);
+      toastError(
+        `Failed to apply ${PAYROLL_LABELS.medicalCover}: ` +
+          (error as Error).message,
+      );
     } finally {
       setSaving(false);
     }
@@ -1098,8 +1101,11 @@ export default function PayrollSystem() {
       saveSettings(updatedSettings);
       setShowNssfModal(false);
     } catch (error) {
-      console.error("Error updating NSSF:", error);
-      toastError("Failed to update NSSF: " + (error as Error).message);
+      console.error(`Error updating ${PAYROLL_LABELS.socialFund}:`, error);
+      toastError(
+        `Failed to update ${PAYROLL_LABELS.socialFund}: ` +
+          (error as Error).message,
+      );
     } finally {
       setSaving(false);
     }
@@ -2946,7 +2952,7 @@ export default function PayrollSystem() {
         .join(", ");
       const sheetInfo =
         result.sheetsUsed.length > 1
-          ? ` across ${result.sheetsUsed.length} sheets (${result.sheetsUsed.join(", ")}) — bank details, ID/SHA/NSSF numbers merged`
+          ? ` across ${result.sheetsUsed.length} sheets (${result.sheetsUsed.join(", ")}) — bank details, ID/${PAYROLL_LABELS.medicalCover}/${PAYROLL_LABELS.socialFund} numbers merged`
           : ` in sheet "${result.sheetName}"`;
       const confirmImport = confirm(
         `Found ${result.employees.length} employee(s)${sheetInfo}` +
@@ -3283,7 +3289,9 @@ export default function PayrollSystem() {
                   <span className="hidden md:inline">
                     Export {PAYROLL_LABELS.medicalCover} List
                   </span>
-                  <span className="md:hidden">SHA</span>
+                  <span className="md:hidden">
+                    {PAYROLL_LABELS.medicalCover}
+                  </span>
                 </button>
                 <button
                   onClick={exportNssfList}
@@ -3293,7 +3301,7 @@ export default function PayrollSystem() {
                   <span className="hidden md:inline">
                     Export {PAYROLL_LABELS.socialFund} List
                   </span>
-                  <span className="md:hidden">NSSF</span>
+                  <span className="md:hidden">{PAYROLL_LABELS.socialFund}</span>
                 </button>
                 <button
                   onClick={exportPayrollList}
@@ -3748,11 +3756,11 @@ export default function PayrollSystem() {
           <span className="block md:inline">{formatCurrency(totalGross)}</span>
         </div>
         <div>
-          <strong>SHA:</strong>{" "}
+          <strong>{PAYROLL_LABELS.medicalCover}:</strong>{" "}
           <span className="block md:inline">{formatCurrency(totalSha)}</span>
         </div>
         <div>
-          <strong>NSSF:</strong>{" "}
+          <strong>{PAYROLL_LABELS.socialFund}:</strong>{" "}
           <span className="block md:inline">{formatCurrency(totalNssf)}</span>
         </div>
         <div>
