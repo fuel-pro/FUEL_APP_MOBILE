@@ -1,3 +1,69 @@
+## Session 2026-09-04 (cont.) — Compliance "My Documents & Records" feature + expired-filter fix (commits f74a505 + 7e8dba3)
+
+User's Compliance-tab request: (1) per-station/user upload of permits/compliance
+documents, (2) expiry notifications per station/user, (3) auto-renewal of
+expired documents, (4) document preview before downloading/sending, (5)
+searchable records for record keeping.
+
+**Feature (f74a505)** — new `src/react-app/lib/compliance-documents.ts` +
+`src/react-app/components/ComplianceDocuments.tsx` + shared
+`src/react-app/components/PdfCanvasPreview.tsx` (canvas PDF renderer; bundled
+pdfjs worker via `pdf.worker.min.mjs?url` — CSP `worker-src 'self'` safe,
+never use unpkg CDN). Mounted as a "My Documents & Records" section inside
+the Compliance tab (`src/react-app/components/Compliance.tsx`).
+- Upload/track docs (name, permit type, issuer, issue/expiry dates, notes,
+  optional file) — cloud-synced via `cloudStorageService` (station-scoped
+  `compliance_documents` key, 3-ref guard pattern), files to Supabase Storage
+  `fuelpro-files/compliance/<uid>/<ts>-<name>`.
+- Status engine: active / expiring (within reminderDays) / expired /
+  renewal-pending / no-expiry + stats cards + banner + bell notifications
+  (`addNotification`, deduped once per day via localStorage key).
+- Auto-renew: on mount, for expired docs with autoRenew enabled and not yet
+  handled for the current expiry (`autoRenewedFor !== expiryDate`), generates
+  a "renewal request letter" PDF via jsPDF, uploads it, marks the doc
+  renewal-pending, and emails the issuer via `callIntegration("email-send")`
+  when a gateway is configured (honest toast otherwise). Manual "Renew" button
+  does the same; "Mark renewed" rolls the expiry forward N months
+  (`rollExpiry`, month-end clamped).
+- Preview: canvas-rendered PDF (PdfCanvasPreview) or image inline; text/HTML
+  previewed by extension; modal has Download + Send buttons (Send reuses the
+  shared email gateway, honest error when unconfigured).
+- Records: search (name/type/issuer/notes/file), month filter, year filter
+  (matches expiry OR issue OR created year), status filter, CSV export,
+  quick-track chips for country-required permits, delete w/ confirm.
+- 12 vitest cases in `src/test/compliance-documents.test.ts`.
+
+**Filter fix (7e8dba3)**: the "Expired" status filter matched nothing when
+expired docs existed, because auto-renewed docs compute as `renewal-pending`
+status and were excluded. `filterComplianceDocs` status "expired" is now an
+umbrella over everything past expiry (expired + renewal-pending); the
+"Renewal pending" filter remains the narrow view. +1 test (234/234 pass).
+
+**Verified LIVE via Playwright E2E** (both `04dc9a93` preview and production
+`fuel-app-mobile.pages.dev`): upload w/ dates, expired + expiring badges,
+auto-renew letter generation + "1 renewal on record", notify banner + bell
+entries (Expired/Expiring), PDF preview renders 1 canvas page + Download/Send
+buttons, search + status filters, delete w/ confirm. QA docs cleaned up after.
+
+**Playwright gotchas for this repo**: Compliance tab id is `regional` (NOT
+`compliance`) — dispatch `changeTab` with detail "regional". OnboardingTutorial
+renders a `z-[9999]` overlay on first load — click "Skip tour" before
+interacting. Delete buttons use `window.confirm` — register
+`page.on("dialog", d => d.accept())`. Date inputs must be filled as ISO
+`YYYY-MM-DD`. Headless chromium at
+`/home/openhands/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome`
+with `--no-sandbox`.
+
+**Deploy state**: GitHub main 7e8dba3; Cloudflare Pages LIVE (preview
+08a4dba0 + main alias, Compliance-XsT_snBY.js markers confirmed); Vercel
+production LIVE (prebuilt oluxoqyqb aliased to fuel-app-mobile.vercel.app).
+Supabase: no schema changes (app_kv + existing fuelpro-files bucket).
+
+**NOTE on stale CF uploads**: wrangler pages deploy may serve an older build
+when dist has stale chunks — always `npm run build` fresh (its clean:cache
+step clears node_modules/.vite + dist) and verify the deployed entry chunk
+hash matches `dist/index.html` before declaring done.
+
 ## Session 2026-09-04 (cont.) — Payslip preview blank fix (commit 08f60c4)
 
 User report: the new Payslip Preview modal opened blank (no document
