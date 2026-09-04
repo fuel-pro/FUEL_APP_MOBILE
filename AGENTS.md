@@ -1,3 +1,42 @@
+## Session 2026-09-04 (cont.) — Compliance re-organized + required-docs coverage on upload (commit 76a8a28)
+
+User asked to "re-organize everything perfectly" and to check uploads against
+the required compliance documents.
+
+**Re-organization**: the Compliance tab's 10 stacked accordions (Country
+Rules sections) are now grouped under 3 SubTabBar sub-tabs — **Country
+Rules** (country selector + overview card + 8 accordions + ETR/Data-Residency
+banners), **My Documents** (the ComplianceDocuments manager), and **Safety &
+HSSE** (SafetyInspectionLog + HsePermitToWorkLog). Also removed duplicated
+`dark:text-gray-900 dark:text-white` classes + unused showTemplate/countries.
+
+**Upload coverage check**: new `docCoversPermit` / `checkRequiredCoverage`
+helpers in `src/react-app/lib/compliance-documents.ts`. Two-way containment
+on permit type + stem-aware keyword overlap across name/type/issuer
+(cert ↔ certificate, lic ↔ licence/license, reg ↔ registration). All
+meaningful words must match — a vague "NEMA approval" doc does NOT cover
+"NEMA Environmental Permit" (test-enforced). Wired into ComplianceDocuments:
+- Coverage banner: "Required compliance documents: N/K on file — fully
+  compliant ✓ | M missing"; required permits render as green covered chips
+  or amber "+p" one-click upload buttons (replaces the old quick-track row).
+- Stats strip gains a "Required on file: N/K" card (blue until full, then
+  emerald).
+- Editor live hint under Permit type: "✓ Covers required: X" or "Does not
+  match any required compliance document".
+- Save toast reports "Covers required: … Still missing M: … | All required
+  compliance documents are now on file. ✓"
+- 4 new vitest cases (242/242 pass).
+- Verified LIVE (CF preview 750123cb): quick-track click → editor hint
+  "✓ Covers required: State Environmental Permit" → save → records 2→3,
+  chip flips to covered; delete → reverts. E2E data cleaned up after.
+
+**Deploy state**: GitHub main 76a8a28; Cloudflare Pages LIVE (preview
+750123cb + main alias, Compliance-DpkyBQXD.js MD5 match); Vercel production
+LIVE (prebuilt a9k0j9nc9 aliased, marker confirmed). Supabase: no schema
+changes. NOTE: first wrangler deploy (92f2b338) left the Compliance chunk at
+404 — redeployed (750123cb) and re-verified via MD5 before E2E. Vercel
+`vercel alias set` rejects `--yes`; run without it.
+
 ## Session 2026-09-04 (cont.) — Compliance "My Documents & Records" feature + expired-filter fix (commits f74a505 + 7e8dba3)
 
 User's Compliance-tab request: (1) per-station/user upload of permits/compliance
