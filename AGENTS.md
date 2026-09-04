@@ -1,3 +1,68 @@
+## Session 2026-09-04 (cont.) — Compliance OCR auto-fill + never-dismiss uploads (commit f3f3719)
+
+User: don't dismiss an uploaded document with "Does not match any required
+compliance document" — auto-add it as a required compliance document, and
+keep auto-feeding the empty fields by ACCURATELY VISUALLY ANALYZING the
+document (the real user docs are CamScanner image-only PDFs).
+
+**Never-dismiss rule**: on save, if the doc covers NO required permit,
+its permit type is auto-added to the station's required compliance
+documents (per-country cloud key `custom_required_permits_<cc>`,
+station-scoped, cross-device) and appears in Country Rules → Required
+Permits & Licenses under "Added from your uploaded documents" with a
+remove (✕) button. Coverage banner + progress now count custom permits.
+
+**On-device OCR** (tesseract.js, ALL assets same-origin in
+`public/tessdata/` — worker.min.js + 3 wasm core variants +
+eng.traineddata.gz — CSP-safe, zero external calls): image-only PDFs are
+rendered page-by-page with pdfjs (scale 2.0) and OCR'd client-side;
+images OCR'd directly. Spinner copy tells the user visual analysis is
+running; the banner notes "fields read by visual (OCR) analysis".
+CSP `script-src` gains `'wasm-unsafe-eval'` (required for tesseract WASM).
+workbox excludes `tessdata/**` from precache (12MB, lazy-loaded — also
+fixes the 2MiB generateSW build failure).
+
+**OCR-hardened parser** (all learned from the 9 REAL user PDFs, fixtures
+in `src/test/fixtures/ocr/*.txt`, 22 tests in
+`compliance-ocr-extraction.test.ts`):
+- Dates: colon/mixed separators (16:01:2025, 16:01 2025, 16:03-2025),
+  digit confusions ()→1, l→1 between digits/separators), fused
+  day+month ("2006/2025" → 20/06/2025, validated via iso()).
+- Labels: "Certificate Date" (+ "Cortificate" OCR misread), "Date of
+  Calibration", "valid for twelve (12) months up to …".
+- `findLabelledDate` NEVER steals a neighbouring field's date: window
+  capped at 44 chars, rejected when a stop-label word or another
+  `Word:` label appears in the gap before the first date; only the
+  NEAREST date in TEXT order is taken (allDates is now appearance-ordered
+  via allDateMatches; it used to be pattern-grouped which mis-paired
+  issue/expiry).
+- Issuer: trailing OCR fragments stripped ("- Pa ol :", ". Pol",
+  " or ie"; punct-preceded ≤3 letters, space-preceded ≤2 so "Ltd" is
+  safe); "Turkana County Government" → "County Government of Turkana".
+
+**Verified LIVE in chromium against the production build (dist)**: all 9
+user PDFs upload → OCR → auto-fill → save; e.g. Single Business Permit:
+issue 2025-03-16 (OCR's own read of a garbled digit) / expiry 2028-12-31 /
+issuer cleaned / ref extracted; Tax Compliance: KRA + KRA email +
+issue 2025-06-20 recovered from fused "2006/2025" + expiry 2026-06-19.
+QA data cleaned up after.
+
+Gates: tsc -b 0, eslint 0 errors, prettier clean, 269/269 tests,
+build exit 0 (134 precache).
+
+Deploy state: GitHub main f3f3719; Cloudflare Pages LIVE (preview 373f7c2c
++ main alias, Compliance-iJRDM8DH.js markers + tessdata 200 verified);
+Vercel production LIVE (prebuilt, aliased, Compliance-Dt6-vIs4.js marker
++ tessdata 200 verified). Supabase: no schema changes (app_kv
+custom_required_permits_<cc> + compliance_documents keys).
+
+Gotchas: `npm run build | tail` HIDES the workbox 2MiB failure (pipeline
+exit code comes from tail) — check `echo $?` on the build itself. Browser
+WASM-SIMD tesseract output DIFFERS from Node's — always verify OCR
+features in real chromium, not just Node fixtures. Playwright E2E: system
+chromium at /usr/bin/chromium with --no-sandbox; Compliance tab id is
+"regional"; date inputs read back ISO YYYY-MM-DD.
+
 ## Session 2026-09-04 (cont.) — Compliance upload auto-fills the form from the document (commits 29b808f + eb28a74)
 
 User: when a station/user uploads a permit/compliance file, auto-feed the
