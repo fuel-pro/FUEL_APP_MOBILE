@@ -1,5 +1,37 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-04 — Payroll CASH PAYMENT option (commit c5e675a)
+
+Employees can now be paid in CASH instead of by bank transfer, matching
+the user's reference workbook (`/workspace/DOC-20260805-WA0003..xlsx`:
+SALARY PAYMENT + CASH PAYMENTS + CPC CENTRALIZED + SHA/NSSF LIST sheets).
+
+- Employee model: `paymentMethod: "bank" | "cash"` (default bank; cloud
+  field `payment_method`). Add/Edit Employee modal has a Payment Method
+  selector; choosing Cash hides the bank fields. The employee table Bank
+  column shows an emerald CASH badge; the summary row shows a
+  `Cash: $X (N)` chip when cash staff exist.
+- Combined PAYROLL export mirrors the reference: bank-paid staff on the
+  Payroll Payment + CPC Centralized sheets, cash-paid staff on a new
+  `Cash Payments` sheet (same salary columns, no bank details), statutory
+  SHA/NSSF lists include EVERYONE. Standalone CPC export filters to
+  bank-paid only. Employees exports gain a PAYMENT METHOD column.
+- Importer (`payroll-import.ts`): new payment-method column aliases
+  (PAYMENT METHOD / MODE OF PAYMENT / PAY VIA / ...); a sheet literally
+  named "CASH PAYMENTS" marks its rows cash (a row-level value wins over
+  the sheet default); the value merges across sheets. Verified against
+  the real reference workbook: 10 employees merged across 5 sheets, the
+  cash-sheet-only employee marked cash with bank fields empty.
+- `normalizePaymentMethod()` exported from payroll-import.ts for both UI
+  + importer. 7 new vitest cases (197/197 pass). tsc 0 errors, eslint 0
+  errors, prettier clean.
+- Verified LIVE (Cloudflare 1815f8c6 + main alias): Payment Method
+  dropdown renders in the Edit Employee modal (US-localized labels);
+  a cloud-written cash employee renders the CASH badge + Cash summary
+  chip; PAYROLL export runs clean. Test employee removed after QA.
+- Deployed: GitHub main c5e675a; Cloudflare Pages LIVE (1815f8c6, MD5
+  match on PayrollSystem chunk); Vercel auto-deploys via Git integration.
+
 ## Session 2026-09-04 — Country/region-aware payroll labels (commits 9a94ac8 + 28126a7)
 
 All payroll statutory terminology was hardcoded to Kenya (KRA PIN / SHA /
