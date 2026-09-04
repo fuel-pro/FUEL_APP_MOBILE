@@ -73,6 +73,9 @@ import {
   type PayslipSecurityInput,
 } from "@/react-app/lib/payslip-security";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
+import { loadFounder2FA } from "@/react-app/lib/founder-auth";
+import { verifyCode } from "@/react-app/lib/totp";
+import { getSupabaseClient } from "@/supabase/client";
 import {
   calcNetPay,
   computeColumnValue,
@@ -400,6 +403,12 @@ export default function PayrollSystem() {
   const [activeTab, setActiveTab] = useState("employees");
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // Clear-all (2FA-gated) state
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [clearAllPhrase, setClearAllPhrase] = useState("");
+  const [clearAllCode, setClearAllCode] = useState("");
+  const [clearAllTotp, setClearAllTotp] = useState<boolean | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const [showShaModal, setShowShaModal] = useState(false);
   const [showNssfModal, setShowNssfModal] = useState(false);
   const [showColumnModal, setShowColumnModal] = useState(false);
@@ -913,6 +922,86 @@ export default function PayrollSystem() {
       toastError("Failed to delete employee: " + (error as Error).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Clear ALL employees — a destructive bulk wipe, gated behind 2FA:
+  // the user's authenticator TOTP code when 2FA is enabled on their
+  // profile, otherwise a password re-authentication (a real second
+  // factor — the password is verified against Supabase Auth, never
+  // compared locally). Both paths additionally require typing the
+  // "DELETE ALL" phrase so a stray click can never wipe the roster.
+  const openClearAllModal = () => {
+    if (employees.length === 0) return;
+    setClearAllPhrase("");
+    setClearAllCode("");
+    setClearAllTotp(null);
+    setShowClearAllModal(true);
+    if (user?.id) {
+      loadFounder2FA(user.id)
+        .then((s) => setClearAllTotp(s.enabled && !!s.secret))
+        .catch(() => setClearAllTotp(false));
+    } else {
+      setClearAllTotp(false);
+    }
+  };
+
+  const clearAllEmployees = async () => {
+    if (!cloudLoadCompleteRef.current) {
+      toastError("Still loading your employees — try again in a moment.");
+      return;
+    }
+    if (clearAllPhrase.trim().toUpperCase() !== "DELETE ALL") {
+      toastError('Type "DELETE ALL" exactly to confirm.');
+      return;
+    }
+    const code = clearAllCode.trim();
+    if (!code) {
+      toastError(
+        clearAllTotp
+          ? "Enter the 6-digit code from your authenticator app."
+          : "Enter your account password to confirm.",
+      );
+      return;
+    }
+    try {
+      setClearingAll(true);
+      // Second factor verification.
+      if (clearAllTotp && user?.id) {
+        const { secret } = await loadFounder2FA(user.id);
+        if (!secret || !(await verifyCode(secret, code))) {
+          toastError("Invalid authenticator code.");
+          return;
+        }
+      } else {
+        if (!user?.email) {
+          toastError("Cannot verify your identity — please sign in again.");
+          return;
+        }
+        const { error } = await getSupabaseClient().auth.signInWithPassword({
+          email: user.email,
+          password: code,
+        });
+        if (error) {
+          toastError("Incorrect password.");
+          return;
+        }
+      }
+      const clearedAt = new Date().toISOString();
+      await cloudStorageService.set("payroll_employees", [], stationId);
+      localStorage.setItem("fuelpro_payroll_employees", "[]");
+      await fetchEmployees();
+      setShowClearAllModal(false);
+      setClearAllPhrase("");
+      setClearAllCode("");
+      toastSuccess(
+        `All employees cleared (verified ${clearAllTotp ? "via authenticator" : "via password"} at ${clearedAt.slice(0, 16).replace("T", " ")} UTC).`,
+      );
+    } catch (error) {
+      console.error("Error clearing employees:", error);
+      toastError("Failed to clear employees: " + (error as Error).message);
+    } finally {
+      setClearingAll(false);
     }
   };
 
@@ -3216,6 +3305,20 @@ export default function PayrollSystem() {
           </button>
 
           <button
+            onClick={openClearAllModal}
+            disabled={employees.length === 0}
+            title="Clear all employees (requires 2FA verification)"
+            aria-label="Clear all employees"
+            className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 size={12} className="md:w-4 md:h-4" />
+            <span className="ml-1">
+              <span className="hidden sm:inline">Clear All</span>
+              <span className="sm:hidden">Clear</span>
+            </span>
+          </button>
+
+          <button
             onClick={openAddEmployeeModal}
             aria-label="Add employee"
             className="btn btn-primary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
@@ -5194,6 +5297,86 @@ export default function PayrollSystem() {
                   <Trash2 size={16} />
                 )}
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Employees Modal (2FA-gated) */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-2 text-red-600 dark:text-red-400 flex items-center gap-2">
+              <Trash2 size={20} /> Clear All Employees
+            </h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              This permanently removes{" "}
+              <strong>
+                all {employees.length} employee
+                {employees.length === 1 ? "" : "s"}
+              </strong>{" "}
+              from payroll on every device. This action cannot be undone.
+              Consider exporting first (Export → Combined Payroll).
+            </p>
+            <div className="form-group mb-3">
+              <label className="text-sm font-medium">
+                Type <strong>DELETE ALL</strong> to confirm
+              </label>
+              <input
+                type="text"
+                value={clearAllPhrase}
+                onChange={(e) => setClearAllPhrase(e.target.value)}
+                placeholder="DELETE ALL"
+                className="form-input w-full mt-1"
+                autoComplete="off"
+              />
+            </div>
+            <div className="form-group mb-4">
+              <label className="text-sm font-medium">
+                {clearAllTotp === null
+                  ? "Checking your 2FA settings..."
+                  : clearAllTotp
+                    ? "Authenticator app code (2FA)"
+                    : "Your account password (2FA)"}
+              </label>
+              <input
+                type={clearAllTotp ? "text" : "password"}
+                inputMode={clearAllTotp ? "numeric" : undefined}
+                value={clearAllCode}
+                onChange={(e) => setClearAllCode(e.target.value)}
+                placeholder={clearAllTotp ? "6-digit code" : "Password"}
+                className="form-input w-full mt-1"
+                autoComplete="off"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {clearAllTotp
+                  ? "Enter the current code from your authenticator app."
+                  : "Verified securely against your account — never stored."}
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowClearAllModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={clearAllEmployees}
+                disabled={
+                  clearingAll ||
+                  clearAllPhrase.trim().toUpperCase() !== "DELETE ALL" ||
+                  !clearAllCode.trim()
+                }
+                className="btn btn-danger flex items-center gap-2"
+              >
+                {clearingAll ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                Clear All
               </button>
             </div>
           </div>
