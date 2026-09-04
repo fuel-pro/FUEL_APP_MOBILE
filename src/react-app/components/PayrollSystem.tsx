@@ -57,11 +57,7 @@ import {
   buildTemplateWorkbook,
 } from "@/react-app/lib/payroll-import";
 import jsPDF from "jspdf";
-import {
-  getCurrencySymbol,
-  isKenyaStation,
-  getDetectedCountryCode,
-} from "../lib/currency";
+import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 import QRCode from "qrcode";
 import {
@@ -76,6 +72,7 @@ import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import { loadFounder2FA } from "@/react-app/lib/founder-auth";
 import { verifyCode } from "@/react-app/lib/totp";
 import { getSupabaseClient } from "@/supabase/client";
+import { getPayrollLabels } from "@/react-app/lib/payroll-localization";
 import {
   calcNetPay,
   computeColumnValue,
@@ -311,6 +308,11 @@ function normalizePayrollSettings(
 // payroll adapts to the station's location rather than forcing Kenya rules.
 const countryCode = getDetectedCountryCode();
 const isKenya = countryCode === "KE";
+// Country-aware payroll terminology (KRA PIN/SHA/NSSF in Kenya; TIN/SHU/NSSF
+// in Uganda; SSN/Health Insurance/401(k) in the US; ...). Shared by the
+// employee form, payslip, exports, and settings modals so they all speak
+// the station's local language.
+const PAYROLL_LABELS = getPayrollLabels(countryCode);
 
 const defaultSettings: PayrollSettings = {
   organizationName: "",
@@ -357,7 +359,6 @@ export default function PayrollSystem() {
     [currentStation],
   );
   const { state: fuelState } = useFuel();
-  const isKenya = isKenyaStation();
 
   // State — initialize from the synchronous cache so the FIRST render shows
   // data instantly (no blank flash while the async cloud get resolves).
@@ -380,8 +381,8 @@ export default function PayrollSystem() {
   });
 
   const [columnNames, setColumnNames] = useState<ColumnNames>({
-    sha: "SHA",
-    nssf: "NSSF",
+    sha: PAYROLL_LABELS.medicalCover,
+    nssf: PAYROLL_LABELS.socialFund,
     advance: "Advance",
     bank: "Bank",
     bankCode: "Bank Code",
@@ -1810,8 +1811,8 @@ export default function PayrollSystem() {
         "S/NO.",
         "NAME",
         "BASIC AMOUNT",
-        "SHA",
-        "NSSF",
+        PAYROLL_LABELS.medicalCover.toUpperCase(),
+        PAYROLL_LABELS.socialFund.toUpperCase(),
         "BANK CHARGES",
         "ADVANCE",
         // Station-defined deduction + earnings columns (one per type).
@@ -1903,9 +1904,18 @@ export default function PayrollSystem() {
 
     // Sheet 2: SHA List
     const shaData = [
-      [`${orgName} STAFF SHA LIST ${monthName} ${year}`],
+      [
+        `${orgName} STAFF ${PAYROLL_LABELS.medicalCover.toUpperCase()} LIST ${monthName} ${year}`,
+      ],
       [],
-      ["S/NO.", "NAME", "ID NO.", "SHA NO.", "BASIC SALARY", "SHA AMOUNT"],
+      [
+        "S/NO.",
+        "NAME",
+        "ID NO.",
+        `${PAYROLL_LABELS.medicalCover.toUpperCase()} NO.`,
+        "BASIC SALARY",
+        `${PAYROLL_LABELS.medicalCover.toUpperCase()} AMOUNT`,
+      ],
       ...employees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
@@ -1934,13 +1944,25 @@ export default function PayrollSystem() {
       { wch: 15 },
       { wch: 12 },
     ];
-    XLSX.utils.book_append_sheet(wb, shaWS, "SHA List");
+    XLSX.utils.book_append_sheet(
+      wb,
+      shaWS,
+      `${PAYROLL_LABELS.medicalCover} List`,
+    );
 
     // Sheet 3: NSSF List (with doubled amount as per requirement)
     const nssfData = [
-      [`${orgName} STAFF NSSF LIST ${monthName} ${year}`],
+      [
+        `${orgName} STAFF ${PAYROLL_LABELS.socialFund.toUpperCase()} LIST ${monthName} ${year}`,
+      ],
       [],
-      ["S/NO.", "NAME", "ID NO.", "NSSF NO.", "AMOUNT"],
+      [
+        "S/NO.",
+        "NAME",
+        "ID NO.",
+        `${PAYROLL_LABELS.socialFund.toUpperCase()} NO.`,
+        "AMOUNT",
+      ],
       ...employees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
@@ -1966,7 +1988,11 @@ export default function PayrollSystem() {
       { wch: 15 },
       { wch: 12 },
     ];
-    XLSX.utils.book_append_sheet(wb, nssfWS, "NSSF List");
+    XLSX.utils.book_append_sheet(
+      wb,
+      nssfWS,
+      `${PAYROLL_LABELS.socialFund} List`,
+    );
 
     // Sheet 4: CPC Centralized Processing
     const cpcData = [
@@ -2160,12 +2186,12 @@ export default function PayrollSystem() {
     const deductionRows: { label: string; amt: number }[] = [];
     if (sha > 0)
       deductionRows.push({
-        label: isKenya ? "SHIF Auto" : "Health Insurance",
+        label: PAYROLL_LABELS.medicalCover,
         amt: sha,
       });
     if (nssf > 0)
       deductionRows.push({
-        label: isKenya ? "NSSF Auto" : "Pension Contribution",
+        label: PAYROLL_LABELS.socialFund,
         amt: nssf,
       });
     if (advance > 0)
@@ -2341,7 +2367,7 @@ export default function PayrollSystem() {
       ["PF-Number:", employee.employeeId || "—"],
       ["ID Number:", employee.idNo || "—"],
       ["Designation:", employee.role || "—"],
-      ["Tax PIN:", employee.kraPin || "—"],
+      [`${PAYROLL_LABELS.taxPin}:`, employee.kraPin || "—"],
       ["Station:", stationName],
       ["Increment Month:", incrementMonth],
       ["Employment Date:", employee.employmentDate || "—"],
@@ -3031,10 +3057,17 @@ export default function PayrollSystem() {
 
     const shaData = [
       [
-        `${(settings.organizationName || "ORGANIZATION").toUpperCase()} STAFF SHA LIST ${monthName} ${settings.payrollYear}`,
+        `${(settings.organizationName || "ORGANIZATION").toUpperCase()} STAFF ${PAYROLL_LABELS.medicalCover.toUpperCase()} LIST ${monthName} ${settings.payrollYear}`,
       ],
       [],
-      ["S/NO.", "NAME", "ID NO.", "SHA NO.", "BASIC SALARY", "SHA AMOUNT"],
+      [
+        "S/NO.",
+        "NAME",
+        "ID NO.",
+        `${PAYROLL_LABELS.medicalCover.toUpperCase()} NO.`,
+        "BASIC SALARY",
+        `${PAYROLL_LABELS.medicalCover.toUpperCase()} AMOUNT`,
+      ],
       ...employees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
@@ -3063,8 +3096,11 @@ export default function PayrollSystem() {
       { wch: 15 },
       { wch: 12 },
     ];
-    XLSX.utils.book_append_sheet(wb, ws, "SHA List");
-    XLSX.writeFile(wb, `SHA_List_${monthName}_${settings.payrollYear}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, `${PAYROLL_LABELS.medicalCover} List`);
+    XLSX.writeFile(
+      wb,
+      `${PAYROLL_LABELS.medicalCover}_List_${monthName}_${settings.payrollYear}.xlsx`,
+    );
   };
 
   const exportNssfList = () => {
@@ -3075,10 +3111,16 @@ export default function PayrollSystem() {
 
     const nssfData = [
       [
-        `${(settings.organizationName || "ORGANIZATION").toUpperCase()} STAFF NSSF LIST ${monthName} ${settings.payrollYear}`,
+        `${(settings.organizationName || "ORGANIZATION").toUpperCase()} STAFF ${PAYROLL_LABELS.socialFund.toUpperCase()} LIST ${monthName} ${settings.payrollYear}`,
       ],
       [],
-      ["S/NO.", "NAME", "ID NO.", "NSSF NO.", "AMOUNT"],
+      [
+        "S/NO.",
+        "NAME",
+        "ID NO.",
+        `${PAYROLL_LABELS.socialFund.toUpperCase()} NO.`,
+        "AMOUNT",
+      ],
       ...employees.map((emp, index) => [
         index + 1,
         (emp.fullName || "").toUpperCase(),
@@ -3104,8 +3146,11 @@ export default function PayrollSystem() {
       { wch: 15 },
       { wch: 12 },
     ];
-    XLSX.utils.book_append_sheet(wb, ws, "NSSF List");
-    XLSX.writeFile(wb, `NSSF_List_${monthName}_${settings.payrollYear}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, `${PAYROLL_LABELS.socialFund} List`);
+    XLSX.writeFile(
+      wb,
+      `${PAYROLL_LABELS.socialFund}_List_${monthName}_${settings.payrollYear}.xlsx`,
+    );
   };
 
   const exportPayrollList = () => {
@@ -3127,8 +3172,8 @@ export default function PayrollSystem() {
         "ROLE",
         "DEPARTMENT",
         "BASIC SALARY",
-        "SHA",
-        "NSSF",
+        PAYROLL_LABELS.medicalCover.toUpperCase(),
+        PAYROLL_LABELS.socialFund.toUpperCase(),
         "ADVANCE",
         "NET PAY",
         "BANK",
@@ -3235,7 +3280,9 @@ export default function PayrollSystem() {
                   className="w-full text-left px-2 md:px-4 py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 md:gap-3 text-xs md:text-base"
                 >
                   <FileText size={12} className="md:w-4 md:h-4" />
-                  <span className="hidden md:inline">Export SHA List</span>
+                  <span className="hidden md:inline">
+                    Export {PAYROLL_LABELS.medicalCover} List
+                  </span>
                   <span className="md:hidden">SHA</span>
                 </button>
                 <button
@@ -3243,7 +3290,9 @@ export default function PayrollSystem() {
                   className="w-full text-left px-2 md:px-4 py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 md:gap-3 text-xs md:text-base"
                 >
                   <FileText size={12} className="md:w-4 md:h-4" />
-                  <span className="hidden md:inline">Export NSSF List</span>
+                  <span className="hidden md:inline">
+                    Export {PAYROLL_LABELS.socialFund} List
+                  </span>
                   <span className="md:hidden">NSSF</span>
                 </button>
                 <button
@@ -3768,32 +3817,44 @@ export default function PayrollSystem() {
           className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
         >
           <Calculator size={12} className="md:w-4 md:h-4" />
-          <span className="hidden sm:inline ml-1">Edit SHA for All</span>
-          <span className="sm:hidden ml-1">SHA</span>
+          <span className="hidden sm:inline ml-1">
+            Edit {PAYROLL_LABELS.medicalCover} for All
+          </span>
+          <span className="sm:hidden ml-1">{PAYROLL_LABELS.medicalCover}</span>
         </button>
         <button
           onClick={() => setShowNssfModal(true)}
           className="btn btn-secondary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
         >
           <Calculator size={12} className="md:w-4 md:h-4" />
-          <span className="hidden sm:inline ml-1">Edit NSSF for All</span>
-          <span className="sm:hidden ml-1">NSSF</span>
+          <span className="hidden sm:inline ml-1">
+            Edit {PAYROLL_LABELS.socialFund} for All
+          </span>
+          <span className="sm:hidden ml-1">{PAYROLL_LABELS.socialFund}</span>
         </button>
         <button
           onClick={exportShaList}
           className="btn btn-outline px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
         >
           <FileText size={12} className="md:w-4 md:h-4" />
-          <span className="hidden sm:inline ml-1">Export SHA List</span>
-          <span className="sm:hidden ml-1">SHA List</span>
+          <span className="hidden sm:inline ml-1">
+            Export {PAYROLL_LABELS.medicalCover} List
+          </span>
+          <span className="sm:hidden ml-1">
+            {PAYROLL_LABELS.medicalCover} List
+          </span>
         </button>
         <button
           onClick={exportNssfList}
           className="btn btn-outline px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
         >
           <FileText size={12} className="md:w-4 md:h-4" />
-          <span className="hidden sm:inline ml-1">Export NSSF List</span>
-          <span className="sm:hidden ml-1">NSSF List</span>
+          <span className="hidden sm:inline ml-1">
+            Export {PAYROLL_LABELS.socialFund} List
+          </span>
+          <span className="sm:hidden ml-1">
+            {PAYROLL_LABELS.socialFund} List
+          </span>
         </button>
         <button
           onClick={exportPayrollList}
@@ -4013,7 +4074,9 @@ export default function PayrollSystem() {
         </div>
 
         <div className="form-group">
-          <label className="text-xs md:text-sm">SHA Percentage (%)</label>
+          <label className="text-xs md:text-sm">
+            {PAYROLL_LABELS.medicalCover} Percentage (%)
+          </label>
           <input
             type="number"
             step="0.01"
@@ -4037,7 +4100,7 @@ export default function PayrollSystem() {
 
         <div className="form-group">
           <label className="text-xs md:text-sm">
-            NSSF Amount ({stationCurrencySymbol})
+            {PAYROLL_LABELS.socialFund} Amount ({stationCurrencySymbol})
           </label>
           <input
             type="number"
@@ -4161,7 +4224,7 @@ export default function PayrollSystem() {
             kind: "deduction" as const,
             title: "Statutory & Other Deductions",
             empty: "No custom deductions yet.",
-            hint: "The built-in columns are SHA, NSSF and Advance. Add your own deduction columns (e.g. HELB Loan, Union Dues, Insurance) — each appears in the table, on payslips, and in exports.",
+            hint: `The built-in columns are ${PAYROLL_LABELS.medicalCover}, ${PAYROLL_LABELS.socialFund} and Advance. Add your own deduction columns (e.g. HELB Loan, Union Dues, Insurance) — each appears in the table, on payslips, and in exports.`,
           },
           {
             kind: "earning" as const,
@@ -4994,24 +5057,22 @@ export default function PayrollSystem() {
                 />
               </div>
 
-              {isKenya && (
-                <div className="form-group">
-                  <label>KRA PIN</label>
-                  <input
-                    type="text"
-                    value={employeeForm.kraPin}
-                    onChange={(e) =>
-                      setEmployeeForm({
-                        ...employeeForm,
-                        kraPin: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              )}
+              <div className="form-group">
+                <label>{PAYROLL_LABELS.taxPin}</label>
+                <input
+                  type="text"
+                  value={employeeForm.kraPin}
+                  onChange={(e) =>
+                    setEmployeeForm({
+                      ...employeeForm,
+                      kraPin: e.target.value,
+                    })
+                  }
+                />
+              </div>
 
               <div className="form-group">
-                <label>SHA Number</label>
+                <label>{PAYROLL_LABELS.medicalCover} Number</label>
                 <input
                   type="text"
                   value={employeeForm.shaNo}
@@ -5022,7 +5083,7 @@ export default function PayrollSystem() {
               </div>
 
               <div className="form-group">
-                <label>NSSF Number</label>
+                <label>{PAYROLL_LABELS.socialFund} Number</label>
                 <input
                   type="text"
                   value={employeeForm.nssfNo}
@@ -5388,14 +5449,14 @@ export default function PayrollSystem() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">
-              Edit SHA for All Employees
+              Edit {PAYROLL_LABELS.medicalCover} for All Employees
             </h3>
             <p className="mb-4">
-              Enter the SHA percentage to apply to all employees based on their
-              basic salary:
+              Enter the {PAYROLL_LABELS.medicalCover} percentage to apply to all
+              employees based on their basic salary:
             </p>
             <div className="form-group">
-              <label>SHA Percentage (%)</label>
+              <label>{PAYROLL_LABELS.medicalCover} Percentage (%)</label>
               <input
                 type="number"
                 value={shaPercentage}
@@ -5405,8 +5466,8 @@ export default function PayrollSystem() {
                 step="0.01"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Note: Minimum SHA contribution is {stationCurrencySymbol} 300
-                (automatically enforced)
+                Note: Minimum {PAYROLL_LABELS.medicalCover} contribution is{" "}
+                {stationCurrencySymbol} 300 (automatically enforced)
               </p>
             </div>
             <div className="flex gap-4 mt-6">
@@ -5434,13 +5495,15 @@ export default function PayrollSystem() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">
-              Edit NSSF for All Employees
+              Edit {PAYROLL_LABELS.socialFund} for All Employees
             </h3>
             <p className="mb-4">
               Enter the fixed NSSF amount to apply to all employees:
             </p>
             <div className="form-group">
-              <label>NSSF Amount ({stationCurrencySymbol})</label>
+              <label>
+                {PAYROLL_LABELS.socialFund} Amount ({stationCurrencySymbol})
+              </label>
               <input
                 type="number"
                 value={nssfAmount}
