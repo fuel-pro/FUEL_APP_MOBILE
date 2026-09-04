@@ -1,5 +1,23 @@
 # FuelPro Mobile — Repository Knowledge
 
+## Session 2026-09-04 (cont.) — Payroll "Clear All" employees with 2FA (commit d96d015)
+
+Payroll System > Employees toolbar gained a red "Clear All" button
+(disabled when the roster is empty). It opens a destructive-action modal
+requiring BOTH: (1) typing the exact phrase "DELETE ALL", and (2) a real
+second factor — the user's authenticator TOTP code when 2FA is enabled
+on their profile (loadFounder2FA + verifyCode from lib/totp), otherwise
+a password re-authentication verified against Supabase Auth
+(signInWithPassword; the password is never compared locally). The wipe
+is guarded by cloudLoadCompleteRef so it can never race the initial
+cloud load; it writes [] to cloud key payroll_employees + localStorage
+cache, refreshes from cloud, and toasts which factor was used. The
+modal itself explains the action is permanent and suggests exporting
+first. Gates: tsc -b 0, vitest 183/183, eslint 0 errors, prettier
+clean, build OK. Deployed: GitHub main d96d015; Cloudflare LIVE
+(d6143d85, "Clear All Employees"/"DELETE ALL" markers in
+PayrollSystem-C63MjeaL.js); Vercel auto-deploys.
+
 ## Session 2026-09-04 — Payroll Import Excel multi-sheet merge (commit ea93c94)
 
 User report: Payroll System > Employees > "Import Excel" was not extracting
