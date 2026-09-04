@@ -16,17 +16,15 @@ import {
   Printer,
   Upload,
   Download,
-  Eye,
   Info,
   ShieldCheck,
-  FileSignature,
 } from "lucide-react";
 import SafetyInspectionLog from "@/react-app/components/SafetyInspectionLog";
 import HsePermitToWorkLog from "@/react-app/components/HsePermitToWorkLog";
 import ComplianceDocuments from "@/react-app/components/ComplianceDocuments";
+import SubTabBar from "@/react-app/components/SubTabBar";
 import {
   getComplianceConfig,
-  getAllComplianceCountries,
   type ComplianceConfig,
 } from "@/react-app/config/compliance";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
@@ -73,30 +71,28 @@ export default function Compliance() {
   const [expandedSection, setExpandedSection] = useState<string | null>(
     "overview",
   );
-  const [showTemplate, setShowTemplate] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState("rules");
 
   const config = useMemo(
     () => getComplianceConfig(selectedCountryCode),
     [selectedCountryCode],
   );
-  const countries = useMemo(() => getAllComplianceCountries(), []);
+
+  const subTabs = [
+    { id: "rules", label: "Country Rules", icon: Globe },
+    { id: "documents", label: "My Documents", icon: Upload },
+    { id: "safety", label: "Safety & HSSE", icon: ShieldCheck },
+  ];
 
   const sections = [
     { id: "overview", label: "Compliance Overview", icon: Globe },
     { id: "tax", label: "Tax & Revenue", icon: Shield },
     { id: "fuel", label: "Fuel Regulation", icon: Fuel },
     { id: "permits", label: "Required Permits & Licenses", icon: FileCheck },
-    {
-      id: "documents",
-      label: "My Documents & Records",
-      icon: Upload,
-    },
     { id: "receipts", label: "Receipt & Invoice Rules", icon: Receipt },
     { id: "features", label: "Compliance Features", icon: CheckCircle2 },
     { id: "payments", label: "Payment Compliance", icon: Landmark },
     { id: "template", label: "Compliance Template", icon: FileText },
-    { id: "safety", label: "Safety Inspections", icon: ShieldCheck },
-    { id: "hsse", label: "Permit to Work", icon: FileSignature },
   ];
 
   const handlePrint = () => {
@@ -135,10 +131,10 @@ export default function Compliance() {
           <Globe size={24} className="text-blue-600 dark:text-blue-400" />
         </div>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Compliance
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Country-specific regulations, permits, tax rules, and compliance
             requirements for every nation
           </p>
@@ -245,109 +241,127 @@ export default function Compliance() {
         </div>
       </div>
 
-      {/* Expandable Sections */}
-      <div className="space-y-3">
-        {sections.map((section) => {
-          const isExpanded = expandedSection === section.id;
-          const SectionIcon = section.icon;
-          return (
-            <div
-              key={section.id}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            >
-              <button
-                onClick={() =>
-                  setExpandedSection(isExpanded ? null : section.id)
-                }
-                className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all"
-              >
-                <SectionIcon size={18} className="text-blue-500" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white flex-1 text-left">
-                  {section.label}
-                </span>
-                <ChevronDown
-                  size={16}
-                  className={`text-gray-500 dark:text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                />
-              </button>
+      {/* Sub-tab navigation */}
+      <SubTabBar
+        tabs={subTabs}
+        active={activeSubTab}
+        onChange={setActiveSubTab}
+      />
 
-              {isExpanded && (
-                <div className="border-t border-gray-100 dark:border-gray-700 p-4">
-                  {section.id === "overview" && (
-                    <OverviewSection config={config} />
-                  )}
-                  {section.id === "tax" && <TaxSection config={config} />}
-                  {section.id === "fuel" && <FuelSection config={config} />}
-                  {section.id === "permits" && (
-                    <PermitsSection config={config} />
-                  )}
-                  {section.id === "documents" && (
-                    <ComplianceDocuments
-                      requiredPermits={config.requiredPermits}
+      {activeSubTab === "rules" && (
+        <>
+          {/* Expandable country-rule sections */}
+          <div className="space-y-3">
+            {sections.map((section) => {
+              const isExpanded = expandedSection === section.id;
+              const SectionIcon = section.icon;
+              return (
+                <div
+                  key={section.id}
+                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                >
+                  <button
+                    onClick={() =>
+                      setExpandedSection(isExpanded ? null : section.id)
+                    }
+                    className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all"
+                  >
+                    <SectionIcon size={18} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1 text-left">
+                      {section.label}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-gray-500 dark:text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                     />
-                  )}
-                  {section.id === "receipts" && (
-                    <ReceiptsSection config={config} />
-                  )}
-                  {section.id === "features" && (
-                    <FeaturesSection config={config} />
-                  )}
-                  {section.id === "payments" && (
-                    <PaymentsSection config={config} />
-                  )}
-                  {section.id === "template" && (
-                    <TemplateSection config={config} />
-                  )}
-                  {section.id === "safety" && <SafetyInspectionLog />}
-                  {section.id === "hsse" && <HsePermitToWorkLog />}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  </button>
 
-      {/* ETR Info Banner */}
-      {config.hasETR && (
-        <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle
-              size={18}
-              className="text-amber-500 flex-shrink-0 mt-0.5"
-            />
-            <div>
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                {config.etrName} Compliance Required
-              </p>
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                All fuel sales in {config.country} must be invoiced through the{" "}
-                {config.taxAuthorityShort} registered
-                {config.etrName} system. Format: {config.etrFormat}. Ensure your
-                ETR device is connected via the Integration Hub.
-              </p>
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+                      {section.id === "overview" && (
+                        <OverviewSection config={config} />
+                      )}
+                      {section.id === "tax" && <TaxSection config={config} />}
+                      {section.id === "fuel" && <FuelSection config={config} />}
+                      {section.id === "permits" && (
+                        <PermitsSection config={config} />
+                      )}
+                      {section.id === "receipts" && (
+                        <ReceiptsSection config={config} />
+                      )}
+                      {section.id === "features" && (
+                        <FeaturesSection config={config} />
+                      )}
+                      {section.id === "payments" && (
+                        <PaymentsSection config={config} />
+                      )}
+                      {section.id === "template" && (
+                        <TemplateSection config={config} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ETR Info Banner */}
+          {config.hasETR && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle
+                  size={18}
+                  className="text-amber-500 flex-shrink-0 mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    {config.etrName} Compliance Required
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    All fuel sales in {config.country} must be invoiced through
+                    the {config.taxAuthorityShort} registered
+                    {config.etrName} system. Format: {config.etrFormat}. Ensure
+                    your ETR device is connected via the Integration Hub.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Data Residency Banner */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4">
+            <div className="flex items-start gap-3">
+              <Shield
+                size={18}
+                className="text-indigo-500 flex-shrink-0 mt-0.5"
+              />
+              <div>
+                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+                  Data Residency: {config.country}
+                </p>
+                <p className="text-xs text-indigo-700 dark:text-indigo-400 mt-1">
+                  Per {config.country}&apos;s data protection regulations, all
+                  transaction data, audit logs, and customer records are stored
+                  and processed within {config.country}&apos;s jurisdiction.
+                  Cross-border data transfers require explicit consent and
+                  follow {config.taxAuthorityShort} guidelines.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Data Residency Banner */}
-      <div className="bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4">
-        <div className="flex items-start gap-3">
-          <Shield size={18} className="text-indigo-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
-              Data Residency: {config.country}
-            </p>
-            <p className="text-xs text-indigo-700 dark:text-indigo-400 mt-1">
-              Per {config.country}&apos;s data protection regulations, all
-              transaction data, audit logs, and customer records are stored and
-              processed within {config.country}&apos;s jurisdiction.
-              Cross-border data transfers require explicit consent and follow{" "}
-              {config.taxAuthorityShort} guidelines.
-            </p>
-          </div>
+      {activeSubTab === "documents" && (
+        <ComplianceDocuments requiredPermits={config.requiredPermits} />
+      )}
+
+      {activeSubTab === "safety" && (
+        <div className="space-y-6">
+          <SafetyInspectionLog />
+          <HsePermitToWorkLog />
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -369,7 +383,7 @@ function OverviewItem({
           {label}
         </p>
       </div>
-      <p className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
+      <p className="text-sm font-semibold text-gray-900 dark:text-white">
         {value}
       </p>
     </div>
@@ -487,7 +501,7 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
             className="p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
           >
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
                 {ft.localName}
               </p>
               <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
@@ -657,7 +671,7 @@ function FeaturesSection({ config }: { config: ComplianceConfig }) {
             className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${f.required ? "bg-red-500" : "bg-gray-400"}`}
           />
           <div>
-            <p className="text-xs font-medium text-gray-900 dark:text-gray-900 dark:text-white">
+            <p className="text-xs font-medium text-gray-900 dark:text-white">
               {f.name}
               {f.required && (
                 <span className="ml-2 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
@@ -691,7 +705,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
             className="p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
           >
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
                 {pm.name}
               </p>
               <span
@@ -783,9 +797,7 @@ function InfoCard({
       <p className="text-[10px] text-gray-500 uppercase tracking-wider">
         {title}
       </p>
-      <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-        {value}
-      </p>
+      <p className="text-sm font-bold text-gray-900 dark:text-white">{value}</p>
       {desc && (
         <p className="text-[10px] text-gray-500 dark:text-gray-400">{desc}</p>
       )}

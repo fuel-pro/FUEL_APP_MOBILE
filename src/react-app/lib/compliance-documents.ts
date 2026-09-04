@@ -170,6 +170,72 @@ export function removeComplianceDoc(
   return list.filter((d) => d.id !== id);
 }
 
+/** Normalize a permit-type/issuer string for fuzzy matching. */
+function normWords(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * True when a tracked document satisfies a required permit name. Matches on
+ * permitType first, then falls back to the document name; a requirement
+ * keyword also satisfied by the issuer (e.g. "Fire Certificate" issued by
+ * "County Fire Dept") counts. Two-way containment on the normalized text so
+ * "EPRA Retail Licence" covers a required "EPRA Licence" and vice versa.
+ */
+export function docCoversPermit(
+  doc: Pick<ComplianceDocument, "name" | "permitType" | "issuer">,
+  requiredPermit: string,
+): boolean {
+  const req = normWords(requiredPermit);
+  if (!req) return false;
+  const typeWords = normWords(doc.permitType);
+  const hay = normWords(`${doc.permitType} ${doc.name} ${doc.issuer}`);
+  if (!hay) return false;
+  // Straight containment (either way) when there is a real permit type.
+  if (typeWords.length >= 3 && (hay.includes(req) || req.includes(typeWords)))
+    return true;
+  // Keyword overlap: every meaningful word of the requirement appears in the
+  // doc's combined text (permit type + name + issuer). Words match exactly,
+  // by substring, or by a ≥4-char shared stem (cert ↔ certificate,
+  // lic ↔ licence/license, reg ↔ registration).
+  const stop = new Set(["the", "of", "and", "a", "an", "for"]);
+  const reqWords = req.split(" ").filter((w) => w.length > 2 && !stop.has(w));
+  if (reqWords.length === 0) return hay.includes(req);
+  const hayWords = hay.split(" ");
+  const wordMatch = (w: string) =>
+    hay.includes(w) ||
+    hayWords.some(
+      (hw) =>
+        w.length >= 4 &&
+        hw.length >= 4 &&
+        (w.startsWith(hw) || hw.startsWith(w)),
+    );
+  return reqWords.every(wordMatch);
+}
+
+/**
+ * Coverage check of the tracked documents against the country's required
+ * compliance documents. Returns which required permits are covered and which
+ * are still missing — used to warn the user on upload and to render the
+ * "required documents" checklist.
+ */
+export function checkRequiredCoverage(
+  docs: ComplianceDocument[],
+  requiredPermits: string[],
+): { covered: string[]; missing: string[] } {
+  const covered: string[] = [];
+  const missing: string[] = [];
+  for (const p of requiredPermits) {
+    if (docs.some((d) => docCoversPermit(d, p))) covered.push(p);
+    else missing.push(p);
+  }
+  return { covered, missing };
+}
+
 /**
  * Period-based record filtering (task: records per month/year). A document
  * matches a period when EITHER its expiry OR its issue date falls in it, so

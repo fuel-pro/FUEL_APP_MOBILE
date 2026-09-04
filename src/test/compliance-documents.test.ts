@@ -12,6 +12,8 @@ import {
   dateToPeriod,
   compliancePeriodLabel,
   buildRenewalLetterPdf,
+  checkRequiredCoverage,
+  docCoversPermit,
   type ComplianceDocument,
 } from "@/react-app/lib/compliance-documents";
 
@@ -192,6 +194,73 @@ describe("filterComplianceDocs (period records)", () => {
     // the narrower "Renewal pending" filter only matches pending docs
     const r2 = filterComplianceDocs(list, { status: "renewal-pending" }, NOW);
     expect(r2.map((d) => d.id)).toEqual(["4"]);
+  });
+});
+
+describe("required-permit coverage (upload check)", () => {
+  const required = [
+    "EPRA Licence",
+    "Fire Certificate",
+    "NEMA Environmental Permit",
+  ];
+
+  it("matches by permit type (two-way containment)", () => {
+    expect(
+      docCoversPermit(
+        doc({ permitType: "EPRA Retail Licence" }),
+        "EPRA Licence",
+      ),
+    ).toBe(true);
+    expect(docCoversPermit(doc({ permitType: "EPRA" }), "EPRA Licence")).toBe(
+      true,
+    );
+  });
+
+  it("matches by document name and issuer keywords", () => {
+    expect(
+      docCoversPermit(
+        doc({ name: "Fire Safety Cert 2026", issuer: "County Fire Dept" }),
+        "Fire Certificate",
+      ),
+    ).toBe(true);
+    expect(
+      docCoversPermit(
+        doc({ name: "Environmental Permit", issuer: "NEMA" }),
+        "NEMA Environmental Permit",
+      ),
+    ).toBe(true);
+    // a vague doc does NOT auto-cover a specific requirement
+    expect(
+      docCoversPermit(
+        doc({ name: "NEMA approval", issuer: "NEMA" }),
+        "NEMA Environmental Permit",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not match unrelated documents", () => {
+    expect(
+      docCoversPermit(
+        doc({ name: "Insurance Policy", permitType: "Insurance" }),
+        "Fire Certificate",
+      ),
+    ).toBe(false);
+  });
+
+  it("checkRequiredCoverage splits covered vs missing", () => {
+    const docs = [
+      doc({ permitType: "EPRA Retail Licence" }),
+      doc({ name: "Fire Certificate 2026" }),
+    ];
+    const r = checkRequiredCoverage(docs, required);
+    expect(r.covered).toEqual(["EPRA Licence", "Fire Certificate"]);
+    expect(r.missing).toEqual(["NEMA Environmental Permit"]);
+    // with everything covered, missing is empty
+    const full = checkRequiredCoverage(
+      [...docs, doc({ permitType: "NEMA Environmental Permit" })],
+      required,
+    );
+    expect(full.missing).toEqual([]);
   });
 });
 

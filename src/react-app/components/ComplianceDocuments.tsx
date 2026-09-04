@@ -46,6 +46,8 @@ import {
   buildRenewalLetterPdf,
   dateToPeriod,
   compliancePeriodLabel,
+  checkRequiredCoverage,
+  docCoversPermit,
   type ComplianceDocument,
   type ComplianceDocStatus,
 } from "@/react-app/lib/compliance-documents";
@@ -337,6 +339,12 @@ export default function ComplianceDocuments({
     return Array.from(years).sort((a, b) => b - a);
   }, [docs]);
 
+  // ── required-permit coverage (upload checks against required documents) ──
+  const coverage = useMemo(
+    () => checkRequiredCoverage(docs, requiredPermits),
+    [docs, requiredPermits],
+  );
+
   // ── actions ────────────────────────────────────────────────────────────
   const openAdd = (permitType = "") => {
     setEditor(newComplianceDoc({ permitType }));
@@ -387,7 +395,26 @@ export default function ComplianceDocuments({
       persist(list);
       setEditor(null);
       setEditorFile(null);
-      toastSuccess(`"${next.name}" saved${next.fileName ? " with file" : ""}.`);
+      // Check the upload against the country's required compliance documents:
+      // confirm what it covers and warn about anything still missing.
+      const after = checkRequiredCoverage(list, requiredPermits);
+      const coversNow = requiredPermits.filter((p) => docCoversPermit(next, p));
+      const parts = [
+        `"${next.name}" saved${next.fileName ? " with file" : ""}.`,
+      ];
+      if (coversNow.length > 0) {
+        parts.push(
+          `Covers required: ${coversNow.slice(0, 3).join(", ")}${coversNow.length > 3 ? ` +${coversNow.length - 3} more` : ""}.`,
+        );
+      }
+      if (after.missing.length > 0) {
+        parts.push(
+          `Still missing ${after.missing.length} required document(s): ${after.missing.slice(0, 3).join(", ")}${after.missing.length > 3 ? "…" : ""}.`,
+        );
+      } else if (requiredPermits.length > 0) {
+        parts.push("All required compliance documents are now on file. ✓");
+      }
+      toastSuccess(parts.join(" "));
     } catch (e) {
       toastError((e as Error).message);
     } finally {
@@ -595,7 +622,9 @@ export default function ComplianceDocuments({
   return (
     <div className="space-y-4">
       {/* Stats strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div
+        className={`grid grid-cols-2 ${requiredPermits.length > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2`}
+      >
         {[
           {
             label: "Documents",
@@ -609,6 +638,18 @@ export default function ComplianceDocuments({
             cls: "text-amber-600",
           },
           { label: "Expired", value: stats.expired, cls: "text-red-600" },
+          ...(requiredPermits.length > 0
+            ? [
+                {
+                  label: "Required on file",
+                  value: `${coverage.covered.length}/${requiredPermits.length}`,
+                  cls:
+                    coverage.missing.length === 0
+                      ? "text-emerald-600"
+                      : "text-blue-600",
+                },
+              ]
+            : []),
         ].map((s) => (
           <div
             key={s.label}
@@ -659,27 +700,55 @@ export default function ComplianceDocuments({
         </button>
       </div>
 
-      {/* Quick-add from required permits not yet tracked */}
+      {/* Required compliance documents coverage (checked on every upload) */}
       {requiredPermits.length > 0 && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-1">
-          <span className="font-medium">Quick-track required permit:</span>
-          {requiredPermits
-            .filter(
-              (p) =>
-                !docs.some(
-                  (d) => d.permitType.toLowerCase() === p.toLowerCase(),
-                ),
-            )
-            .slice(0, 4)
-            .map((p) => (
-              <button
-                key={p}
-                onClick={() => openAdd(p)}
-                className="px-2 py-1 rounded-full border border-dashed border-blue-300 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-              >
-                + {p}
-              </button>
-            ))}
+        <div
+          className={`rounded-lg border p-3 space-y-2 ${
+            coverage.missing.length === 0
+              ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700"
+              : "border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p
+              className={`text-xs font-semibold ${
+                coverage.missing.length === 0
+                  ? "text-emerald-800 dark:text-emerald-300"
+                  : "text-blue-800 dark:text-blue-300"
+              }`}
+            >
+              Required compliance documents: {coverage.covered.length}/
+              {requiredPermits.length} on file
+              {coverage.missing.length === 0 && " — fully compliant ✓"}
+            </p>
+            {coverage.missing.length > 0 && (
+              <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                {coverage.missing.length} missing
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {requiredPermits.map((p) => {
+              const covered = coverage.covered.includes(p);
+              return covered ? (
+                <span
+                  key={p}
+                  className="px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1"
+                >
+                  <CheckCircle2 size={11} /> {p}
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => openAdd(p)}
+                  title={`Upload ${p}`}
+                  className="px-2 py-1 rounded-full text-[11px] font-medium border border-dashed border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                >
+                  + {p}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -995,6 +1064,25 @@ export default function ComplianceDocuments({
                     <option key={p} value={p} />
                   ))}
                 </datalist>
+                {requiredPermits.length > 0 &&
+                  (editor.permitType.trim() || editor.name.trim()) && (
+                    <p className="text-[11px] mt-1 text-gray-500 dark:text-gray-400">
+                      {(() => {
+                        const covers = requiredPermits.filter((p) =>
+                          docCoversPermit(editor, p),
+                        );
+                        return covers.length > 0 ? (
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            ✓ Covers required: {covers.join(", ")}
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400">
+                            Does not match any required compliance document
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  )}
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
