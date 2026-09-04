@@ -54,6 +54,7 @@ import {
 import {
   extractFromComplianceFile,
   mergeExtractedIntoDoc,
+  type ExtractionMethod,
 } from "@/react-app/lib/compliance-doc-parser";
 
 const BUCKET = "fuelpro-files";
@@ -114,8 +115,15 @@ const MONTH_OPTIONS = [
 
 export default function ComplianceDocuments({
   requiredPermits = [],
+  onAddRequiredPermit,
 }: {
   requiredPermits?: string[];
+  /**
+   * Called when a saved document does not match any required compliance
+   * document — the parent registers its type as a new station requirement
+   * (uploaded documents are never dismissed).
+   */
+  onAddRequiredPermit?: (permit: string) => void;
 }) {
   const { user } = useAuth();
   const { state } = useFuel();
@@ -151,6 +159,9 @@ export default function ComplianceDocuments({
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [autoFilled, setAutoFilled] = useState<string[]>([]);
+  const [ocrProgress, setOcrProgress] = useState<number | null>(null);
+  const [extractionMethod, setExtractionMethod] =
+    useState<ExtractionMethod | null>(null);
 
   const [preview, setPreview] = useState<{
     doc: ComplianceDocument;
@@ -352,14 +363,20 @@ export default function ComplianceDocuments({
   );
 
   // ── actions ────────────────────────────────────────────────────────────
-  // Auto-feed empty fields from the uploaded file's contents.
+  // Auto-feed empty fields from the uploaded file's contents — text PDFs are
+  // read directly; scans/images are analyzed visually with on-device OCR.
   const handleEditorFile = async (f: File | null) => {
     setEditorFile(f);
     setAutoFilled([]);
+    setExtractionMethod(null);
+    setOcrProgress(null);
     if (!f || !editor) return;
     setExtracting(true);
     try {
-      const ex = await extractFromComplianceFile(f, requiredPermits);
+      const ex = await extractFromComplianceFile(f, requiredPermits, {
+        onOcrProgress: (p) => setOcrProgress(p),
+      });
+      setExtractionMethod(ex.method ?? null);
       setEditor((cur) => {
         if (!cur) return cur;
         const { doc, filled } = mergeExtractedIntoDoc(cur, ex);
@@ -379,6 +396,7 @@ export default function ComplianceDocuments({
       });
     } finally {
       setExtracting(false);
+      setOcrProgress(null);
     }
   };
 
@@ -433,8 +451,9 @@ export default function ComplianceDocuments({
       persist(list);
       setEditor(null);
       setEditorFile(null);
-      // Check the upload against the country's required compliance documents:
-      // confirm what it covers and warn about anything still missing.
+      // Check the upload against the required compliance documents: confirm
+      // what it covers — and if it matches NOTHING, never dismiss it: the
+      // document type becomes a new required compliance document instead.
       const after = checkRequiredCoverage(list, requiredPermits);
       const coversNow = requiredPermits.filter((p) => docCoversPermit(next, p));
       const parts = [
@@ -444,6 +463,14 @@ export default function ComplianceDocuments({
         parts.push(
           `Covers required: ${coversNow.slice(0, 3).join(", ")}${coversNow.length > 3 ? ` +${coversNow.length - 3} more` : ""}.`,
         );
+      } else {
+        const newRequirement = next.permitType || next.name;
+        if (newRequirement) {
+          onAddRequiredPermit?.(newRequirement);
+          parts.push(
+            `Added "${newRequirement}" to your station's required compliance documents.`,
+          );
+        }
       }
       if (after.missing.length > 0) {
         parts.push(
@@ -1114,8 +1141,10 @@ export default function ComplianceDocuments({
                             ✓ Covers required: {covers.join(", ")}
                           </span>
                         ) : (
-                          <span className="text-amber-600 dark:text-amber-400">
-                            Does not match any required compliance document
+                          <span className="text-indigo-600 dark:text-indigo-400">
+                            ✚ New document type — it will be added to your
+                            station&apos;s required compliance documents when
+                            you save.
                           </span>
                         );
                       })()}
@@ -1256,13 +1285,19 @@ export default function ComplianceDocuments({
                 {extracting && (
                   <p className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 mt-1">
                     <Loader2 size={12} className="animate-spin" />
-                    Reading document to auto-fill the details…
+                    {ocrProgress !== null
+                      ? `Visually analyzing the document (OCR)… ${Math.round(
+                          ocrProgress * 100,
+                        )}%`
+                      : "Reading document to auto-fill the details…"}
                   </p>
                 )}
                 {!extracting && autoFilled.length > 0 && (
                   <p className="flex items-start gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 mt-1">
                     <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
                     Auto-filled from the document: {autoFilled.join(", ")}.
+                    {extractionMethod === "ocr" &&
+                      " Scanned document — fields read by visual (OCR) analysis."}{" "}
                     Please review before saving.
                   </p>
                 )}

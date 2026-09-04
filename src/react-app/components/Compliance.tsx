@@ -18,6 +18,7 @@ import {
   Download,
   Info,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import SafetyInspectionLog from "@/react-app/components/SafetyInspectionLog";
 import HsePermitToWorkLog from "@/react-app/components/HsePermitToWorkLog";
@@ -27,6 +28,13 @@ import {
   getComplianceConfig,
   type ComplianceConfig,
 } from "@/react-app/config/compliance";
+import {
+  CUSTOM_REQUIRED_PERMITS_KEY,
+  addCustomRequiredPermit,
+  mergeRequiredPermits,
+  removeCustomRequiredPermit,
+} from "@/react-app/lib/compliance-documents";
+import { toastSuccess } from "@/react-app/lib/toast";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -76,6 +84,66 @@ export default function Compliance() {
   const config = useMemo(
     () => getComplianceConfig(selectedCountryCode),
     [selectedCountryCode],
+  );
+
+  // ── Custom required compliance documents ─────────────────────────────────
+  // Uploaded documents that don't match a country default are NEVER dismissed
+  // — their type is registered here so it becomes part of the station's
+  // required compliance set. Cloud-synced per station + country.
+  const customPermitsKey = `${CUSTOM_REQUIRED_PERMITS_KEY}_${selectedCountryCode.toLowerCase()}`;
+  const [customPermits, setCustomPermits] = useState<string[]>(() => {
+    const cached = cloudStorageService.getCached<string[]>(
+      customPermitsKey,
+      currentStation?.id,
+    );
+    return Array.isArray(cached) ? cached : [];
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+    (async () => {
+      const cloud = await cloudStorageService.get<string[]>(
+        customPermitsKey,
+        currentStation?.id,
+      );
+      if (!cancelled && Array.isArray(cloud)) setCustomPermits(cloud);
+      unsub = cloudStorageService.subscribe<string[]>(
+        customPermitsKey,
+        currentStation?.id,
+        (val) => {
+          if (Array.isArray(val)) setCustomPermits(val);
+        },
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [customPermitsKey, currentStation?.id]);
+
+  const persistCustomPermits = (list: string[]) => {
+    setCustomPermits(list);
+    cloudStorageService
+      .set(customPermitsKey, list, currentStation?.id)
+      .catch(() => {});
+  };
+
+  const handleAddCustomPermit = (permit: string) => {
+    const { list, added } = addCustomRequiredPermit(customPermits, permit);
+    if (added) {
+      persistCustomPermits(list);
+      toastSuccess(`"${permit}" added to your required compliance documents.`);
+    }
+  };
+
+  const handleRemoveCustomPermit = (permit: string) => {
+    persistCustomPermits(removeCustomRequiredPermit(customPermits, permit));
+  };
+
+  const requiredPermits = useMemo(
+    () => mergeRequiredPermits(config.requiredPermits, customPermits),
+    [config, customPermits],
   );
 
   const subTabs = [
@@ -284,7 +352,11 @@ export default function Compliance() {
                       {section.id === "tax" && <TaxSection config={config} />}
                       {section.id === "fuel" && <FuelSection config={config} />}
                       {section.id === "permits" && (
-                        <PermitsSection config={config} />
+                        <PermitsSection
+                          config={config}
+                          customPermits={customPermits}
+                          onRemoveCustom={handleRemoveCustomPermit}
+                        />
                       )}
                       {section.id === "receipts" && (
                         <ReceiptsSection config={config} />
@@ -353,7 +425,10 @@ export default function Compliance() {
       )}
 
       {activeSubTab === "documents" && (
-        <ComplianceDocuments requiredPermits={config.requiredPermits} />
+        <ComplianceDocuments
+          requiredPermits={requiredPermits}
+          onAddRequiredPermit={handleAddCustomPermit}
+        />
       )}
 
       {activeSubTab === "safety" && (
@@ -525,7 +600,15 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
   );
 }
 
-function PermitsSection({ config }: { config: ComplianceConfig }) {
+function PermitsSection({
+  config,
+  customPermits = [],
+  onRemoveCustom,
+}: {
+  config: ComplianceConfig;
+  customPermits?: string[];
+  onRemoveCustom?: (permit: string) => void;
+}) {
   const storageKey = `compliance_permits_${config.countryCode}`;
   const [obtained, setObtained] = useState<Set<string>>(() => {
     try {
@@ -577,7 +660,7 @@ function PermitsSection({ config }: { config: ComplianceConfig }) {
   };
 
   const obtainedCount = obtained.size;
-  const total = config.requiredPermits.length;
+  const total = config.requiredPermits.length + customPermits.length;
   const pct = total > 0 ? Math.round((obtainedCount / total) * 100) : 0;
 
   return (
@@ -626,6 +709,52 @@ function PermitsSection({ config }: { config: ComplianceConfig }) {
           </button>
         );
       })}
+      {customPermits.length > 0 && (
+        <div className="pt-2 mt-1 border-t border-dashed border-gray-200 dark:border-gray-700">
+          <p className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 mb-1.5">
+            Added from your uploaded documents:
+          </p>
+          {customPermits.map((permit) => {
+            const isObtained = obtained.has(permit);
+            return (
+              <div
+                key={permit}
+                className="w-full flex items-center gap-2 p-2 mb-1 bg-indigo-50/60 dark:bg-indigo-900/10 rounded-lg text-left"
+              >
+                <button
+                  onClick={() => toggle(permit)}
+                  className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isObtained ? "bg-green-500 border-green-500" : "border-gray-300 dark:border-gray-600"}`}
+                  aria-label={
+                    isObtained ? "Mark not obtained" : "Mark obtained"
+                  }
+                >
+                  {isObtained && (
+                    <CheckCircle2
+                      size={12}
+                      className="text-gray-900 dark:text-white"
+                    />
+                  )}
+                </button>
+                <span
+                  className={`text-xs flex-1 ${isObtained ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"}`}
+                >
+                  {permit}
+                </span>
+                {onRemoveCustom && (
+                  <button
+                    onClick={() => onRemoveCustom(permit)}
+                    className="text-gray-400 hover:text-red-500 p-0.5"
+                    title={`Remove "${permit}" from required documents`}
+                    aria-label={`Remove ${permit}`}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
         <p className="text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle size={12} className="inline mr-1" />

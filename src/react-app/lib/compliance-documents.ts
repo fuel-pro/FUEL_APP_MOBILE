@@ -7,6 +7,58 @@ import jsPDF from "jspdf";
 
 export const COMPLIANCE_DOCS_KEY = "compliance_documents";
 
+/**
+ * Cloud key for document types the station itself requires — uploaded
+ * documents that don't match a country default are auto-added here (never
+ * dismissed), so every uploaded permit becomes part of the station's required
+ * compliance set. Scoped per station + country.
+ */
+export const CUSTOM_REQUIRED_PERMITS_KEY = "custom_required_permits";
+
+/** Merge base (country default) + custom (user-added) permits, deduped. */
+export function mergeRequiredPermits(
+  base: string[],
+  custom: string[],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of [...base, ...custom]) {
+    const label = (p || "").trim();
+    if (!label) continue;
+    const key = label.toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out;
+}
+
+/** Add a custom required permit (case/whitespace-insensitive dedup). */
+export function addCustomRequiredPermit(
+  custom: string[],
+  permit: string,
+): { list: string[]; added: boolean } {
+  const label = (permit || "").trim();
+  if (!label) return { list: custom, added: false };
+  const key = label.toLowerCase().replace(/\s+/g, " ");
+  const exists = custom.some(
+    (c) => c.trim().toLowerCase().replace(/\s+/g, " ") === key,
+  );
+  if (exists) return { list: custom, added: false };
+  return { list: [...custom, label], added: true };
+}
+
+/** Remove a custom required permit (case/whitespace-insensitive). */
+export function removeCustomRequiredPermit(
+  custom: string[],
+  permit: string,
+): string[] {
+  const key = permit.trim().toLowerCase().replace(/\s+/g, " ");
+  return custom.filter(
+    (c) => c.trim().toLowerCase().replace(/\s+/g, " ") !== key,
+  );
+}
+
 export interface ComplianceDocHistoryEntry {
   archivedAt: string; // ISO
   expiryDate: string; // the expiry date that was replaced
