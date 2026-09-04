@@ -181,7 +181,15 @@ function guessIssuer(text: string): string | undefined {
       /(?:signed|authorised|authorized)\s+(?:by|for)\s*[:-]?\s*([^\n,;]{3,60})/i,
     );
   if (!m) return undefined;
-  const v = m[1].replace(/\s+/g, " ").trim();
+  // stop at the next field label (pdfjs merges lines, so "Issued by: EPA
+  // Contact: x@y" would otherwise bleed together)
+  const v = m[1]
+    .split(
+      /\s+(?:contact|e-?mail|phone|tel|date|valid|certificate|licen[cs]e|permit|ref(?:erence)?)\b/i,
+    )[0]
+    .replace(/\s+[A-Z]?\s*$/, "") // trailing orphan word fragment
+    .replace(/\s+/g, " ")
+    .trim();
   return v.length >= 3 ? v : undefined;
 }
 
