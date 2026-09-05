@@ -1,3 +1,58 @@
+## Session 2026-09-05 (cont.) — Live TV: full iptv-org catalog + dead curated channels removed (commit b9942e6, DEPLOYED LIVE, PR #139)
+
+User: in News → Live TV "add and incorporate all channels/streams from
+https://iptv-org.github.io/iptv/index.m3u" to existing channels and "make
+sure it works well" (it had errors / wasn't showing live feed).
+
+**Root causes found + fixed**:
+1. **Deployed production bundle was STALE** — pages.dev entry served the old
+   per-country 200-cap build with NO alt-name search and the dead curated
+   group. The fix (branch fix/iptv-live-tv-global-catalog-alt-search, PR #139)
+   had never been merged to main (`5cb9928`).
+2. **11 dead curated channels shadowed real iptv-org streams**: all Zee
+   One/World/Family/Dunia/Zonke/Bollywood/Além + Dangal TV + &TV + Zee Cinema
+   + B4U Movies pointed at ONE dead YouTube playlist
+   `PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL` ("Watch video on YouTube / Learn
+   more" — not playable). Because curated entries are PREPENDED and
+   mergeChannelsWithIptv dedupes by name keeping primary-first, the dead
+   copy shadowed the real playable iptv-org HLS streams → "Retry / Next
+   channel" error never played. Removed all 11; remaining 33 curated entries
+   intact (Zee TV keeps its own real playlist, Star/Colors/Sony etc.).
+3. **Array-hole footgun**: while deleting curated entries, the removal left
+   dangling `,` lines → sparse array holes → `forEach`/filter iterate
+   `undefined` → TypeError in tests. ALWAYS scrub `^[ \t]*,[ \t]*$` lines
+   after batch-deleting array members and re-count `nanoid:` occurrences.
+
+**Fix contents (main b9942e6, PR #139 squash-merged 2026-09-05)**:
+- `src/react-app/services/LiveStreamService.ts`: full iptv-org catalog fetch
+  (`fetchIptvChannels("", cat, 12000)` in LiveFeedEmbed → "Search 10023
+  channels"), `searchChannels` matches name + country + alt_names (VLC
+  parity), `iptvToLiveChannel` maps alt_names, merge dedupes keeping primary
+  first, 11 dead curated entries removed.
+- `api/live-channels.ts` + `functions/api/iptv-channels.ts`: MAX_RESULTS
+  12000, alt_names passthrough.
+- `LiveFeedEmbed.tsx`: 12000 fetch limit.
+- `src/test/iptv-live-channels.test.ts`: 7 tests (was 6) incl. regression
+  "curated list never shadows Zee-family channels with a dead playlist".
+
+**Verified LIVE on pages.dev (founder QA user)**: Live TV "Search 10023
+channels"; searching "Zee One" → player shows **Zee One | UK | HLS | HD |
+LIVE** with a real `<video>` + quality selector (720p/540p/360p), NO error
+overlay. "Zee Cinema" → **India | HLS | LIVE**, plays. Both hosts:
+pages.dev entry index-CBeuu_It.js + vercel index-Dotl3fvG.js, dead playlist
+count 0, altNames present; `/api/iptv-channels` returns 9,829 channels with
+alt_names on BOTH hosts. tsc 0, vitest 294/294, eslint 0 errors, prettier
+clean, build 135 precache.
+
+**Deploy**: GitHub main b9942e6 (PR #139 squash, deleted branch); Cloudflare
+Pages LIVE via wrangler (`CLOUDFLARE_API_TOKEN` + account ID f91f9… from API
+KEYS.txt lines 67-68, project fuel-app-mobile); Vercel production LIVE via
+`vercel pull --yes --environment production` then `vercel build --prod
+--yes` then `vercel deploy --prebuilt --prod` (token API KEYS.txt line 26,
+user leonnovic, org team_HvnupSUe9C1kfvUEQ5LFXOju, project
+prj_hjVrMLO7CxLTI77kthGE020eI3oj). Both hosts deploy in one pass — always
+update both.
+
 ## Session 2026-09-05 (cont.) — Cross-tab data-source audit: Margin guard + fuel prices bus-sync (commit 8d3ac7e, DEPLOYED LIVE)
 
 User: "Margin guard (price − cost)" wasn't updating; audit how EVERYTHING
