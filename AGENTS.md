@@ -46,6 +46,63 @@ has the same markers — Vercel hashes differ from local, verify by MARKER).
 Gates: tsc 0, vitest 283/283, eslint 0 errors (only pre-existing warnings),
 prettier clean, clean Vite-cache build (135 precache).
 
+## Session 2026-09-05 (cont.) — Data Backup/Restore + Cloud Sync status fixed to the REAL source of truth (commit 4014e70)
+
+T2 broad audit ("handle a different audit pass over the whole site") — same
+'loads from its own wrong source instead of the source of truth' anti-pattern,
+different domain. Two real bugs found + fully fixed, plus dead Firebase
+iceberg removed:
+
+**Bug 1 — DataRecovery.tsx (Data Manager → Recovery) Local Backup/Restore
+operated on DEAD legacy localStorage keys** (`"fuelData"`, `"clients"`,
+`"invoices"`, `"salesHistory"`) that the app has never written since the
+Supabase migration (real compact key = `user_<uid>_<stationId>_compact`).
+Export produced a bundle of `null`s; Import wrote to keys nothing reads then
+soft-reloaded (restored nothing). Fix: `exportAll()` now dumps
+`cloudStorageService.getAll()` (app_kv = source of truth) for BOTH the
+"Export Backup" + "Export All Cloud Data" buttons (shared helper), and
+`handleImport` loops `cloudStorageService.set(key, value, stationId)` per
+record with a new `splitLogicalKey()` helper that reconstructs station scope
+from the `key__<stationId>` logical-key form so rows land in the EXACT same
+app_kv rows (RLS/realtime unaffected). Accepts both the current
+`{ cloudData: {...} }` envelope and legacy flat shape. Cleaned unused `error`
+catch-bindings (eslint).
+
+**Bug 2 — DataManager "Cloud Sync" tab rendered the Firebase-era
+CloudSyncPanel** which read dead `localStorage "fuelpro_cloud_enabled"` +
+connected to the abandoned Firestore (`getFirestoreDb`) + listened for a
+`fuelpro-cloud-sync` event NOTHING dispatches — a stale/misleading status. Fix:
+replaced with a real Supabase-backed status card (account from
+`cloudStorageService.currentUserIdSync()`, stored data-set count from
+`getAll()`, realtime/low-bandwidth mode from `isRealtimeEnabled()`, Refresh +
+Force Sync buttons). `DataManager` gained `refreshCloudStatus` useCallback +
+mount effect.
+
+**Dead-code removal** (zero references, tree-shaken before but misleading):
+deleted `CloudSyncPanel.tsx`, `useBackendSync.ts`, `FirebaseService.ts`,
+`src/firebase/` (client/auth/database/admin/index), `adminAPI.ts`.
+`src/firebase` + adminAPI formed a closed iceberg (adminAPI was the only
+importer of @/firebase, nobody imported adminAPI). `firebase` deps left in
+package.json (runtime harmless; only the one-time
+`scripts/migrate-firebase-to-supabase.sh` references the old paths).
+
+**Ruled clean this pass (no change):** CustomerSegments + ComplaintsPanel +
+AttendantPerformance (read live parents/shared KVs), MPESAAnalyzer +
+LiveTransaction (share `mpesa_transactions` via getTransactions/
+subscribeToTransactions), TerminalSessions (canonical `terminal_sessions`
+table), AutomationPanel (cloud `automation_prefs`/`automation_log`),
+Commissions (cloud `commissionSettings` + FuelContext pumps), Dashboard +
+FuelTracker (canonical `fuelTypeApi` / `/api/fuel-local` server),
+CustomerLoyalty (3-ref guard), InventoryManagement/POS/credit reports
+(canonical tables/shared KVs).
+
+Gates: tsc -b 0 errors, eslint 0 errors (pre-existing warnings only),
+vitest 24 files / 283 tests pass, prettier clean, clean Vite-cache build
+(135 precache, DataManager-CtKgHqkc.js markers confirmed).
+
+Deploy state: GitHub main 4014e70 pushed; Cloudflare Pages LIVE (preview
+fef8e502 + main alias); Vercel production deploy (prebuilt) kicked off.
+
 ## Session 2026-09-05 — Shared on-device OCR applied to ALL upload/scan flows (commit 73c9648)
 
 User: apply the same ACCURATE OCR capability to other relevant
