@@ -1,3 +1,48 @@
+## Session 2026-09-05 — Shared on-device OCR applied to ALL upload/scan flows (commit 73c9648)
+
+User: apply the same ACCURATE OCR capability to other relevant
+scanning/uploads throughout the site/app. The proven tesseract.js pipeline
+from the Compliance parser is now a SHARED service used by every upload/scan
+surface.
+
+**New `src/react-app/lib/ocr-service.ts`** — the single canonical OCR
+implementation (lazy singleton tesseract worker, same-origin `/tessdata`
+assets, CSP-safe, IndexedDB-cached): `ocrImage`, `ocrPdf`, `ocrAnyFile`,
+`extractPdfText` (native text layer), `extractPdfTextSmart` (text-layer-first
+with automatic OCR fallback for scanned PDFs), `renderPdfPagesForOcr`,
+`OcrProgress`. Never import-and-call at module scope in tests (jsdom has no
+canvas/WASM).
+
+**Wired into every relevant flow:**
+- **Compliance** (`compliance-doc-parser.ts`): delegates to the shared
+  service; `extractTextFromPdf`/`ocrCompliancePdf`/`ocrComplianceImage`/
+  `renderPdfPagesForOcr` keep their export signatures (tests green).
+- **Sales Tracking** (`SalesTracking.tsx` + NEW `lib/sales-scan-parser.ts`):
+  the fake `simulateAIExtraction` (hardcoded zeros) is GONE. Real OCR of
+  photos/scanned PDFs + a deterministic sales-sheet parser extracting pump
+  meter readings (opening/closing/sales), expenses, till/cash/total amounts,
+  date, shift — with OCR digit confusions (O→0, l→1 only next to digits so
+  "Petrol"/"Kerosene" survive), colon/mixed date separators, and fuel names
+  beyond petrol/diesel (normalized via `normalizeFuelType`). Spinner shows
+  OCR progress %; step label "OCR Reading".
+- **M-PESA Analyzer** (`MPESAAnalyzer.tsx`): pdfjs worker now BUNDLED
+  same-origin (was unpkg CDN — blocked by CSP worker-src 'self'). Scanned
+  (image-only) statement PDFs auto-OCR via `ocrPdf`; uploads accept
+  photos/screenshots (`image/*`) via `ocrImage`.
+- **Document Converter** (`DocumentConverter.tsx`): the OCR-lite placeholder
+  `imageToText` (returned "[Image captured: WxH]") is now REAL OCR; scanned
+  PDFs go through `extractPdfTextSmart` (text layer first, OCR fallback).
+- **Payroll System** (`PayrollSystem.tsx` + `payroll-import.ts`): import
+  accepts `.pdf,image/*` in addition to spreadsheets; scanned/photographed
+  payroll sheets are OCR'd and fed through the SAME `parseEmployeeWorkbook`
+  pipeline via new `workbookFromOcrText` (cells split on tabs/pipes/2+ spaces).
+
+**Gates:** tsc -b 0 errors, eslint 0 errors (pre-existing warnings only),
+prettier clean, vitest 276/276 (7 new: 5 sales-scan-parser + 2
+workbookFromOcrText), build exit 0 (135 precache).
+
+**Deploy state:** GitHub main 73c9648; Cloudflare Pages + Vercel deployed.
+
 ## Session 2026-09-04 (cont.) — Compliance OCR auto-fill + never-dismiss uploads (commit f3f3719)
 
 User: don't dismiss an uploaded document with "Does not match any required
