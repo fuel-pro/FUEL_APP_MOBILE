@@ -41,6 +41,7 @@ import { getRegionalConfig } from "../config/regions";
 import SearchableCountryDropdown from "./SearchableCountryDropdown";
 import { resolveCountryFromBrowser } from "../lib/geo-utils";
 import cloudStorageService from "../lib/cloud-storage-service";
+import { getCachedSignupProfile } from "../lib/signup-company-profile";
 
 const DEFAULT_CURRENCY = "$ ";
 
@@ -137,10 +138,16 @@ export default function SetupWizard({
     const cc = detectedCc || "US";
     const countryPrice = getCountryPrice(cc, "petrol");
     const dieselPrice = getCountryPrice(cc, "diesel");
+    // Pre-fill from the company details the user entered at SIGNUP (AuthLogin
+    // persists them to `company_profile`; nothing else read them, so the
+    // wizard started blank and their signup data never showed up).
+    const signupProfile = getCachedSignupProfile();
     return {
-      stationName: "",
-      location: "Auto-detected",
-      contacts: "",
+      stationName: signupProfile?.name || "",
+      location: signupProfile?.address
+        ? signupProfile.address
+        : "Auto-detected",
+      contacts: signupProfile?.phone || "",
       email: "",
       countryCode: cc,
       pmsTankCapacity: 20000,
@@ -151,9 +158,11 @@ export default function SetupWizard({
       agoCount: 2,
       pmsPrice: displayPrices.pmsPrice || countryPrice.price,
       agoPrice: displayPrices.agoPrice || dieselPrice.price,
-      kraPin: "",
-      vatRegNo: "",
-      physicalAddress: "Auto-detected location",
+      kraPin: signupProfile?.taxId || "",
+      vatRegNo: signupProfile?.regNo || "",
+      physicalAddress: signupProfile?.address
+        ? signupProfile.address
+        : "Auto-detected location",
       etrSerialNo: "",
       extraFuels: [],
     };
@@ -208,6 +217,43 @@ export default function SetupWizard({
     // Re-detect when the user-entered location changes so prices track the
     // station's real country instead of the CDN/browser timezone.
   }, [data.location]);
+
+  // Pre-fill from the CLOUD copy of the signup profile (cross-device): a
+  // user may have signed up on one device and be running the wizard on
+  // another, where the localStorage cache doesn't exist. Only fill fields the
+  // user hasn't touched yet (sync initializer already filled from the cache).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getSignupProfile } =
+          await import("@/react-app/lib/signup-company-profile");
+        const cloudProfile = await getSignupProfile();
+        if (cancelled || !cloudProfile) return;
+        setData((prev) => {
+          const next = { ...prev };
+          if (!next.stationName && cloudProfile.name)
+            next.stationName = cloudProfile.name;
+          if (!next.contacts && cloudProfile.phone)
+            next.contacts = cloudProfile.phone;
+          if (!next.kraPin && cloudProfile.taxId)
+            next.kraPin = cloudProfile.taxId;
+          if (!next.vatRegNo && cloudProfile.regNo)
+            next.vatRegNo = cloudProfile.regNo;
+          if (!next.physicalAddress && cloudProfile.address)
+            next.physicalAddress = cloudProfile.address;
+          if (!next.location && cloudProfile.address)
+            next.location = cloudProfile.address;
+          return next;
+        });
+      } catch {
+        /* pre-fill is best-effort; never block the wizard */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Function to manually refresh prices
   const refreshPrices = async () => {
