@@ -1263,6 +1263,12 @@ export interface LiveChannel {
   logo?: string;
   /** Alternate/transliterated names — matched by the station search (like VLC). */
   altNames?: string[];
+  /** Custom User-Agent required to fetch this stream (if any). */
+  userAgent?: string;
+  /** Custom Referrer required to fetch this stream (if any). */
+  referrer?: string;
+  /** Quality label (e.g. "720p") parsed from the index.m3u name. */
+  quality?: string;
 }
 
 /** In-memory cache of fetched channel lists (keyed by URL). 5-min TTL. */
@@ -1335,6 +1341,12 @@ export interface IptvChannel {
   category: string;
   /** Alternate/transliterated names (e.g. "Zee One" → "Zee One HD") — used for search. */
   alt_names?: string[];
+  /** Custom User-Agent required to fetch this stream (index.m3u). */
+  userAgent?: string;
+  /** Custom Referrer required to fetch this stream (index.m3u). */
+  referrer?: string;
+  /** Quality label (e.g. "720p") parsed from the index.m3u display name. */
+  quality?: string;
 }
 
 /** In-memory cache for iptv-org channel slices (10-min TTL). */
@@ -1342,22 +1354,28 @@ const iptvCache = new Map<string, { data: IptvChannel[]; ts: number }>();
 const IPTV_CACHE_TTL = 10 * 60 * 1000;
 
 /**
- * Fetch channels from the iptv-org public API via the /api/iptv-channels
- * proxy. The proxy fetches channels.json (10MB) + streams.json server-side,
- * merges them, filters by country/category, and returns a compact slice.
+ * Fetch channels from iptv-org via the /api/iptv-channels proxy.
+ *
+ * When `fmt` is "m3u" (the default here), the proxy fetches + parses the
+ * ACTUAL index.m3u master playlist (the exact file VLC opens) — the full
+ * ~12.9k catalog including quality/geo variants and the custom User-Agent /
+ * Referrer headers many streams require to avoid 403s. This is the "add ALL
+ * channels/streams from index.m3u" path.
  *
  * @param country ISO 2-letter country code (lowercase), or "" for all
  * @param category category id (lowercase), or "" for all
- * @param limit max results (default 5000, hard cap 12000)
+ * @param limit max results (default 13500, hard cap 13500)
+ * @param fmt "m3u" (VLC-equivalent full catalog) | "json" (channels.json merge)
  */
 export async function fetchIptvChannels(
   country = "",
   category = "",
-  limit = 5000,
+  limit = 13500,
+  fmt: "m3u" | "json" = "m3u",
 ): Promise<IptvChannel[]> {
   const c = country.toLowerCase().trim();
   const cat = category.toLowerCase().trim();
-  const cacheKey = `${c || "all"}/${cat || "all"}/${limit}`;
+  const cacheKey = `${fmt}/${c || "all"}/${cat || "all"}/${limit}`;
   const cached = iptvCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < IPTV_CACHE_TTL) {
     return cached.data;
@@ -1367,6 +1385,7 @@ export async function fetchIptvChannels(
     if (c) params.set("country", c);
     if (cat) params.set("category", cat);
     params.set("limit", String(limit));
+    if (fmt === "m3u") params.set("fmt", "m3u");
     const res = await fetch(`/api/iptv-channels?${params.toString()}`);
     if (!res.ok) return [];
     const data = await res.json();
@@ -1396,6 +1415,9 @@ export function iptvToLiveChannel(ch: IptvChannel): LiveChannel {
     isGeoBlocked: false,
     logo: ch.logo || undefined,
     altNames: Array.isArray(ch.alt_names) ? ch.alt_names : [],
+    userAgent: ch.userAgent,
+    referrer: ch.referrer,
+    quality: ch.quality,
   };
 }
 
@@ -1867,7 +1889,7 @@ export async function fetchAllChannels(
   if (!isAudio) {
     const iptvCategory = mapToIptvCategory(category);
     const iptvCountry = country && !showAll ? country : "";
-    const iptv = await fetchIptvChannels(iptvCountry, iptvCategory, 5000);
+    const iptv = await fetchIptvChannels(iptvCountry, iptvCategory, 13500);
     const merged = mergeChannelsWithIptv(primary, iptv);
     // Prepend curated known-good channels (guaranteed-playable) so the
     // player always has a reliable auto-select target. Dedup by nanoid.
@@ -2016,9 +2038,10 @@ export function prefetchLiveChannelsInBackground(): void {
       fetchLiveChannels("tv", "countries", "gb"),
       fetchLiveChannels("radio", "countries", "us"),
     ];
-    // Also pre-fetch iptv-org US channels (adds 200+ extra channels to the cache)
+    // Also pre-fetch the FULL iptv-org index.m3u catalog (VLC parity) so the
+    // Live TV grid renders instantly and search covers every channel.
     commonFetches.push(
-      fetchIptvChannels("us", "", 5000).then((chs) =>
+      fetchIptvChannels("", "", 13500).then((chs) =>
         chs.map(iptvToLiveChannel),
       ),
     );

@@ -121,6 +121,47 @@ describe("iptv-live-channels — catalog integration", () => {
     expect(merged[1].nanoid).toBe("x-Zee One"); // primary copy kept
   });
 
+  it("iptvToLiveChannel carries custom UA/Referrer/quality from index.m3u", () => {
+    const m3uChannel: IptvChannel = {
+      id: "ZeeAction.in",
+      name: "Zee Action (720p) [Geo-blocked]",
+      url: "https://example.com/zee-action/playlist.m3u8",
+      logo: "",
+      country: "IN",
+      language: "",
+      category: "movies",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      referrer: "https://www.website.com/",
+      quality: "720p",
+    };
+    const lc = iptvToLiveChannel(m3uChannel);
+    expect(lc.userAgent).toContain("Mozilla/5.0");
+    expect(lc.referrer).toBe("https://www.website.com/");
+    expect(lc.quality).toBe("720p");
+    expect(lc.nanoid).toBe("iptv-ZeeAction.in");
+  });
+
+  it("searchChannels finds index.m3u geo/quality VARIANTS (VLC parity)", () => {
+    // The full m3u catalog includes "Zee One Français" as its own entry —
+    // search must find it, not just the plain "Zee One".
+    const catalog = [
+      iptvToLiveChannel({
+        ...ZEE_ONE,
+        name: "Zee One (1080p)",
+        id: "ZeeOne.uk",
+      }),
+      iptvToLiveChannel({
+        ...ZEE_ONE,
+        name: "Zee One Français (720p)",
+        id: "ZeeOne.uk-2",
+      }),
+    ];
+    expect(searchChannels(catalog, "zee one")).toHaveLength(2);
+    const fr = searchChannels(catalog, "français");
+    expect(fr).toHaveLength(1);
+    expect(fr[0].name).toContain("Français");
+  });
+
   it("curated list never shadows Zee-family channels with a dead playlist", () => {
     // Regression: several curated entries pointed at one shared, now-dead
     // YouTube playlist (PLq1tg...). Because curated entries are PREPENDED

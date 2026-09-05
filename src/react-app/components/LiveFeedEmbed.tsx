@@ -160,9 +160,12 @@ function extractYouTubeId(url: string): string | null {
  * Uses the ABSOLUTE origin (window.location.origin) instead of a relative
  * path — the relative form silently stalls hls.js's manifest fetch in some
  * contexts. */
-function hlsProxyUrl(url: string): string {
+function hlsProxyUrl(url: string, ua?: string, ref?: string): string {
   const origin = window.location.origin;
-  return `${origin}/api/hls-proxy?url=${encodeURIComponent(url)}`;
+  let out = `${origin}/api/hls-proxy?url=${encodeURIComponent(url)}`;
+  if (ua) out += `&ua=${encodeURIComponent(ua)}`;
+  if (ref) out += `&ref=${encodeURIComponent(ref)}`;
+  return out;
 }
 
 /** A selectable HLS quality level (one rendition of the master playlist). */
@@ -288,7 +291,7 @@ function ChannelPlayer({
       // the same-origin proxy so the strict CSP (`media-src 'self' blob:`)
       // can allow the media element to connect (CSP still blocks arbitrary
       // external hosts even on <audio>/<video>).
-      mediaEl.src = hlsProxyUrl(streamUrl);
+      mediaEl.src = hlsProxyUrl(streamUrl, channel.userAgent, channel.referrer);
       mediaEl.play().catch(() => {
         /* autoplay blocked */
       });
@@ -401,10 +404,13 @@ function ChannelPlayer({
 
     if (Hls.isSupported()) {
       // Same-origin proxy FIRST (CSP-compliant), direct fallback on fatal.
-      attachHls(Hls, hlsProxyUrl(streamUrl));
+      attachHls(
+        Hls,
+        hlsProxyUrl(streamUrl, channel.userAgent, channel.referrer),
+      );
     } else {
       // Safari native HLS / non-HLS direct stream (mp3/aac/icecast etc.)
-      mediaEl.src = hlsProxyUrl(streamUrl);
+      mediaEl.src = hlsProxyUrl(streamUrl, channel.userAgent, channel.referrer);
       mediaEl.play().catch(() => {
         /* autoplay blocked */
       });
@@ -1222,19 +1228,20 @@ export default function LiveFeedEmbed({
 
         // Merge the public-domain catalog (adds logos + extra channels) for
         // the video family only (it has no radio mode).
-        // NOTE: fetch the FULL 12k global iptv-org catalog (like VLC opening
-        // the master .m3u) — NOT a per-country capped slice. A per-country/limit
-        // slice silently drops any channel outside the current country (e.g.
-        // "Zee One" is a UK channel — it would never appear on the default US
-        // view, so searching "zee one" found nothing, even though VLC finds it
-        // the instant a global playlist is loaded. The client-side country label
-        // + search then operate over the whole catalog exactly like the playlist.
+        // NOTE: fetch the FULL ~13k global iptv-org catalog (the ACTUAL index.m3u
+        // master playlist VLC opens, via fmt=m3u) — NOT a per-country capped
+        // slice. A per-country/limit slice silently drops any channel outside
+        // the current country (e.g. "Zee One" is a UK channel — it would never
+        // appear on the default US view, so searching "zee one" found nothing,
+        // even though VLC finds it the instant a global playlist is loaded).
+        // The client-side country label + search then operate over the whole
+        // catalog exactly like the playlist.
         const catDef = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
         const isAudio = catDef?.family === "audio";
         if (!isAudio) {
           try {
             const iptvCat = mapToIptvCategory(category);
-            const iptv = await fetchIptvChannels("", iptvCat || "", 12000);
+            const iptv = await fetchIptvChannels("", iptvCat || "", 13500);
             if (!cancelled && iptv.length > 0) {
               list = mergeChannelsWithIptv(list, iptv);
             }
