@@ -245,6 +245,9 @@ export default function PriceBoard() {
   const pricesRef = useRef(prices);
   pricesRef.current = prices;
   const [showAutoUpdateNotice, setShowAutoUpdateNotice] = useState(false);
+  // True once the initial cloud load has completed (drives the seed-from-fuel-
+  // types effect so it never races the cloud load and gets overwritten).
+  const [cloudLoaded, setCloudLoaded] = useState(false);
 
   const isKenya = isKenyaStation();
   const countryProfile = getCountryById(getDetectedCountryCode());
@@ -466,7 +469,10 @@ export default function PriceBoard() {
         if (!cancelled && cloudHistory && !localModifiedRef.current)
           setHistory(normalizePriceHistoryList(cloudHistory));
       } finally {
-        if (!cancelled) cloudLoadCompleteRef.current = true;
+        if (!cancelled) {
+          cloudLoadCompleteRef.current = true;
+          setCloudLoaded(true);
+        }
       }
     })();
     return () => {
@@ -483,6 +489,54 @@ export default function PriceBoard() {
         .catch(() => {});
     }
   }, [cloudLoadCompleteRef.current]);
+
+  // SEED FROM FUEL TYPES: the Price Board must ALWAYS show the station's
+  // already-set prices. The authoritative prices live in `fuel_types_config`
+  // (edited by Fuel Type Manager + applied by the Price Scheduler), while the
+  // board's own `priceboard_data` store can be empty or stale (e.g. a station
+  // that set prices in Fuel Types but never opened the board). Whenever the
+  // configured fuel types load, merge any fuel that is MISSING from the board
+  // into it (preserving the configured price + source), so the board is never
+  // blank and never contradicts the source of truth.
+  useEffect(() => {
+    if (!cloudLoaded) return;
+    if (!fuelTypeApi.fuelTypes.length) return;
+    setPrices((prev) => {
+      const byCanonical = new Map(
+        prev.map((p) => [normalizeFuelType(p.fuelType), p]),
+      );
+      const additions: PriceEntry[] = [];
+      for (const ft of fuelTypeApi.fuelTypes) {
+        const canonical = normalizeFuelType(ft.name);
+        if (!canonical || byCanonical.has(canonical)) continue;
+        additions.push({
+          id: `pb_${ft.id || canonical}`,
+          fuelType: ft.name,
+          grade: ft.code || "Regular",
+          price: ft.price || 0,
+          previousPrice: ft.price || 0,
+          currency: "",
+          displayOrder: prev.length + additions.length + 1,
+          isActive: !!ft.active,
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          updatedBy: "Fuel Type Manager",
+          updatedAt: new Date().toISOString(),
+          // Preserve the authoritative source so the regulator auto-sync can
+          // still refresh a genuinely "auto"-sourced price. User/scheduled
+          // entries (the common case — a station that set prices) stay
+          // protected; unmarked legacy with a real price is treated as user.
+          source:
+            ft.source === "scheduled"
+              ? "scheduled"
+              : ft.source === "auto"
+                ? "auto"
+                : "user",
+        });
+      }
+      if (additions.length === 0) return prev;
+      return [...prev, ...additions];
+    });
+  }, [fuelTypeApi.fuelTypes, cloudLoaded]);
 
   const showNotification = (
     message: string,

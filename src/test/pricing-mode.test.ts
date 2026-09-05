@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { canAutoSyncPrice } from "@/react-app/lib/pricing-mode";
+import {
+  canAutoSyncPrice,
+  defaultPricingMode,
+} from "@/react-app/lib/pricing-mode";
+
+describe("defaultPricingMode (manual by default)", () => {
+  it("is manual for every station", () => {
+    expect(defaultPricingMode()).toBe("manual");
+  });
+});
 
 /**
  * The core pricing-stability rule: the regulator/EPRA auto-sync may ONLY

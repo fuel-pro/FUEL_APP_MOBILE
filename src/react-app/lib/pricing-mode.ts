@@ -14,7 +14,6 @@
  */
 
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getDetectedCountryCode } from "@/react-app/lib/currency";
 
 export type PricingMode = "manual" | "auto";
 
@@ -42,11 +41,13 @@ export const PRICING_MODES: PricingModeMeta[] = [
   },
 ];
 
-/** Default mode: Kenya follows the national EPRA cycle; everywhere else is
- * manual so a foreign station never gets absurd KES prices auto-applied. */
+/** Default mode is MANUAL for every station: prices only change when the
+ * user (or an explicitly queued Price Scheduler entry) sets them. The
+ * regulator/EPRA auto-sync is opt-in via the Pricing Mode selector, so a
+ * station's already-set prices are never silently overwritten out of the
+ * box. */
 export function defaultPricingMode(): PricingMode {
-  const cc = getDetectedCountryCode();
-  return cc === "KE" ? "auto" : "manual";
+  return "manual";
 }
 
 /** Synchronous read (localStorage cache) for instant first render. */
