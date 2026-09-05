@@ -78,6 +78,23 @@ replaced with a real Supabase-backed status card (account from
 Force Sync buttons). `DataManager` gained `refreshCloudStatus` useCallback +
 mount effect.
 
+**Bug 3 — useCloudKV same-page staleness (stacked views sharing one key)**
+(commit 7c8e2c8). With realtime OFF by default (low-bandwidth mode},
+`cloudStorageService.subscribe()` is a no-op — so two SIMULTANEOUSLY-MOUNTED
+components sharing one app_kv key did NOT see each other's `setData` until
+remount. Real instance: Stock Management → Tank Monitor stack —
+TankMonitor WRITES `tankReadings` while TankWaterTrace,
+TheftAnomalyDetector, ThresholdAlertRules + AutoReplenishment READ it in
+the SAME mounted view (`InventoryManagement.tsx` L2182-2188); a new
+tank reading saved in TankMonitor left the anomaly/water/threshold panels
+showing stale data. Fix: in-memory same-page pub/sub in useCloudKV
+(`kvBusSubscribe`/`kvBusPublish`/`kvBusKey`, keyed by (key, stationId},
+exported for tests); `setData` publishes locally after the cloud write
+(`skipNextRemoteRef` consumes the writer's own echo; other mounted
+instances apply immediately, independent of realtime). Isolates keys +
+stations (4 new cases in `src/test/cloud-kv-bus.test.ts`; gates: tsc 0,
+eslint 0 errors, prettier clean, vitest 287/287, clean build\).
+
 **Dead-code removal** (zero references, tree-shaken before but misleading):
 deleted `CloudSyncPanel.tsx`, `useBackendSync.ts`, `FirebaseService.ts`,
 `src/firebase/` (client/auth/database/admin/index), `adminAPI.ts`.
