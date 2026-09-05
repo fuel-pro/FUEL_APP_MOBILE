@@ -12076,3 +12076,21 @@ backdrop in their tap chain and every overlay button is now reachable.
 **Deploy state**: GitHub main d227c13; Cloudflare Pages LIVE (preview
 f6906f78 + main alias, verified touch rules live); Vercel auto-deploys;
 Supabase: no changes.
+
+## Session 2026-09-05 (cont.) — Price Board seeds station prices + manual default + inline price editor (commits ffd22f4 + 330eb0a)
+
+User: (1) "Price Board should always show already set price", (2) "Pricing Mode should be manual by default", (3) "fix any other issue in Fuel Type Manager or add improvements".
+
+**Price Board always shows set prices (330eb0a)**: the board's own `priceboard_data` store could be empty/stale while the authoritative prices live in `fuel_types_config` (Fuel Type Manager + Price Scheduler). New seeding effect in PriceBoard.tsx: after the cloud load completes (`cloudLoaded` state flag), any configured fuel MISSING from the board is merged in, preserving its configured price + source (user/scheduled = protected, auto = still refreshable). The board is never blank when the station has set prices. Guarded so it never races the cloud load (which would overwrite the seeds).
+
+**Pricing Mode defaults to MANUAL (330eb0a)**: `defaultPricingMode()` in `lib/pricing-mode.ts` now returns `"manual"` for EVERY station (was auto-for-Kenya). The regulator/EPRA auto-sync is now strictly opt-in via the Pricing Mode selector in Price Scheduler. Removed the now-unused `getDetectedCountryCode` import. New test asserts manual default (283/283 tests).
+
+**Fuel Type Manager improvements (330eb0a)**:
+- NEW inline price editor on each expanded fuel card: Selling Price / Cost Price / VAT Rate inputs with Save/Cancel — a direct manual-pricing workflow that persists via `persist()` with `source: "user"` (never auto-overwritten). `startInlineEdit`/`saveInlineEdit`/`cancelInlineEdit` handlers + `inlineEditId`/`inlinePrice`/`inlineCost`/`inlineTax` state.
+- NEW Pricing Mode badge in the header ("Pricing: Manual" amber / "Pricing: Auto" emerald) via `getPricingModeSync(stationId)` + `pricingModeLabel`.
+- Removed dead `editingId` state (declared, never used).
+
+Gates: tsc -b 0 errors, vitest 283/283, eslint 0 errors (pre-existing warnings only), prettier clean, build success. Deployed: GitHub main ffd22f4 + 330eb0a; Cloudflare Pages LIVE (941085cd + main alias, FuelTypesManager-B7gt0x8x.js markers verified); Vercel production LIVE (FuelTypesManager-BcrvSgnf.js markers verified). Supabase: no schema changes (pricing_mode cloud key + fuel_types_config source field only).
+
+Gotchas: Vercel `vercel build --prod` takes ~5 min and must run in background (`> /tmp/vercel_build2.log 2>&1 &`); then `vercel deploy --prebuilt --prod`. PriceBoard + PriceScheduler + pricing-mode are all bundled into the FuelTypesManager chunk by Vite (inner sub-tabs) — verify markers in `FuelTypesManager-*.js`, not a separate chunk. The seeding effect must gate on a `cloudLoaded` STATE flag (not the ref) so it re-runs after the async cloud load; the ref alone doesn't trigger re-render.
+
