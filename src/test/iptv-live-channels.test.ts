@@ -13,6 +13,7 @@ import {
   iptvToLiveChannel,
   searchChannels,
   mergeChannelsWithIptv,
+  getCuratedGoodChannels,
   type IptvChannel,
   type LiveChannel,
 } from "@/react-app/services/LiveStreamService";
@@ -118,5 +119,38 @@ describe("iptv-live-channels — catalog integration", () => {
       "Extra One",
     ]);
     expect(merged[1].nanoid).toBe("x-Zee One"); // primary copy kept
+  });
+
+  it("curated list never shadows Zee-family channels with a dead playlist", () => {
+    // Regression: several curated entries pointed at one shared, now-dead
+    // YouTube playlist (PLq1tg...). Because curated entries are PREPENDED
+    // and mergeChannelsWithIptv dedupes by name keeping primary-first, the
+    // dead curated copy SHADOWED the real playable iptv-org stream (e.g.
+    // "Zee One" on wurl.com HLS) — so selecting it always errored and the
+    // feed never played. Remove those entries entirely so the iptv-org
+    // stream surfaces.
+    const curated = getCuratedGoodChannels(false, "tv");
+    const deadPlaylist =
+      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL";
+
+    // The channels that pointed at the dead playlist must no longer be
+    // curated (so their real iptv-org HLS stream can surface).
+    for (const name of ["Zee One", "Zee World", "Zee Cinema", "Dangal TV"]) {
+      expect(curated.some((c) => c.name === name)).toBe(false);
+    }
+
+    // No curated channel may reference the dead playlist at all.
+    for (const c of curated) {
+      for (const y of c.youtube_urls ?? []) {
+        expect(y).not.toBe(deadPlaylist);
+      }
+    }
+
+    // And every remaining curated channel still resolves to a REAL stream.
+    for (const c of curated) {
+      expect(
+        (c.stream_urls ?? []).length > 0 || (c.youtube_urls ?? []).length > 0,
+      ).toBe(true);
+    }
   });
 });

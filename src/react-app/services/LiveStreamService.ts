@@ -1454,17 +1454,6 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
   // channels are geo-blocked or carry no stream URL; these YouTube embeds are
   // the reliable playable source.)
   {
-    nanoid: "curated-zee-world",
-    name: "Zee World",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
-  {
     nanoid: "curated-zee-tv",
     name: "Zee TV",
     stream_urls: [],
@@ -1508,17 +1497,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "in",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-zee-family",
-    name: "Zee Family",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
+
   {
     nanoid: "curated-star-life",
     name: "Star Life",
@@ -1530,39 +1509,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "bg",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-zee-one",
-    name: "Zee One",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "uk",
-    isGeoBlocked: false,
-  },
-  {
-    nanoid: "curated-zee-dunia",
-    name: "Zee Dunia",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["swa", "hin", "eng"],
-    country: "ke",
-    isGeoBlocked: false,
-  },
-  {
-    nanoid: "curated-zee-zonke",
-    name: "Zee Zonke",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["zul", "hin", "eng"],
-    country: "za",
-    isGeoBlocked: false,
-  },
+
   {
     nanoid: "curated-sony-sab",
     name: "Sony SAB",
@@ -1574,17 +1521,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "in",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-zee-bollywood",
-    name: "Zee Bollywood",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
+
   {
     nanoid: "curated-star-gold",
     name: "Star Gold",
@@ -1607,39 +1544,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "in",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-dangal-tv",
-    name: "Dangal TV",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
-  {
-    nanoid: "curated-and-tv",
-    name: "&TV (And TV)",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
-  {
-    nanoid: "curated-zee-cinema",
-    name: "Zee Cinema",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
+
   {
     nanoid: "curated-sony-max",
     name: "Sony Max",
@@ -1651,17 +1556,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "in",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-b4u-movies",
-    name: "B4U Movies",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["hin", "eng"],
-    country: "in",
-    isGeoBlocked: false,
-  },
+
   {
     nanoid: "curated-star-select",
     name: "Star Select",
@@ -1673,17 +1568,7 @@ const CURATED_GOOD_CHANNELS: LiveChannel[] = [
     country: "in",
     isGeoBlocked: false,
   },
-  {
-    nanoid: "curated-zee-alem",
-    name: "Zee Alem",
-    stream_urls: [],
-    youtube_urls: [
-      "https://www.youtube-nocookie.com/embed/videoseries?list=PLq1tg_5hO6LzExWX3tM0mJkK0M0dF3YzL",
-    ],
-    languages: ["ara", "hin", "eng"],
-    country: "eg",
-    isGeoBlocked: false,
-  },
+
   // --- YouTube 24/7 live news channels (embeddable, always live) ---
   {
     nanoid: "curated-redacted-news",
