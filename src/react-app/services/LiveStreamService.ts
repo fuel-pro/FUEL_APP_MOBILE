@@ -1208,6 +1208,31 @@ export function filterChannelsByKeywords(
   });
 }
 
+/**
+ * Case-insensitive search over a channel list covering the channel name, its
+ * country code and ANY alternate/transliterated name (iptv-org alt_names).
+ * This mirrors how VLC matches a network playlist: a channel like "Zee One"
+ * is found by its plain name even when it lives in a country that isn't the
+ * user's current one. Returns the input list unchanged when query is empty.
+ */
+export function searchChannels(
+  channels: LiveChannel[],
+  query: string,
+): LiveChannel[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return channels;
+  return channels.filter((s) => {
+    if (s.name.toLowerCase().includes(q)) return true;
+    if ((s.country || "").toLowerCase().includes(q)) return true;
+    if (Array.isArray(s.altNames)) {
+      for (const alt of s.altNames) {
+        if (alt && alt.toLowerCase().includes(q)) return true;
+      }
+    }
+    return false;
+  });
+}
+
 // ===========================================================================
 // NATIVE CHANNEL API — fetches channel data directly from the provider's
 // JSON API and renders a NATIVE FuelPro channel grid + player. NO iframe
@@ -1236,6 +1261,8 @@ export interface LiveChannel {
   isGeoBlocked: boolean;
   /** Optional channel logo URL (iptv-org channels have logos) */
   logo?: string;
+  /** Alternate/transliterated names — matched by the station search (like VLC). */
+  altNames?: string[];
 }
 
 /** In-memory cache of fetched channel lists (keyed by URL). 5-min TTL. */
@@ -1306,6 +1333,8 @@ export interface IptvChannel {
   country: string;
   language: string;
   category: string;
+  /** Alternate/transliterated names (e.g. "Zee One" → "Zee One HD") — used for search. */
+  alt_names?: string[];
 }
 
 /** In-memory cache for iptv-org channel slices (10-min TTL). */
@@ -1366,6 +1395,7 @@ export function iptvToLiveChannel(ch: IptvChannel): LiveChannel {
     country: ch.country,
     isGeoBlocked: false,
     logo: ch.logo || undefined,
+    altNames: Array.isArray(ch.alt_names) ? ch.alt_names : [],
   };
 }
 
