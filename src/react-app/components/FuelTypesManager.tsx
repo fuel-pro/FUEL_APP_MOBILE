@@ -77,6 +77,14 @@ export interface CustomFuelType {
   pumpCount: number;
   active: boolean;
   description: string;
+  /**
+   * Who set this price — the pricing-taxonomy primitive that keeps prices
+   * stable. "user" = the station set it (never auto-overwritten); "scheduled"
+   * = a Price Scheduler entry applied it (never auto-overwritten);
+   * "auto" = populated by the regulator source (eligible for re-sync);
+   * undefined = legacy entry (treated as "auto").
+   */
+  source?: "user" | "scheduled" | "auto";
 }
 
 // Cloud key under which the custom fuel-type catalog is persisted/synced.
@@ -107,6 +115,10 @@ function normalizeCustomFuelType(
     pumpCount: typeof f?.pumpCount === "number" ? f.pumpCount : 0,
     active: typeof f?.active === "boolean" ? f.active : false,
     description: f?.description ?? "",
+    source:
+      f?.source === "user" || f?.source === "scheduled" || f?.source === "auto"
+        ? f.source
+        : undefined,
   };
 }
 
@@ -565,6 +577,7 @@ export default function FuelTypesManager() {
       pumpCount: typeof formPumps === "number" ? formPumps : 0,
       active: true,
       description: formDesc,
+      source: "user",
     };
     persist([...fuelTypes, newFuel]);
     resetForm();

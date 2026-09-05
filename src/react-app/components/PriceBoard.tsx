@@ -42,6 +42,10 @@ import {
 } from "@/react-app/lib/fuel-interlink-bus";
 import { normalizeFuelType } from "@/react-app/config/pricing";
 import { emit } from "@/react-app/lib/automation-engine";
+import {
+  getPricingModeSync,
+  canAutoSyncPrice,
+} from "@/react-app/lib/pricing-mode";
 
 interface PriceEntry {
   id: string;
@@ -56,8 +60,9 @@ interface PriceEntry {
   updatedBy: string;
   updatedAt: string;
   /** "user" = explicitly set by the owner/manager (never auto-overwritten);
+   *  "scheduled" = applied by the Price Scheduler (never auto-overwritten);
    *  "auto" = last set by the EPRA/regulator auto-sync (may be refreshed). */
-  source?: "user" | "auto";
+  source?: "user" | "scheduled" | "auto";
 }
 
 interface PriceHistory {
@@ -256,6 +261,13 @@ export default function PriceBoard() {
       localStorage.getItem("fuelpro_price_auto_update") !== "disabled";
     if (!autoUpdateEnabled) return;
 
+    // PRICING-MODE GATE: when the station/user chose "manual", the regulator
+    // auto-sync NEVER writes — it can't clobber scheduler-applied or
+    // user-entered prices. Only in "auto" mode may the regulator fill in
+    // entries that are still "auto"-sourced (see canAutoSyncPrice below).
+    const pricingMode = getPricingModeSync(stationId);
+    if (pricingMode !== "auto") return;
+
     // Get current local prices
     const currentPrices = loadPrices();
     const today = new Date().toISOString().slice(0, 10);
@@ -277,7 +289,7 @@ export default function PriceBoard() {
         // Don't auto-overwrite a price the owner/manager set explicitly.
         if (
           petrolEntry &&
-          petrolEntry.source !== "user" &&
+          canAutoSyncPrice(petrolEntry.source, pricingMode) &&
           petrolEntry.price !== fuelPrice.petrolPrice
         ) {
           // Log history before updating
@@ -311,7 +323,7 @@ export default function PriceBoard() {
         // Don't auto-overwrite a price the owner/manager set explicitly.
         if (
           dieselEntry &&
-          dieselEntry.source !== "user" &&
+          canAutoSyncPrice(dieselEntry.source, pricingMode) &&
           dieselEntry.price !== fuelPrice.dieselPrice
         ) {
           // Log history
@@ -345,7 +357,7 @@ export default function PriceBoard() {
         // Don't auto-overwrite a price the owner/manager set explicitly.
         if (
           keroseneEntry &&
-          keroseneEntry.source !== "user" &&
+          canAutoSyncPrice(keroseneEntry.source, pricingMode) &&
           keroseneEntry.price !== fuelPrice.kerosenePrice
         ) {
           // Log history
@@ -416,14 +428,17 @@ export default function PriceBoard() {
         );
         if (idx < 0 || prev[idx].price === p.price) return prev;
         const next = prev.slice();
+        // A price propagated from the Price Scheduler is marked "scheduled";
+        // everything else (FuelTypesManager / "Set as my price") is an
+        // explicit user choice — either way the EPRA auto-sync must NOT
+        // overwrite it (canAutoSyncPrice only allows "auto"/unset).
+        const isScheduler =
+          typeof p.source === "string" && p.source.includes("Scheduler");
         next[idx] = {
           ...next[idx],
           price: p.price,
           updatedAt: new Date().toISOString(),
-          // A price propagated from FuelTypesManager / "Set as my price" is
-          // an explicit user choice — mark it so the EPRA auto-sync won't
-          // overwrite it on the next refresh.
-          source: "user",
+          source: isScheduler ? "scheduled" : "user",
         };
         return next;
       });
