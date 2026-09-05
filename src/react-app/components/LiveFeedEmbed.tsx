@@ -42,6 +42,7 @@ import {
   liveCaptionEngine,
   type CaptionStatus,
 } from "@/react-app/lib/live-caption-engine";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import Hls from "hls.js";
 import {
   Tv,
@@ -504,7 +505,9 @@ function ChannelPlayer({
       subtitleLangRef.current,
       // Pass the channel's country so the ASR language matches the language
       // SPOKEN in the stream (accuracy), not just the display language.
-      channel.country || "",
+      // Fall back to the user/station's detected country when the channel
+      // has no country metadata (e.g. some iptv-org m3u-sourced channels).
+      channel.country || getDetectedCountryCode(),
     );
   }, [isAudio]);
 

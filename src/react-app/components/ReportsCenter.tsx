@@ -36,7 +36,8 @@ import {
   navigateToTab,
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
-import { getVATRate, getFuelLabel } from "@/react-app/config/pricing";
+import { getFuelLabel } from "@/react-app/config/pricing";
+import { getEffectiveVatRateFor } from "@/react-app/lib/effective-tax";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
@@ -63,7 +64,7 @@ export default function ReportsCenter() {
   const { state } = useFuel();
 
   // Country-aware VAT rate + label (replaces hardcoded "16%")
-  const VAT_RATE = getVATRate(getDetectedCountryCode());
+  const VAT_RATE = getEffectiveVatRateFor(getDetectedCountryCode());
   const vatPercentLabel = `${(VAT_RATE * 100).toFixed(0)}%`;
   const isKenya = isKenyaStation();
 

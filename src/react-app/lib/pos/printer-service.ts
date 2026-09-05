@@ -28,6 +28,7 @@ export interface ReceiptData {
   footerMessage?: string;
   currencyCode?: string; // Currency code (KES, UGX, etc.)
   currencySymbol?: string; // Currency symbol (KSh, USh, etc.)
+  taxLabel?: string; // Label for the tax line (default "VAT")
   settings?: { paperWidth?: number; copies?: number; silent?: boolean };
 }
 
@@ -281,7 +282,10 @@ class PrinterService {
     if (receipt.tax > 0) {
       commands.push(
         this.textToBytes(
-          this.formatLine("Tax (VAT):", this.formatCurrency(receipt.tax)),
+          this.formatLine(
+            `Tax (${receipt.taxLabel || "VAT"}):`,
+            this.formatCurrency(receipt.tax),
+          ),
         ),
       );
       commands.push(this.newline());

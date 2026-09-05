@@ -27,8 +27,12 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import {
+  getEffectiveVatRateFor,
+  getEffectiveTaxIncludedFor,
+  getEffectiveTaxLabelFor,
+} from "@/react-app/lib/effective-tax";
+import {
   CANONICAL_FUEL_TYPES,
-  getVATRate,
   normalizeFuelType,
 } from "@/react-app/config/pricing";
 import {
@@ -378,7 +382,9 @@ export default function PointOfSale() {
     : kenyaStation
       ? "KE"
       : detectedCountryCode || "KE";
-  const VAT_RATE = getVATRate(countryCode);
+  const VAT_RATE = getEffectiveVatRateFor(countryCode);
+  const TAX_INCLUDED = getEffectiveTaxIncludedFor(countryCode);
+  const TAX_LABEL = getEffectiveTaxLabelFor(countryCode);
   const vatPercent = (VAT_RATE * 100).toFixed(2);
 
   // Locale for date/number formatting — derived from the STATION's country
@@ -585,11 +591,18 @@ export default function PointOfSale() {
     cart.forEach((item) => {
       const itemTotal = item.total;
       if (item.vatCategory === "A") {
-        // VAT inclusive calculation
-        const taxable = itemTotal / (1 + VAT_RATE);
-        const vat = itemTotal - taxable;
-        taxableA += taxable;
-        vatA += vat;
+        if (TAX_INCLUDED) {
+          // Prices already include tax: the displayed total is tax-inclusive.
+          const net = itemTotal / (1 + VAT_RATE);
+          const vat = itemTotal - net;
+          taxableA += net;
+          vatA += vat;
+        } else {
+          // Tax-exclusive prices: tax is added on top of the item total.
+          const vat = itemTotal * VAT_RATE;
+          taxableA += itemTotal;
+          vatA += vat;
+        }
       } else if (item.vatCategory === "B") {
         taxableB += itemTotal;
         // 0% VAT
@@ -604,7 +617,11 @@ export default function PointOfSale() {
   const { vatA, taxableA, taxableB, exemptE } = calculateVAT();
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
   const totalVat = vatA;
-  const total = subtotal;
+  // The item totals are the amount the customer pays. When prices are
+  // tax-INCLUSIVE (the default — regulated fuel prices already contain VAT)
+  // the VAT breakdown only re-splits the total for the receipt. When the
+  // owner explicitly configures tax-EXCLUSIVE prices, VAT is added on top.
+  const total = TAX_INCLUDED ? subtotal : subtotal + vatA;
 
   const initiateSTKPush = async () => {
     if (!customerPhone) {
@@ -1710,7 +1727,9 @@ export default function PointOfSale() {
                     </span>
                   </div>
                   <div className="flex justify-between text-gray-600 dark:text-gray-500 dark:text-gray-400">
-                    <span>VAT ({vatPercent}%):</span>
+                    <span>
+                      {TAX_LABEL} ({vatPercent}%):
+                    </span>
                     <span>
                       {currencySymbol} {formatNumber(vatA)}
                     </span>
@@ -2317,7 +2336,9 @@ export default function PointOfSale() {
 
                   {/* VAT Summary */}
                   <div className="vat-summary text-xs space-y-1 mb-3">
-                    <div className="font-bold border-b pb-1">VAT SUMMARY</div>
+                    <div className="font-bold border-b pb-1">
+                      {TAX_LABEL.toUpperCase()} SUMMARY
+                    </div>
                     <div className="flex justify-between">
                       <span>A-{vatPercent}%:</span>
                       <span>
@@ -2325,7 +2346,7 @@ export default function PointOfSale() {
                         {formatNumber(
                           currentTransaction.subtotal - currentTransaction.vatE,
                         )}{" "}
-                        | VAT: {formatNumber(currentTransaction.vatA)}
+                        | {TAX_LABEL}: {formatNumber(currentTransaction.vatA)}
                       </span>
                     </div>
                     {currentTransaction.vatB > 0 && (
@@ -2333,7 +2354,7 @@ export default function PointOfSale() {
                         <span>B-0.00%:</span>
                         <span>
                           Taxable: {formatNumber(currentTransaction.vatB)} |
-                          VAT: 0.00
+                          {TAX_LABEL}: 0.00
                         </span>
                       </div>
                     )}

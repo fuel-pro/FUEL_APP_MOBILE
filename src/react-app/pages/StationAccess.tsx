@@ -25,11 +25,13 @@ import {
 import {
   loginWithAccessCode,
   getAccessSession,
+  saveAccessSession,
   clearAccessSession,
   lookupStation,
   type StationAccessSession,
   type StationLookupResult,
 } from "@/react-app/lib/station-access-code-service";
+import { redeemQrAccess } from "@/react-app/lib/station-qr-access-service";
 import {
   getStationSnapshot,
   type StationSnapshot,
@@ -74,8 +76,51 @@ export default function StationAccess() {
     );
     const owner = params.get("owner");
     const station = params.get("station");
+    const qrToken = params.get("qr");
     if (owner) setStationOwnerId(owner);
     if (station) setStationId(station);
+    // One-tap QR redeem: /#/station-access?qr=<token>&sid=<stationId>
+    // The QR encodes an opaque expiry-scoped grant; redeem it server-side
+    // and auto-log the recipient into the read-only snapshot viewer.
+    if (qrToken && station) {
+      setLoading(true);
+      setError("");
+      redeemQrAccess(station, qrToken)
+        .then((res) => {
+          if (!res.ok || !res.stationId || !res.ownerId) {
+            const reason =
+              res.reason === "expired"
+                ? "This access QR has expired."
+                : res.reason === "max_uses"
+                  ? "This access QR has reached its maximum uses."
+                  : res.reason === "disabled"
+                    ? "This access QR has been revoked."
+                    : res.reason === "not_found"
+                      ? "This access QR is not valid."
+                      : "This access QR could not be redeemed.";
+            setError(reason);
+            return;
+          }
+          const s: StationAccessSession = {
+            accessCodeId: `qr:${qrToken}`,
+            memberName: res.memberLabel || "Guest",
+            memberRole: res.memberRole || "Guest",
+            allowedTabs: res.allowedTabs || [],
+            readOnly: res.readOnly !== false,
+            stationId: res.stationId,
+            stationOwnerId: res.ownerId,
+            loginTime: Date.now(),
+          };
+          saveAccessSession(s);
+          setSession(s);
+        })
+        .catch((err) => {
+          setError(
+            err instanceof Error ? err.message : "QR could not be redeemed.",
+          );
+        })
+        .finally(() => setLoading(false));
+    }
   }, []);
 
   // Debounced station search by name or code.

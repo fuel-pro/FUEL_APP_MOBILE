@@ -183,7 +183,7 @@ const DEFAULT_CONFIG: GeneralSettingsConfig = {
   taxEnabled: true,
   taxRate: getVATRate(getDetectedCountryCode()),
   taxLabel: "VAT",
-  taxIncludedInPrice: false,
+  taxIncludedInPrice: true,
   currency: getDetectedCurrency(),
   currencyPosition: "before",
   invoicePrefix: "INV",

@@ -275,9 +275,9 @@ export class LiveCaptionEngine {
       (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       this.backend = "webspeech";
+      this.running = true;
       this.statusCb?.("listening", "Generating live captions…");
       this.startWebSpeech(SpeechRecognition, onCaption);
-      this.running = true;
       return;
     }
 

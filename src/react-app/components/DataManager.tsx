@@ -204,6 +204,13 @@ export default function DataManager() {
       return;
     }
 
+    if (
+      !confirm(
+        "Restoring a backup will OVERWRITE your current app data with the contents of this file. Continue?",
+      )
+    )
+      return;
+
     setImportStatus("Reading backup file...");
 
     const reader = new FileReader();
@@ -253,6 +260,7 @@ export default function DataManager() {
       const confirmedCloud = confirm(
         "This will permanently delete your data from the cloud so it does NOT reappear on other devices. Continue?",
       );
+      if (!confirmedCloud) return; // cancelling step 2 aborts the whole wipe
       // Only remove FuelPro keys — never clear all localStorage (destructive to other apps)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

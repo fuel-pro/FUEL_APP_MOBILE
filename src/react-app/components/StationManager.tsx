@@ -3723,6 +3723,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
+                      if (
+                        !confirm(
+                          "Reset Station Manager preferences (default station, sort order, active view)?",
+                        )
+                      )
+                        return;
                       localStorage.removeItem(DEFAULT_STATION_KEY);
                       localStorage.removeItem(STATION_SORT_PREF_KEY);
                       localStorage.removeItem(SUBTAB_KEY);

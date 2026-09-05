@@ -1,5 +1,6 @@
 // POS Checkout Component - Payment processing with hardware integration
 import React, { useState } from "react";
+import { getEffectiveTaxLabelFor } from "@/react-app/lib/effective-tax";
 import {
   printerService,
   type ReceiptData,
@@ -119,6 +120,7 @@ export default function POSCheckout({
       customerName,
       attendantName,
       transactionRef: paymentRef,
+      taxLabel: getEffectiveTaxLabelFor(""),
       footerMessage: "E&OE. Prices include VAT where applicable.",
     };
   };

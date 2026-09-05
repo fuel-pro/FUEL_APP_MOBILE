@@ -466,6 +466,11 @@ export function clearAccessSession(): void {
   localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
+/** Persist an access session (used by the one-tap QR redeem path too). */
+export function saveAccessSession(session: StationAccessSession): void {
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+}
+
 // ---------------------------------------------------------------------------
 // Station lookup — lets a member find their station by code or name WITHOUT
 // knowing the owner UUID + station UUID. Powers the "Station Member" login

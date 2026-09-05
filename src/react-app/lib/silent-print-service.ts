@@ -509,7 +509,7 @@ class SilentPrintService {
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
           <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.subtotal.toLocaleString()}</span></div>
           ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.discount.toLocaleString()}</span></div>` : ""}
-          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.tax.toLocaleString()}</span></div>` : ""}
+          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (${receipt.taxLabel || "VAT"}): <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.tax.toLocaleString()}</span></div>` : ""}
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12pt; margin-top: 2mm;">
             <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.total.toLocaleString()}</span>
           </div>
