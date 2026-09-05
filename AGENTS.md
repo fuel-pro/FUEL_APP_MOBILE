@@ -1,3 +1,51 @@
+## Session 2026-09-05 (cont.) — Cross-tab data-source audit: Margin guard + fuel prices bus-sync (commit 8d3ac7e, DEPLOYED LIVE)
+
+User: "Margin guard (price − cost)" wasn't updating; audit how EVERYTHING
+loads/renders across tabs and fix any disconnected-store / stale-source
+issues.
+
+**Root cause of the marquee bug**: FuelTypesManager kept its own local
+`fuelTypes` state refreshed ONLY from the cloud key + realtime subscribe.
+Realtime is OFF by default (low-bandwidth mode, Supabase quota fix), and
+FuelTypesManager did NOT subscribe to the in-device fuel interlink bus
+(`onFuelPriceChange`/`onFuelTypeChange`) — so a price edited in Price
+Board / Dashboard / Price Scheduler / Fuel Price Finder never reached the
+Fuel Type Manager list, and the **Margin guard (price − cost)** stayed
+stale until a full reload. (PriceBoard DOES emit on the bus; PriceScheduler
+goes through `syncPriceToFuelTypes` which emits; both now reach
+FuelTypesManager.)
+
+**Fixes (commit 8d3ac7e)**:
+1. `FuelTypesManager.tsx`: added `onFuelPriceChange` (updates the matching
+   fuel's price in local state, keyed by canonical type) + `onFuelTypeChange`
+   (re-reads latest list from the cloud cache). Margin guard + price/cost
+   InfoBoxes now live-update when a price is set ANYWHERE. Removed the dead
+   `useStationFuelTypes` import (component uses its own local state).
+2. `DeliveryTracker.tsx`: dropped the `state.fuelTypes` additive fallback
+   (NEVER populated — dead source); sole source is canonical
+   `fuel_types_config` via `fuelTypeApi.activeFuelTypes`.
+3. `AIChatbot.tsx`: AI-context `pms/ago/petrol/diesel` now resolve from
+   canonical `fuel_types_config` (via `fuelTypeApi.getPriceFor`) FIRST,
+   legacy `state.pmsPrice/agoPrice` only as fallback — so the chatbot's
+   price answers never drift from a price set in Fuel Type Manager.
+
+**Audit confirmations (already canonical, no change)**: Dashboard price
+cards + Fuel Distribution + Pump Status recompute from `fuelTypeApi`
+(live via the hook's bus sub); POS quick-sale + Invoice "use fuel price"
+use `fuelTypeApi.getPriceFor`; ReportsCenter + AdvancedAnalytics sum
+`posSales`; FuelSalesReport is pump-based by design; CustomerLoyalty /
+CreditManagement / Payroll / GeneralSettings all have the 3-ref guard +
+cloud + subscribe; FuelRateHistory re-reads cloud on sub-tab mount
+(useCloudKV). `state.fuelTypes` remains NEVER populated — never use it.
+
+**Deploy**: GitHub main 8d3ac7e pushed; Cloudflare Pages LIVE (preview
+f48a7971 + main alias, entry index-CaC7Ti0X.js, FuelTypesManager-D4p5jrbJ.js
+has PriceBoard.persist + Price Scheduler markers); Vercel production LIVE
+via GitHub auto-deploy (entry index-FZG7TNk5.js, FuelTypesManager-BoA9Xmy5.js
+has the same markers — Vercel hashes differ from local, verify by MARKER).
+Gates: tsc 0, vitest 283/283, eslint 0 errors (only pre-existing warnings),
+prettier clean, clean Vite-cache build (135 precache).
+
 ## Session 2026-09-05 — Shared on-device OCR applied to ALL upload/scan flows (commit 73c9648)
 
 User: apply the same ACCURATE OCR capability to other relevant
