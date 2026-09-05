@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import {
   parseEmployeeWorkbook,
   buildTemplateWorkbook,
+  workbookFromOcrText,
   employeeDedupKey,
 } from "@/react-app/lib/payroll-import";
 
@@ -323,6 +324,33 @@ describe("buildTemplateWorkbook", () => {
     expect(result.employees[0].sha_number).toBe("SHA-123456");
     expect(result.employees[0].nssf_number).toBe("NSSF-123456");
     expect(result.employees[0].phone).toBe("0712345678");
+  });
+});
+
+describe("workbookFromOcrText", () => {
+  it("turns OCR text rows into a workbook the parser can read", () => {
+    const text = `EMPLOYEE NAME  ID NO  BASIC SALARY  SHA  NSSF  NET
+John Mwangi  33847994  10000  275  540  9185
+Sarah Wanjiku  33847995  85000  2337.5  540  77662.5
+TOTALS  95000  2612.5  1080  86847.5`;
+    const wb = workbookFromOcrText(text);
+    const result = parseEmployeeWorkbook(wb);
+    expect(result.employees).toHaveLength(2);
+    expect(result.employees[0].first_name).toBe("John");
+    expect(result.employees[0].last_name).toBe("Mwangi");
+    expect(result.employees[0].id_number).toBe("33847994");
+    expect(result.employees[0].basic_salary).toBe(10000);
+    expect(result.employees[1].basic_salary).toBe(85000);
+  });
+
+  it("splits cells on pipes and multiple spaces (OCR table shape)", () => {
+    const text = `NAME | ID NO. | BASIC SALARY | NET
+Jane Doe | EMP-001 | 45000 | 40000`;
+    const wb = workbookFromOcrText(text);
+    const result = parseEmployeeWorkbook(wb);
+    expect(result.employees).toHaveLength(1);
+    expect(result.employees[0].first_name).toBe("Jane");
+    expect(result.employees[0].basic_salary).toBe(45000);
   });
 });
 

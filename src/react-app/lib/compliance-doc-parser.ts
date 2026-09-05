@@ -1,5 +1,10 @@
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { ComplianceDocument } from "./compliance-documents";
+import {
+  ocrImage as ocrImageShared,
+  ocrPdf as ocrPdfShared,
+  renderPdfPagesForOcr as renderPdfPagesForOcrShared,
+  extractPdfText as extractPdfTextShared,
+} from "./ocr-service";
 
 /**
  * Best-effort extraction of compliance document fields (name, permit type,
@@ -111,82 +116,19 @@ export function parseDateToken(raw: string): string | undefined {
 // ── text extraction (native PDF text layer) ─────────────────────────────────
 
 export async function extractTextFromPdf(file: File | Blob): Promise<string> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-  const buf = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data: buf }).promise;
-  let text = "";
-  const pages = Math.min(pdf.numPages, 5); // first 5 pages is plenty
-  for (let p = 1; p <= pages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    text +=
-      content.items.map((it) => ("str" in it ? it.str : "")).join(" ") + "\n";
-  }
-  return text;
+  return extractPdfTextShared(file, 5);
 }
 
 // ── visual analysis (OCR) for scanned PDFs & images ─────────────────────────
-
-/** Same-origin tesseract assets (bundled in /public/tessdata — CSP-safe). */
-const TESS_ASSETS = "/tessdata";
-
-interface OcrWorker {
-  recognize: (
-    image: Blob | HTMLCanvasElement,
-  ) => Promise<{ data: { text: string } }>;
-  terminate: () => Promise<void>;
-}
-
-/**
- * Create an OCR worker with all assets served from our own origin.
- * Never call this at module scope (jsdom/tests have no canvas/WASM).
- */
-async function createOcrWorker(
-  onProgress?: (progress: number) => void,
-): Promise<OcrWorker> {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng", 1 /* OEM.LSTM_ONLY */, {
-    workerPath: `${TESS_ASSETS}/worker.min.js`,
-    corePath: TESS_ASSETS,
-    langPath: TESS_ASSETS,
-    gzip: true,
-    cacheMethod: "write", // IndexedDB → subsequent runs skip the download
-    logger: (m: { status?: string; progress?: number }) => {
-      if (m?.status === "recognizing text" && typeof m.progress === "number")
-        onProgress?.(m.progress);
-    },
-    errorHandler: () => {},
-  });
-  return worker as unknown as OcrWorker;
-}
+// Canonical implementation lives in ./ocr-service (shared with every other
+// upload/scan flow in the app); these keep the original export signatures.
 
 /** Render up to `maxPages` of a PDF to white-backed canvases (for OCR). */
 export async function renderPdfPagesForOcr(
   file: File | Blob,
   maxPages = 2,
 ): Promise<HTMLCanvasElement[]> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-  const buf = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data: buf }).promise;
-  const pages: HTMLCanvasElement[] = [];
-  const count = Math.min(pdf.numPages, maxPages);
-  for (let p = 1; p <= count; p++) {
-    const page = await pdf.getPage(p);
-    // ~200dpi is the OCR sweet spot for A4 scans.
-    const viewport = page.getViewport({ scale: 2.5 });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) break;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    pages.push(canvas);
-  }
-  return pages;
+  return renderPdfPagesForOcrShared(file, maxPages);
 }
 
 /**
@@ -197,22 +139,10 @@ export async function ocrCompliancePdf(
   file: File | Blob,
   onProgress?: (progress: number) => void,
 ): Promise<string> {
-  let worker: OcrWorker | null = null;
-  try {
-    const pages = await renderPdfPagesForOcr(file, 2);
-    if (!pages.length) return "";
-    worker = await createOcrWorker(onProgress);
-    let text = "";
-    for (const page of pages) {
-      const { data } = await worker.recognize(page);
-      text += data.text + "\n";
-    }
-    return text;
-  } catch {
-    return "";
-  } finally {
-    await worker?.terminate().catch(() => {});
-  }
+  return ocrPdfShared(file, {
+    maxPages: 2,
+    onProgress: (p) => onProgress?.(p.progress),
+  });
 }
 
 /**
@@ -223,16 +153,7 @@ export async function ocrComplianceImage(
   file: File | Blob,
   onProgress?: (progress: number) => void,
 ): Promise<string> {
-  let worker: OcrWorker | null = null;
-  try {
-    worker = await createOcrWorker(onProgress);
-    const { data } = await worker.recognize(file);
-    return data.text || "";
-  } catch {
-    return "";
-  } finally {
-    await worker?.terminate().catch(() => {});
-  }
+  return ocrImageShared(file, (p) => onProgress?.(p.progress));
 }
 
 // ── field extraction from raw text ──────────────────────────────────────────

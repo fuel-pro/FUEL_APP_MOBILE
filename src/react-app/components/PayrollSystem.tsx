@@ -68,10 +68,12 @@ import * as XLSX from "xlsx";
 import {
   parseEmployeeWorkbook,
   readWorkbookFile,
+  workbookFromOcrText,
   employeeDedupKey,
   buildTemplateWorkbook,
   normalizePaymentMethod,
 } from "@/react-app/lib/payroll-import";
+import { ocrAnyFile, extractPdfTextSmart } from "@/react-app/lib/ocr-service";
 import jsPDF from "jspdf";
 import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
@@ -3367,7 +3369,29 @@ export default function PayrollSystem() {
     try {
       setImporting(true);
 
-      const workbook = await readWorkbookFile(file);
+      let workbook;
+      const isSpreadsheet = /\.(xlsx|xls|csv)$/i.test(file.name);
+      if (isSpreadsheet) {
+        workbook = await readWorkbookFile(file);
+      } else {
+        // Scanned/photographed payroll sheet — read it visually (OCR) and
+        // feed the recognized text rows through the normal parser.
+        let text = "";
+        if (file.type.startsWith("image/")) {
+          text = await ocrAnyFile(file);
+        } else if (/\.pdf$/i.test(file.name)) {
+          const res = await extractPdfTextSmart(file, { maxPages: 5 });
+          text = res.text;
+        }
+        if (!text.trim()) {
+          toastError(
+            "Could not read that file — use an Excel/CSV payroll sheet or a clear photo/scan (OCR). You can download the template to start.",
+          );
+          return;
+        }
+        workbook = workbookFromOcrText(text);
+      }
+
       const result = parseEmployeeWorkbook(workbook);
 
       if (result.employees.length === 0) {
@@ -3811,7 +3835,7 @@ export default function PayrollSystem() {
               <Upload size={12} className="md:w-4 md:h-4" />
             )}
             <span className="hidden sm:inline ml-1">
-              {importing ? "Importing..." : "Import Excel"}
+              {importing ? "Importing..." : "Import Excel / Sheet"}
             </span>
             <span className="sm:hidden">
               {importing ? "Loading..." : "Import"}
@@ -6617,7 +6641,7 @@ export default function PayrollSystem() {
       <input
         ref={importInputRef}
         type="file"
-        accept=".xlsx,.xls,.csv"
+        accept=".xlsx,.xls,.csv,.pdf,image/*"
         onChange={handleImportExcel}
         className="hidden"
       />

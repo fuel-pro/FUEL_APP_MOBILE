@@ -666,6 +666,32 @@ export function parseEmployeeWorkbook(workbook: XLSX.WorkBook): ParseResult {
   };
 }
 
+/**
+ * Builds a SheetJS workbook from OCR text of a scanned/photographed payroll
+ * sheet. Lines become rows; cells are split on tabs, pipes, or runs of 2+
+ * spaces (how a visual table OCRs). The result flows through the same
+ * parseEmployeeWorkbook pipeline as a real spreadsheet.
+ */
+export function workbookFromOcrText(
+  text: string,
+  sheetName = "Scanned Sheet",
+): XLSX.WorkBook {
+  const rows = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) =>
+      line
+        .split(/\t|\s*\|\s*| {2,}/)
+        .map((c) => c.trim())
+        .filter((c) => c !== ""),
+    );
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return wb;
+}
+
 /** Reads a File (xlsx/xls/csv) into a SheetJS workbook with date parsing. */
 export async function readWorkbookFile(file: File): Promise<XLSX.WorkBook> {
   if (/\.csv$/i.test(file.name)) {
