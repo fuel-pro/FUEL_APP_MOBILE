@@ -101,6 +101,7 @@ async function handleIptv(
         {
           id: string;
           name: string;
+          alt_names?: string[];
           country: string;
           categories: string[];
           is_nsfw: boolean;
@@ -135,6 +136,7 @@ async function handleIptv(
         country: ch.country || "",
         language: "",
         category: (ch.categories || []).join(", "),
+        alt_names: Array.isArray(ch.alt_names) ? ch.alt_names : [],
       });
     }
     merged.sort((a, b) => {

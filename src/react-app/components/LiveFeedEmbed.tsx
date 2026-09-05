@@ -11,6 +11,7 @@ import {
   formatMinuteOfDay,
   getSubCategory,
   filterChannelsByKeywords,
+  searchChannels,
   fetchLiveChannels,
   fetchIptvChannels,
   mergeChannelsWithIptv,
@@ -1221,13 +1222,19 @@ export default function LiveFeedEmbed({
 
         // Merge the public-domain catalog (adds logos + extra channels) for
         // the video family only (it has no radio mode).
+        // NOTE: fetch the FULL 12k global iptv-org catalog (like VLC opening
+        // the master .m3u) — NOT a per-country capped slice. A per-country/limit
+        // slice silently drops any channel outside the current country (e.g.
+        // "Zee One" is a UK channel — it would never appear on the default US
+        // view, so searching "zee one" found nothing, even though VLC finds it
+        // the instant a global playlist is loaded. The client-side country label
+        // + search then operate over the whole catalog exactly like the playlist.
         const catDef = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
         const isAudio = catDef?.family === "audio";
         if (!isAudio) {
           try {
             const iptvCat = mapToIptvCategory(category);
-            const iptvCountry = country && !showAll ? country : "";
-            const iptv = await fetchIptvChannels(iptvCountry, iptvCat, 200);
+            const iptv = await fetchIptvChannels("", iptvCat || "", 12000);
             if (!cancelled && iptv.length > 0) {
               list = mergeChannelsWithIptv(list, iptv);
             }
@@ -1286,16 +1293,12 @@ export default function LiveFeedEmbed({
     };
   }, [category, subCategoryId, country, showAll]);
 
-  // Search-filtered + paged channel list
-  const filteredChannels = useMemo(() => {
-    const q = channelSearch.trim().toLowerCase();
-    if (!q) return channels;
-    return channels.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.country || "").toLowerCase().includes(q),
-    );
-  }, [channels, channelSearch]);
+  // Search-filtered + paged channel list (matches name, country, alt names —
+  // the same coverage VLC has over a network playlist).
+  const filteredChannels = useMemo(
+    () => searchChannels(channels, channelSearch),
+    [channels, channelSearch],
+  );
 
   const visibleChannels = useMemo(
     () => filteredChannels.slice(0, gridLimit),

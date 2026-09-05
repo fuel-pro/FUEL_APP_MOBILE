@@ -19,6 +19,7 @@ export interface IptvChannel {
   country: string;
   language: string;
   category: string;
+  alt_names?: string[];
 }
 
 interface Env {}
@@ -38,6 +39,7 @@ const MAX_RESULTS = 12000;
 interface IptvChannelRaw {
   id: string;
   name: string;
+  alt_names?: string[];
   country: string;
   categories: string[];
   is_nsfw: boolean;
@@ -123,6 +125,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         country: ch.country || "",
         language: "",
         category: (ch.categories || []).join(", "),
+        alt_names: Array.isArray(ch.alt_names) ? ch.alt_names : [],
       });
     }
 
