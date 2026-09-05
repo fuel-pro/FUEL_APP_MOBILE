@@ -793,10 +793,12 @@ export default function Dashboard() {
       if (entry.agoPumps?.length) allFuelTypes.add("diesel");
     });
     // If no history yet, fall back to the station's configured fuel types
-    if (allFuelTypes.size === 0 && state.fuelTypes?.length > 0) {
-      state.fuelTypes.forEach((ft: any) => {
-        if (ft.isActive && ft.canonicalType) allFuelTypes.add(ft.canonicalType);
-      });
+    // (canonical fuel_types_config — `state.fuelTypes` is never populated).
+    if (allFuelTypes.size === 0) {
+      for (const ft of fuelTypeApi.activeFuelTypes) {
+        const c = fuelTypeApi.canonicalOf(ft.name) || ft.code || "";
+        if (c) allFuelTypes.add(c);
+      }
     }
     if (allFuelTypes.size === 0) {
       allFuelTypes.add("petrol");
@@ -899,7 +901,7 @@ export default function Dashboard() {
         };
       }),
     };
-  }, [state.salesHistory, state.fuelTypes]);
+  }, [state.salesHistory, fuelTypeApi.activeFuelTypes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fuel type distribution
   const fuelDistData = useMemo(() => {

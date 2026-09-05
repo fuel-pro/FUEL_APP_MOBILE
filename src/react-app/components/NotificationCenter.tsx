@@ -25,6 +25,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { normalizeFuelType } from "@/react-app/config/pricing";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 interface NotificationItem {
   id: string;
@@ -45,6 +46,12 @@ export default function NotificationCenter() {
   const { state } = useFuel();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  // Canonical fuel types (fuel_types_config, via useStationFuelTypes).
+  // `state.fuelTypes` is never populated — reading it made low-tank alerts
+  // silently never fire for stations that configured fuels in Fuel Type
+  // Manager (the source of truth). Use the hook so notifications reflect
+  // what the user actually set.
+  const fuelTypeApi = useStationFuelTypes(stationId);
 
   useEffect(() => {
     async function loadNotifications() {
@@ -58,9 +65,9 @@ export default function NotificationCenter() {
           return;
         }
 
-        // 1. Low tank levels (from FuelContext state)
+        // 1. Low tank levels (from FuelContext tank values + canonical fuels)
         const tankValues = state.fuelTankValuesByType || {};
-        const fuelTypes = state.fuelTypes || [];
+        const fuelTypes = fuelTypeApi.fuelTypes;
         for (const ft of fuelTypes) {
           if (!ft.active) continue;
           const canonical =
@@ -263,7 +270,13 @@ export default function NotificationCenter() {
     // Refresh every 60 seconds
     const interval = setInterval(loadNotifications, 60000);
     return () => clearInterval(interval);
-  }, [state.fuelTankValuesByType, state.invoices, state.fuelTypes, stationId]);
+  }, [
+    state.fuelTankValuesByType,
+    state.invoices,
+    state.fuelTypes,
+    stationId,
+    fuelTypeApi.fuelTypes,
+  ]);
 
   // Close on outside click
   useEffect(() => {

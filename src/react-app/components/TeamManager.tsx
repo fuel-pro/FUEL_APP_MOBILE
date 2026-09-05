@@ -63,6 +63,7 @@ import {
 } from "@/react-app/context/PermissionContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
 import AttendantPerformance from "@/react-app/components/AttendantPerformance";
@@ -367,6 +368,11 @@ export default function TeamManager() {
   const { user, bindings, terminateRole } = useAuth();
   const { currentStation } = useStations();
   const { state } = useFuel();
+  const stationId = currentStation?.id;
+  // Canonical fuel types (fuel_types_config, via useStationFuelTypes).
+  // `state.fuelTypes` is never populated — reading it produced an EMPTY
+  // shared snapshot even when the owner set prices in Fuel Type Manager.
+  const fuelTypeApi = useStationFuelTypes(stationId);
   const {
     role,
     team,
@@ -683,23 +689,20 @@ export default function TeamManager() {
   const [lastPublished, setLastPublished] = useState<number | null>(null);
 
   const publishSnapshot = useCallback(async () => {
-    const stationId = currentStation?.id;
     if (!stationId) return;
     setPublishing(true);
     try {
-      // Fuel prices — prefer the dynamic per-fuel-type price store, fall
-      // back to the legacy pmsPrice/agoPrice for stations that haven't
-      // migrated to fuel_types_config.
+      // Fuel prices — canonical fuel_types_config (Fuel Type Manager +
+      // Price Scheduler source), fall back to legacy pmsPrice/agoPrice only
+      // for stations that haven't configured fuel types yet.
       const fuelPrices: StationSnapshot["fuelPrices"] = [];
-      if (state.fuelTypes && Array.isArray(state.fuelTypes)) {
-        for (const ft of state.fuelTypes) {
-          if (ft.active === false) continue;
-          fuelPrices.push({
-            label: ft.localName || getFuelLabel(ft.name || ""),
-            price: Number(ft.price) || 0,
-            code: ft.code || getFuelCode(ft.name || ""),
-          });
-        }
+      for (const ft of fuelTypeApi.fuelTypes) {
+        if (ft.active === false) continue;
+        fuelPrices.push({
+          label: ft.localName || getFuelLabel(ft.name || ""),
+          price: Number(ft.price) || 0,
+          code: ft.code || getFuelCode(ft.name || ""),
+        });
       }
       if (fuelPrices.length === 0) {
         // Legacy fallback
@@ -900,7 +903,7 @@ export default function TeamManager() {
     } finally {
       setPublishing(false);
     }
-  }, [currentStation, state]);
+  }, [currentStation, state, fuelTypeApi.fuelTypes, stationId]);
 
   // Auto-publish the snapshot whenever access codes change (so a freshly
   // created code has data to show) + on mount.
