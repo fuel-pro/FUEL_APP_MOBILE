@@ -38,6 +38,8 @@ import FuelRateHistory from "@/react-app/components/FuelRateHistory";
 import {
   emitFuelTypeChange,
   emitFuelPriceChange,
+  onFuelPriceChange,
+  onFuelTypeChange,
   type FuelPricePrefill,
 } from "@/react-app/lib/fuel-interlink-bus";
 import {
@@ -50,7 +52,6 @@ import {
   getVATRate,
 } from "@/react-app/config/pricing";
 import type { CanonicalFuelType } from "@/react-app/config/pricing";
-import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
@@ -519,6 +520,44 @@ export default function FuelTypesManager() {
         .catch(() => {});
     }
   }, [cloudLoadCompleteRef.current]);
+
+  // In-device interlink bus: a price/fuel-type edit in ANOTHER component on
+  // the same page (Price Board, Dashboard price card, Price Scheduler, POS)
+  // must update THIS list live — otherwise the Margin guard (price − cost)
+  // and the price/cost displays stay stale until a full reload. The bus
+  // fires optimistically before the cloud real-time echo (which is now OFF
+  // by default in low-bandwidth mode), so without this the Fuel Type Manager
+  // would never see price changes made elsewhere.
+  useEffect(() => {
+    const unsubPrice = onFuelPriceChange((p) => {
+      const list = fuelTypesRef.current;
+      if (!list.length) return;
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      const idx = list.findIndex(
+        (ft) => normalizeFuelType(ft.name) === canonical,
+      );
+      if (idx >= 0 && list[idx].price !== p.price) {
+        const next = list.slice();
+        next[idx] = { ...next[idx], price: p.price };
+        setFuelTypes(next);
+      }
+    });
+    const unsubType = onFuelTypeChange(() => {
+      // A fuel-type add/edit/delete/activate elsewhere — re-read the latest
+      // list from the cloud cache so this view reflects it immediately.
+      const cached = cloudStorageService.getCached<unknown[]>(
+        FUEL_TYPES_CLOUD_KEY,
+        stationId,
+      );
+      if (Array.isArray(cached) && !localModifiedRef.current)
+        setFuelTypes(normalizeCustomFuelTypes(cached));
+    });
+    return () => {
+      unsubPrice();
+      unsubType();
+    };
+  }, [stationId]);
 
   // Interlink receiver: when another tab calls navigateToTab("fueltypes",
   // <FuelPricePrefill>), open the add form pre-filled with the fuel type +
