@@ -144,9 +144,7 @@ export default function SetupWizard({
     const signupProfile = getCachedSignupProfile();
     return {
       stationName: signupProfile?.name || "",
-      location: signupProfile?.address
-        ? signupProfile.address
-        : "Auto-detected",
+      location: signupProfile?.address || "",
       contacts: signupProfile?.phone || "",
       email: "",
       countryCode: cc,
@@ -160,9 +158,7 @@ export default function SetupWizard({
       agoPrice: displayPrices.agoPrice || dieselPrice.price,
       kraPin: signupProfile?.taxId || "",
       vatRegNo: signupProfile?.regNo || "",
-      physicalAddress: signupProfile?.address
-        ? signupProfile.address
-        : "Auto-detected location",
+      physicalAddress: signupProfile?.address || "",
       etrSerialNo: "",
       extraFuels: [],
     };
@@ -375,7 +371,15 @@ export default function SetupWizard({
         email: data.email,
         kraPin: data.kraPin,
         vatRegNo: data.vatRegNo,
-        physicalAddress: data.physicalAddress || data.location,
+        // Never write the "Auto-detected location" UI placeholder into the
+        // authoritative companyData — it would leak into invoices/reports.
+        physicalAddress:
+          data.physicalAddress &&
+          data.physicalAddress !== "Auto-detected location"
+            ? data.physicalAddress
+            : data.location && data.location !== "Auto-detected"
+              ? data.location
+              : "",
         etrSerialNo: data.etrSerialNo,
         // Store the currency CODE (e.g. "USD"), not the symbol ("$"), so
         // downstream components resolve the correct symbol at display time.
@@ -534,7 +538,7 @@ export default function SetupWizard({
     try {
       const newStation = createStation({
         name: data.stationName || "My Fuel Station",
-        location: data.location || "Auto-detected",
+        location: data.location || "",
         description: stationDescription,
         // Pass through the contact/tax details captured in the wizard so the
         // station record (and downstream cloud sync) carries them instead of
@@ -584,7 +588,7 @@ export default function SetupWizard({
       const fallbackStation = {
         id: newStationId || `st_${Date.now()}`,
         name: data.stationName || "My Fuel Station",
-        location: data.location || "Auto-detected",
+        location: data.location || "",
         description: stationDescription,
         status: "active",
         createdAt: new Date().toISOString(),

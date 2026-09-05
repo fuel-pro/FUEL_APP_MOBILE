@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Globe,
   Shield,
@@ -610,7 +610,19 @@ function PermitsSection({
   onRemoveCustom?: (permit: string) => void;
 }) {
   const storageKey = `compliance_permits_${config.countryCode}`;
+  // 3-ref guard: cloud is the source of truth; the async cloud load must
+  // never overwrite a just-made toggle (the "reverting" bug), and saves must
+  // not race ahead of the initial load and wipe remote data on a fresh device.
+
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const obtainedRef = useRef<Set<string>>(new Set());
+
   const [obtained, setObtained] = useState<Set<string>>(() => {
+    // Instant first render from the in-memory cloud cache (cross-device),
+    // falling back to the legacy localStorage cache, then empty.
+    const cached = cloudStorageService.getCached<string[]>(storageKey);
+    if (cached && Array.isArray(cached)) return new Set<string>(cached);
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) return new Set<string>(JSON.parse(saved));
@@ -619,23 +631,37 @@ function PermitsSection({
     }
     return new Set<string>();
   });
+  obtainedRef.current = obtained;
   const [loaded, setLoaded] = useState(false);
 
   // Load from cloud (cross-device) + realtime
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
+    cloudLoadCompleteRef.current = false;
     (async () => {
       const cloud = await cloudStorageService.get<string[]>(storageKey);
-      if (!cancelled && Array.isArray(cloud)) {
+      if (!cancelled && Array.isArray(cloud) && !localModifiedRef.current) {
         setObtained(new Set<string>(cloud));
+        obtainedRef.current = new Set<string>(cloud);
+      }
+      cloudLoadCompleteRef.current = true;
+      // Flush any toggle made while the initial load was in flight.
+
+      if (localModifiedRef.current) {
+        cloudStorageService
+          .set(storageKey, Array.from(obtainedRef.current))
+          .catch(() => {});
       }
       setLoaded(true);
       unsub = cloudStorageService.subscribe<string[]>(
         storageKey,
         undefined,
         (val) => {
-          if (Array.isArray(val)) setObtained(new Set<string>(val));
+          if (Array.isArray(val) && !localModifiedRef.current) {
+            setObtained(new Set<string>(val));
+            obtainedRef.current = new Set<string>(val);
+          }
         },
       );
     })();
@@ -650,13 +676,21 @@ function PermitsSection({
     if (next.has(permit)) next.delete(permit);
     else next.add(permit);
     setObtained(next);
+    obtainedRef.current = next;
     const arr = Array.from(next);
     try {
       localStorage.setItem(storageKey, JSON.stringify(arr));
     } catch {
       /* */
     }
-    cloudStorageService.set(storageKey, arr).catch(() => {});
+    if (!cloudLoadCompleteRef.current) return;
+    localModifiedRef.current = true;
+    cloudStorageService
+      .set(storageKey, arr)
+      .catch(() => {})
+      .finally(() => {
+        localModifiedRef.current = false;
+      });
   };
 
   const obtainedCount = obtained.size;

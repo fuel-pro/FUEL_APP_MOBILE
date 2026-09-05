@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import {
   FlaskConical,
@@ -87,13 +87,28 @@ export default function FuelQualityTesting() {
   })();
   const defaultFuelType =
     fuelTypeOptions[0]?.code || fuelTypeApi.activeFuelTypes[0]?.code || "PMS";
+  // 3-ref guard: cloud is the source of truth; the async cloud load must never
+  // overwrite a just-made local edit (the "reverting" bug), and saves must not
+  // race ahead of the initial load and wipe remote data on a fresh device.
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const testsRef = useRef<QualityTest[]>([]);
+
   const [tests, setTests] = useState<QualityTest[]>(() => {
+    // Instant first render from the in-memory cloud cache (cross-device),
+    // falling back to the legacy localStorage cache, then defaults.
+    const cached = cloudStorageService.getCached<QualityTest[]>(
+      "fuel_quality_tests",
+      stationId,
+    );
+    if (Array.isArray(cached) && cached.length > 0) return cached;
     try {
       return JSON.parse(localStorage.getItem("fuelpro_quality_tests") || "[]");
     } catch {
       return defaultTests();
     }
   });
+  testsRef.current = tests;
   const [showAdd, setShowAdd] = useState(false);
   const [newTest, setNewTest] = useState<Partial<QualityTest>>({
     fuelType: defaultFuelType,
@@ -102,20 +117,56 @@ export default function FuelQualityTesting() {
 
   const save = (t: QualityTest[]) => {
     setTests(t);
+    testsRef.current = t;
     localStorage.setItem("fuelpro_quality_tests", JSON.stringify(t));
-    cloudStorageService.set("fuel_quality_tests", t, stationId).catch(() => {});
+    if (!cloudLoadCompleteRef.current) return;
+    localModifiedRef.current = true;
+    cloudStorageService
+      .set("fuel_quality_tests", t, stationId)
+      .catch(() => {})
+      .finally(() => {
+        localModifiedRef.current = false;
+      });
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount (cross-device sync) + realtime subscription.
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+    cloudLoadCompleteRef.current = false;
     (async () => {
       const cloudTests = await cloudStorageService.get<QualityTest[]>(
         "fuel_quality_tests",
         stationId,
       );
-      if (cloudTests && Array.isArray(cloudTests)) setTests(cloudTests);
+      if (cancelled) return;
+      if (Array.isArray(cloudTests) && !localModifiedRef.current) {
+        setTests(cloudTests);
+        testsRef.current = cloudTests;
+      }
+      cloudLoadCompleteRef.current = true;
+      // Flush any edit made while the initial load was in flight.
+      if (localModifiedRef.current) {
+        cloudStorageService
+          .set("fuel_quality_tests", testsRef.current, stationId)
+          .catch(() => {});
+      }
+      unsub = cloudStorageService.subscribe<QualityTest[]>(
+        "fuel_quality_tests",
+        stationId,
+        (val) => {
+          if (Array.isArray(val) && !localModifiedRef.current) {
+            setTests(val);
+            testsRef.current = val;
+          }
+        },
+      );
     })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
   }, [user, stationId]);
 
   const passed = tests.filter((t) => t.passed).length;
