@@ -865,6 +865,190 @@ export default function TeamManager() {
         /* credit optional */
       }
 
+      // ── Extended coverage (member full-site portal) ────────────────────
+      // Each fetch is optional + best-effort; a missing set simply yields []
+      // for that section. We gate on the member's OWN cloud via the public
+      // snapshot, so NO RLS secrets ever leak — only what the owner shares.
+      const getCloud = async <T = any[],>(key: string): Promise<T> => {
+        try {
+          const { cloudStorageService } =
+            await import("@/react-app/lib/cloud-storage-service");
+          const val = await cloudStorageService.get<T>(key, stationId);
+          return val;
+        } catch {
+          return undefined as unknown as T;
+        }
+      };
+
+      // Deliveries — from the compact blob (deliveryData.rows)
+      const deliveries: StationSnapshot["deliveries"] = Array.isArray(
+        state.deliveryData?.rows,
+      )
+        ? state.deliveryData.rows
+            .slice(-30)
+            .reverse()
+            .map((d: any) => ({
+              date: d.date,
+              reg: d.reg || d.vehicle || d.truck,
+              fuel: d.fuel || "",
+              litres: Number(d.litres || 0),
+              amount: Number(d.amount || 0),
+              name: d.name || "",
+              debt: Number(d.debt || 0),
+            }))
+        : [];
+
+      // Customers — from state.clients (record) + loyalty_customers fallback
+      let customers: StationSnapshot["customers"] = [];
+      try {
+        const clientsObj = state.clients || ({} as any);
+        customers = Object.values(clientsObj)
+          .slice(0, 50)
+          .map((c: any) => ({
+            name: c.name || c.customerName || "",
+            phone: c.phone || c.contact || "",
+            email: c.email || "",
+          }));
+      } catch {
+        /* customers optional */
+      }
+      if (customers.length === 0) {
+        const loy = await getCloud<any[]>("loyalty_customers");
+        if (Array.isArray(loy)) {
+          customers = loy.slice(0, 50).map((c: any) => ({
+            name: c.name || c.customerName || "",
+            phone: c.phone || "",
+            email: c.email || "",
+          }));
+        }
+      }
+
+      // Suppliers + purchase orders
+      const purchases: StationSnapshot["purchases"] = [];
+      const suppliers = await getCloud<any[]>("suppliers_data");
+      if (Array.isArray(suppliers)) {
+        suppliers.slice(0, 50).forEach((s: any) =>
+          purchases.push({
+            type: "supplier",
+            name: s.name || s.supplierName || "",
+            amount: Number(s.balance || s.totalDue || 0) || 0,
+            date: s.createdAt || s.date || "",
+            status: s.status || "active",
+          }),
+        );
+      }
+      const purchaseOrders = await getCloud<any[]>("purchase_orders");
+      if (Array.isArray(purchaseOrders)) {
+        purchaseOrders.slice(0, 50).forEach((po: any) =>
+          purchases.push({
+            type: "purchase-order",
+            name: po.supplierName || po.supplier || "Purchase Order",
+            amount: Number(po.total || po.amount || 0) || 0,
+            date: po.createdAt || po.date || "",
+            status: po.status || "open",
+          }),
+        );
+      }
+
+      // Maintenance records
+      const maintenance: StationSnapshot["maintenance"] = [];
+      const maintArr = await getCloud<any[]>("maintenance_records");
+      if (Array.isArray(maintArr)) {
+        maintArr.slice(0, 50).forEach((m: any) =>
+          maintenance.push({
+            title: m.title || m.description || m.equipment || "Maintenance",
+            equipment: m.equipment || m.category || "",
+            cost: Number(m.cost || m.amount || 0) || 0,
+            status: m.status || "open",
+            date: m.date || m.createdAt || "",
+          }),
+        );
+      }
+
+      // Communication contacts
+      const contacts: StationSnapshot["contacts"] = [];
+      const commArr = await getCloud<any[]>("comm_contacts");
+      if (Array.isArray(commArr)) {
+        commArr.slice(0, 50).forEach((c: any) =>
+          contacts.push({
+            name: c.name || "",
+            phone: c.phone || "",
+            email: c.email || "",
+            tags: Array.isArray(c.tags)
+              ? c.tags.join(", ")
+              : typeof c.tags === "string"
+                ? c.tags
+                : "",
+            starred: Boolean(c.starred),
+          }),
+        );
+      }
+
+      // Fuel quality tests
+      const quality: StationSnapshot["quality"] = [];
+      const qualArr = await getCloud<any[]>("fuel_quality_tests");
+      if (Array.isArray(qualArr)) {
+        qualArr.slice(0, 50).forEach((q: any) =>
+          quality.push({
+            fuel: q.fuelType || q.fuel || "",
+            testType: q.testType || q.test || q.type || "Quality Test",
+            result: q.result || q.reading || "",
+            status: q.passed ? "Pass" : q.status || "Pending",
+            date: q.date || q.createdAt || "",
+          }),
+        );
+      }
+
+      // Shift employees
+      const shifts: StationSnapshot["shifts"] = [];
+      const shiftArr = await getCloud<any[]>("shift_employees");
+      if (Array.isArray(shiftArr)) {
+        shiftArr.slice(0, 50).forEach((e: any) =>
+          shifts.push({
+            name: e.name || e.fullName || e.employeeName || "",
+            role: e.role || e.position || "",
+            phone: e.phone || "",
+            active: e.active !== false,
+          }),
+        );
+      }
+
+      // Payment transactions summary (mpesa_transactions)
+      const payments: StationSnapshot["payments"] = [];
+      const payArr = await getCloud<any[]>("mpesa_transactions");
+      if (Array.isArray(payArr)) {
+        payArr
+          .slice(-30)
+          .reverse()
+          .forEach((p: any) =>
+            payments.push({
+              ref: p.transaction_ref || p.reference || p.ref || p.receipt || "",
+              amount: Number(p.amount || 0) || 0,
+              status: p.status || "",
+              origin: p.origin || p.source || "",
+              date: p.transaction_time || p.date || p.createdAt || "",
+            }),
+          );
+      }
+
+      // Report/analytics KPIs
+      const payable = purchases
+        .filter((p) => p.type === "purchase-order")
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+      const reportKpis: StationSnapshot["reportKpis"] = {
+        totalDebt: state.deliveryData?.totals?.balanceDue || 0,
+        totalExpenses: expenses.reduce((sum, e) => sum + (e.amount || 0), 0),
+        totalCreditOutstanding: creditAccounts.reduce(
+          (sum, c) => sum + (c.balance || 0),
+          0,
+        ),
+        totalPayables: payable,
+        totalDeliveries: deliveries.length,
+        totalOffloading: offloading.length,
+        totalTeamMembers: employees.length,
+        totalActiveShifts: shifts.filter((s) => s.active !== false).length,
+      };
+
       const snapshot: Omit<StationSnapshot, "updatedAt"> = {
         stationId,
         stationName:
@@ -894,6 +1078,15 @@ export default function TeamManager() {
           kraPin: state.companyData?.kraPin,
           vatNumber: state.companyData?.vatRegNo,
         },
+        deliveries,
+        customers,
+        purchases,
+        maintenance,
+        contacts,
+        quality,
+        shifts,
+        payments,
+        reportKpis,
       };
 
       const ok = await publishStationSnapshot(stationId, snapshot);
