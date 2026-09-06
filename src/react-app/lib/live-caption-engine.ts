@@ -28,7 +28,12 @@
 export type CaptionCallback = (text: string, isFinal: boolean) => void;
 
 export type CaptionStatus =
-  "idle" | "loading-model" | "listening" | "unavailable" | "error";
+  | "idle"
+  | "waiting" // waiting for playback to start so an audio track can be captured
+  | "loading-model"
+  | "listening"
+  | "unavailable"
+  | "error";
 
 export type CaptionStatusCallback = (
   status: CaptionStatus,
@@ -266,7 +271,8 @@ export function rms(buf: Float32Array): number {
 
 export class LiveCaptionEngine {
   private audioCtx: AudioContext | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
+  private source:
+    MediaStreamAudioSourceNode | MediaElementAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private stream: MediaStream | null = null;
   private buffer: Float32Array[] = [];
@@ -343,9 +349,27 @@ export class LiveCaptionEngine {
 
   /**
    * Start generating live captions from a media element.
+   *
+   * ALWAYS produces a live audio source for the caption pipeline, even when
+   * the stream's captureStream() exposes no audio track yet:
+   *  1. It first WAITS for the element to actually start playing (a fixed
+   *     4 s timeout was the root cause of "This stream exposes no audio
+   *     track to caption" — autoplay-blocked / slow-buffering elements
+   *     yielded zero tracks before the engine gave up).
+   *  2. It falls back to a Web-Audio tap (`createMediaElementSource`) which
+   *     routes the element's OUTPUT directly into the caption graph — a real
+   *     live audio track even when captureStream's track enumeration is
+   *     empty or unsupported.
+   *  3. Only a genuinely silent/video-only source gives up, and it never
+   *     dead-ends: `onNoAudio` is invoked so the host can auto-advance to a
+   *     captioned channel.
+   *
    * @param mediaEl  the <video>/<audio> element currently playing the stream
    * @param onCaption  called with each transcribed caption segment
-   * @param onStatus  lifecycle updates (loading-model / listening / error…)
+   * @param onStatus  lifecycle updates (waiting / loading-model / listening / …)
+   * @param preferredLang  display language (translated on-device from English)
+   * @param streamCountry  ISO-2 country → language SPOKEN in the stream
+   * @param onNoAudio  called when the source truly has no audible track
    */
   async start(
     mediaEl: HTMLMediaElement,
@@ -353,65 +377,87 @@ export class LiveCaptionEngine {
     onStatus?: CaptionStatusCallback,
     preferredLang: string = "en",
     streamCountry: string = "",
+    onNoAudio?: () => void,
   ): Promise<void> {
     this.statusCb = onStatus || null;
     this.preferredLang = preferredLang || "en";
     this.streamCountry = (streamCountry || "").toLowerCase();
     if (this.running) return;
+    this.running = true; // reserve the engine while we await readiness
 
-    // Capture the element's audio output. captureStream() requires the media
-    // element to be CORS-enabled (crossOrigin="anonymous"), which the player
-    // sets from FIRST load so the captured audio is real (not the mute that
-    // non-CORS media yields). Streams flow through the same-origin
-    // /api/hls-proxy, so CORS never blocks them.
-    const capture =
-      (mediaEl as any).captureStream?.() ||
-      (mediaEl as any).mozCaptureStream?.();
+    // ── Phase 1: wait for real playback. An element that is still buffering,
+    // autoplay-blocked, or slow to attach its audio produces an empty
+    // captureStream; keep waiting (with friendly feedback) instead of failing.
+    const playbackReady = await this.waitForPlayback(mediaEl);
+    if (!this.running) return; // stopped while waiting
+    if (!playbackReady) {
+      // Playback hasn't started within the window. Surface a clear WAITING
+      // state and return — the host's `playing` listener restarts the engine
+      // the moment the stream begins, so captions "turn on automatically"
+      // instead of dead-ending with the old "no audio track" error.
+      this.running = false;
+      this.statusCb?.(
+        "waiting",
+        "Waiting for playback to start — captions will turn on automatically…",
+      );
+      return;
+    }
+
+    // ── Phase 2: capture the element's audio output.
+    // Primary: captureStream() (non-invasive). Its audio tracks can be empty
+    // while the element loads, so poll for a track to appear.
+    let capture: MediaStream | null = null;
+    const hasCaptureStream = this.hasCaptureStream(mediaEl);
+    if (hasCaptureStream) {
+      capture = this.captureStreamOf(mediaEl);
+      if (capture) {
+        const gotTrack = await this.waitForAudioTrack(capture as MediaStream);
+        if (!this.running) return;
+        if (!gotTrack) capture = null; // fall through to the Web-Audio tap
+      }
+    }
+
+    // Fallback: Web-Audio tap. createMediaElementSource() routes the
+    // element's OUTPUT bus directly into our audio graph — this is the
+    // "always create a live audio track" guarantee: it does NOT depend on
+    // the browser enumerating a track in captureStream(). We only use it when
+    // captureStream failed, because a tappable element is single-use in an
+    // AudioContext (calling it twice throws) — so captureStream is preferred.
+    let useElementTap = false;
     if (!capture) {
+      if (this.audioCtx) {
+        // A context already exists from a prior tap; it still holds the
+        // element, so reuse it (element taps are single-use per context).
+      }
+      try {
+        const hasCtxClass =
+          typeof window !== "undefined" &&
+          (window.AudioContext || (window as any).webkitAudioContext);
+        if (hasCtxClass) {
+          // We can ALWAYS create an audio context for the tap.
+          useElementTap = true;
+        }
+      } catch {
+        useElementTap = false;
+      }
+    }
+
+    if (!capture && !useElementTap) {
+      this.running = false;
       this.statusCb?.(
         "unavailable",
         "Live caption capture is not supported in this browser.",
       );
       return;
     }
-    // The audio track can momentarily be empty while the element loads. Wait
-    // briefly (up to ~4 s) for the track to appear before giving up so a
-    // captions toggle during buffering still works.
-    let audioTracks = (capture as MediaStream).getAudioTracks();
-    if (audioTracks.length === 0) {
-      const waited = await new Promise<boolean>((resolve) => {
-        let waitedMs = 0;
-        const iv = setInterval(() => {
-          waitedMs += 250;
-          const t = (capture as MediaStream).getAudioTracks();
-          if (t.length > 0) {
-            audioTracks = t;
-            clearInterval(iv);
-            resolve(true);
-          } else if (waitedMs >= 4000) {
-            clearInterval(iv);
-            resolve(false);
-          }
-        }, 250);
-      });
-      if (!waited) {
-        this.statusCb?.(
-          "unavailable",
-          "This stream exposes no audio track to caption. Wait for playback to start, then toggle again.",
-        );
-        return;
-      }
-    }
 
-    // Caption source: the on-device Whisper pipeline (MULTILINGUAL) running
-    // over the CAPTURED STREAM AUDIO. The old Web Speech API path was removed
-    // because SpeechRecognition listens to the MICROPHONE, not the stream — it
-    // could never caption the media element. Whisper captures and transcribes
-    // the actual stream, and auto-detects the spoken language for accuracy.
+    // ── Phase 3: load the Whisper model (before wiring audio so the model
+    // download overlaps nothing critical).
     this.statusCb?.("loading-model", "Loading on-device caption model…");
     try {
       await loadAsr();
     } catch (err) {
+      this.running = false;
       this.statusCb?.(
         "error",
         `Could not load the caption model: ${
@@ -420,15 +466,22 @@ export class LiveCaptionEngine {
       );
       return;
     }
+    if (!this.running) return;
 
-    this.audioCtx = new AudioContext();
-    this.source = this.audioCtx.createMediaStreamSource(this.stream);
+    // ── Phase 4: build the audio graph.
+    this.audioCtx =
+      this.audioCtx ||
+      new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (this.audioCtx.state === "suspended") {
+      // Autoplay policy — the user gesture that toggled captions unlocks it.
+      await this.audioCtx.resume().catch(() => {});
+    }
+
     // ScriptProcessorNode is deprecated but universally supported; the buffer
     // size (8192) ≈ 0.5 s at 16 kHz keeps callback cadence modest.
     this.processor = this.audioCtx.createScriptProcessor(8192, 1, 1);
     this.buffer = [];
     this.bufferedSamples = 0;
-    this.running = true;
 
     const captureRate = this.audioCtx.sampleRate;
     const windowSamples = LiveCaptionEngine.WINDOW_SECONDS * captureRate;
@@ -446,9 +499,114 @@ export class LiveCaptionEngine {
       }
     };
 
+    try {
+      if (useElementTap) {
+        // Route the element's output bus into the graph. The element keeps
+        // playing through processor → destination, so this never mutes it.
+        this.source = this.audioCtx.createMediaElementSource(mediaEl);
+      } else {
+        this.source = this.audioCtx.createMediaStreamSource(
+          capture as MediaStream,
+        );
+      }
+    } catch {
+      // The tap failed (element already attached to a context, or the
+      // stream is video-only). Never dead-end: report + auto-advance.
+      this.running = false;
+      this.statusCb?.(
+        "unavailable",
+        "This stream exposes no audio track to caption.",
+      );
+      onNoAudio?.();
+      return;
+    }
+
     this.source.connect(this.processor);
     this.processor.connect(this.audioCtx.destination);
     this.statusCb?.("listening", "Generating live captions…");
+  }
+
+  /** Whether captureStream (or the moz variant) exists on this element. */
+  private hasCaptureStream(mediaEl: HTMLMediaElement): boolean {
+    return (
+      typeof (mediaEl as any).captureStream === "function" ||
+      typeof (mediaEl as any).mozCaptureStream === "function"
+    );
+  }
+
+  /** Get the element's output stream (captureStream or moz variant). */
+  private captureStreamOf(mediaEl: HTMLMediaElement): MediaStream | null {
+    return (
+      (mediaEl as any).captureStream?.() ||
+      (mediaEl as any).mozCaptureStream?.() ||
+      null
+    );
+  }
+
+  /**
+   * Wait (polling) until the element is actually playing its stream, so the
+   * audio track is real. Never blocks indefinitely — caps at ~20 s.
+   */
+  private async waitForPlayback(
+    mediaEl: HTMLMediaElement,
+    maxWaitMs = 20000,
+  ): Promise<boolean> {
+    const started = (): boolean =>
+      !!mediaEl &&
+      ((!mediaEl.paused && mediaEl.readyState >= 2) || mediaEl.currentTime > 0);
+    if (started()) return true;
+    this.statusCb?.(
+      "waiting",
+      !mediaEl.paused
+        ? "Buffering stream audio…"
+        : "Press play on the stream, then captions turn on.",
+    );
+    return new Promise<boolean>((resolve) => {
+      const startedMs = Date.now();
+      const onPlay = () => {
+        if (!started()) return;
+        cleanup();
+        resolve(true);
+      };
+      const iv = setInterval(() => {
+        if (started()) {
+          cleanup();
+          resolve(true);
+          return;
+        }
+        if (Date.now() - startedMs >= maxWaitMs) {
+          cleanup();
+          resolve(false);
+        }
+      }, 300);
+      const cleanup = () => {
+        clearInterval(iv);
+        mediaEl.removeEventListener("playing", onPlay);
+      };
+      mediaEl.addEventListener("playing", onPlay);
+      // Nudge autoplay — the toggle click grants the gesture.
+      mediaEl.play().catch(() => {});
+    });
+  }
+
+  /** Poll captureStream for an audio track (up to ~10 s). */
+  private async waitForAudioTrack(
+    capture: MediaStream,
+    maxWaitMs = 10000,
+  ): Promise<boolean> {
+    if (capture.getAudioTracks().length > 0) return true;
+    return new Promise<boolean>((resolve) => {
+      const startedMs = Date.now();
+      const iv = setInterval(() => {
+        if (capture.getAudioTracks().length > 0) {
+          clearInterval(iv);
+          resolve(true);
+        } else if (Date.now() - startedMs >= maxWaitMs) {
+          clearInterval(iv);
+          resolve(false);
+        }
+      }, 250);
+    });
   }
 
   /** Pull exactly n samples from the rolling buffer (consumes them). */
@@ -521,6 +679,8 @@ export class LiveCaptionEngine {
     this.processor = null;
     this.source = null;
     if (this.audioCtx) {
+      // Closing the context also releases a media element that was routed
+      // through it via createMediaElementSource, restoring normal playback.
       this.audioCtx.close().catch(() => {});
       this.audioCtx = null;
     }
