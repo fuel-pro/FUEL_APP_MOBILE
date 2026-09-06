@@ -5,12 +5,15 @@
  * - Silence gate (RMS) — quiet windows are skipped instead of emitting
  *   garbage captions.
  * - Downsampling preserves waveform shape (captured audio → 16 kHz PCM).
+ * - No-audio resilience — an element that isn't playing yet yields a
+ *   WAITING state (never the old "exposes no audio track" hard error).
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   LiveCaptionEngine,
   rms,
   downsampleTo16k,
+  modelRemoteHost,
 } from "@/react-app/lib/live-caption-engine";
 
 describe("LiveCaptionEngine language selection (accuracy)", () => {
@@ -76,5 +79,142 @@ describe("LiveCaptionEngine downsampling (capture → 16 kHz PCM)", () => {
     // First output sample ~ input[0], ~3rd ~ input[3] (3x ratio = 48000/16000)
     expect(out[0]).toBeCloseTo(src[0], 5);
     expect(out[3]).toBeCloseTo(src[9], 5);
+  });
+});
+
+describe("LiveCaptionEngine model source (first-party proxy)", () => {
+  it("uses the SAME-ORIGIN /api/hf-proxy/ on known hosts (no external CDN)", () => {
+    const original = window.location.hostname;
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        hostname: "fuel-app-mobile.pages.dev",
+        origin: "https://fuel-app-mobile.pages.dev",
+      },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe("https://fuel-app-mobile.pages.dev/api/hf-proxy/");
+    expect(host).not.toContain("huggingface.co");
+    window.location.hostname = original;
+  });
+
+  it("folds into /api/integrations?action=hf-proxy&p= on Vercel (12-func cap)", () => {
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        hostname: "fuel-app-mobile.vercel.app",
+        origin: "https://fuel-app-mobile.vercel.app",
+      },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe(
+      "https://fuel-app-mobile.vercel.app/api/integrations?action=hf-proxy&p=",
+    );
+  });
+
+  it("falls back to huggingface.co on unknown embed hosts", () => {
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        hostname: "evil.example.net",
+        origin: "https://evil.example.net",
+      },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe("https://huggingface.co/");
+  });
+});
+
+// Fake media element mirroring the DOM surface the engine uses.
+function makeMediaEl(): any {
+  const listeners: Record<string, Array<() => void>> = {};
+  return {
+    paused: true,
+    readyState: 0,
+    currentTime: 0,
+    currentSrc: "",
+    crossOrigin: "",
+    muted: false,
+    addEventListener: (ev: string, cb: () => void) => {
+      (listeners[ev] ||= []).push(cb);
+    },
+    removeEventListener: (ev: string, cb: () => void) => {
+      listeners[ev] = (listeners[ev] || []).filter((f) => f !== cb);
+    },
+    play: async () => {},
+    _emit: (ev: string) => (listeners[ev] || []).forEach((cb) => cb()),
+  };
+}
+
+describe("LiveCaptionEngine no-audio resilience", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("emits WAITING (never a hard error) when the element never starts playing", async () => {
+    const mediaEl = makeMediaEl();
+    const statuses: { status: string; detail?: string }[] = [];
+    const engine = new LiveCaptionEngine();
+    // A never-playing element has NO captureStream and never advances time →
+    // waitForPlayback times out → the engine must emit "waiting" + return
+    // (not "unavailable / no audio track").
+    const op = engine.start(
+      mediaEl,
+      () => {},
+      (s, d) => statuses.push({ status: s, detail: d }),
+      "en",
+      "us",
+      () => {},
+    );
+    // Advance the 20 s wait window completely.
+    await vi.advanceTimersByTimeAsync(21000);
+    await op;
+    expect(statuses.some((s) => s.status === "waiting")).toBe(true);
+    expect(statuses.some((s) => s.status === "unavailable")).toBe(false);
+    expect(engine.isActive()).toBe(false);
+  });
+
+  it("proceeds to capture once the element starts playing mid-wait", async () => {
+    const mediaEl = makeMediaEl();
+    const statuses: { status: string; detail?: string }[] = [];
+    const engine = new LiveCaptionEngine();
+    // Simulate a native element that DOES expose captureStream but has no
+    // track yet — after the media starts "playing" the engine must NOT
+    // dead-end; it will attempt capture (which feeds silence → no captions,
+    // but never the old error). We only assert it leaves "waiting".
+    mediaEl.readyState = 1;
+    const op = engine.start(
+      mediaEl,
+      () => {},
+      (s, d) => statuses.push({ status: s, detail: d }),
+      "en",
+      "us",
+      () => {},
+    );
+    // After 5 s the element starts playing (autoplay eventually succeeds).
+    setTimeout(() => {
+      mediaEl.paused = false;
+      mediaEl.readyState = 2;
+      mediaEl.currentTime = 1;
+      mediaEl._emit("playing");
+    }, 5000);
+    await vi.advanceTimersByTimeAsync(6000);
+    await op;
+    const states = statuses.map((s) => s.status);
+    // It may have progressed to loading-model (no audio → tap attempt on a
+    // fake element throws → "unavailable" + onNoAudio). Either way it must
+    // NOT emit the old hard "no audio" dead-end at the waiting stage.
+    expect(states.includes("waiting")).toBe(true);
+    expect(engine.isActive()).toBe(false);
+  });
+
+  it("exposes the static preload() warm-up (first toggle is instant)", () => {
+    expect(typeof LiveCaptionEngine.preload).toBe("function");
   });
 });

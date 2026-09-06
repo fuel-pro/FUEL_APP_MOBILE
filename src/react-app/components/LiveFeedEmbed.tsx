@@ -49,6 +49,7 @@ import {
   findSubtitleTrackIndex,
 } from "@/react-app/lib/subtitle-languages";
 import {
+  LiveCaptionEngine,
   liveCaptionEngine,
   type CaptionStatus,
 } from "@/react-app/lib/live-caption-engine";
@@ -523,8 +524,13 @@ function ChannelPlayer({
       // Pass the channel's country so the ASR language matches the language
       // SPOKEN in the stream (accuracy), not just the display language.
       channel.country || "",
+      // Never dead-end on a stream that genuinely has no audible track:
+      // auto-advance to a channel that CAN be captioned.
+      () => {
+        if (onCaptionFallback) onCaptionFallback();
+      },
     );
-  }, [isAudio]);
+  }, [isAudio, channel.country, onCaptionFallback]);
 
   const stopLiveCaptions = useCallback(() => {
     liveCaptionEngine.stop();
@@ -556,8 +562,42 @@ function ChannelPlayer({
     return () => {
       liveCaptionEngine.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.nanoid]);
+
+  // Pre-warm the Whisper model as soon as a NATIVE (non-YouTube) player
+  // mounts, so the first caption toggle is instant instead of a 31 MB
+  // download faced mid-handshake.
+  useEffect(() => {
+    if (ytId) return; // YouTube carries its own captions
+    LiveCaptionEngine.preload();
+  }, [ytId]);
+
+  // "Captions turn on automatically": if the user toggled AI captions before
+  // the stream began playing, restart the engine the moment playback starts
+  // (the old code dead-ended with "This stream exposes no audio track").
+  // Also restarts when a retry/quality change remounts the media element.
+  useEffect(() => {
+    if (!liveCaptionsOn || ytId) return;
+    const mediaEl: HTMLMediaElement | null = isAudio
+      ? audioRef.current
+      : videoRef.current;
+    if (!mediaEl) return;
+    const onPlay = () => {
+      if (!liveCaptionsOn) return;
+      if (liveCaptionStatus === "waiting" || liveCaptionStatus === "idle") {
+        startLiveCaptions();
+      } else if (!liveCaptionEngine.isActive()) {
+        // Recreated element (retry/quality remount) — restart to keep
+        // captions flowing on the new element.
+        if (liveCaptionsOn) startLiveCaptions();
+      }
+    };
+    mediaEl.addEventListener("playing", onPlay);
+    return () => {
+      mediaEl.removeEventListener("playing", onPlay);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveCaptionsOn, ytId, isAudio, retryKey]);
 
   // Change the PREFERRED language: persist to cloud (cross-device) and, if the
   // current stream carries a matching track, switch to it immediately.
@@ -588,10 +628,11 @@ function ChannelPlayer({
     } else if (!liveCaptionEngine.isActive()) {
       startLiveCaptions();
     }
-    // If the player has no media yet (not playing), the status callback will
-    // show "press play first" — never a dead end. No channel auto-advance
-    // here: AI captions generate on ANY stream, so the preferred language
-    // never needs to throw the user to a different channel.
+    // If the player has no media yet (not playing), the engine surfaces a
+    // WAITING state and auto-starts the moment playback begins — never a
+    // dead end. No channel auto-advance here: AI captions generate on ANY
+    // stream, so the preferred language never needs to throw the user to a
+    // different channel.
   };
 
   // ─── YOUTUBE IFRAME API — error detection + auto-advance ─────────────
@@ -647,7 +688,7 @@ function ChannelPlayer({
           onReady: (e) => {
             e.target.playVideo();
           },
-          onError: (e) => {
+          onError: (_e) => {
             // Error codes: 2=invalid param, 5=HTML5 error, 100=not found,
             // 101/150=embedding disabled/region blocked.
             if (!destroyed) {
@@ -952,6 +993,15 @@ function ChannelPlayer({
                 <Loader2 size={12} className="animate-spin text-purple-400" />
                 <span className="text-[10px] text-gray-200">
                   Loading on-device caption model (first use downloads ~31 MB)…
+                </span>
+              </div>
+            )}
+            {liveCaptionStatus === "waiting" && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm">
+                <Loader2 size={12} className="animate-spin text-purple-300" />
+                <span className="text-[10px] text-gray-200">
+                  {liveCaptionDetail ||
+                    "Waiting for playback — captions will turn on automatically…"}
                 </span>
               </div>
             )}

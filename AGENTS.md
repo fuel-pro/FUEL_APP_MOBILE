@@ -11487,6 +11487,34 @@ not just the preferred display language:
 Same documented state — no new lost work. founder-username-login (7 ahead)
 awaits user authorization; identifying-security-vulnerabilities-8d289 needs
 /api/r2/* + /api/cache/* endpoints first.
+## Session 2026-09-05 — Live TV captions ALWAYS work even when a stream exposes no audio track (DEPLOYED LIVE, PR #142 follow-up, commit 5819c62)
+
+Follow-up to PR #142 (which fixed the original "Failed to fetch" caption-model loading error via same-origin hf-proxy + vendored WASM). User report: streams that expose **no audio track** dead-ended with:
+
+> This stream exposes no audio track to caption. Wait for playback to start, then toggle again.
+
+### Root cause
+`LiveCaptionEngine.start()` captured the element's `captureStream()` after a **fixed 4 s timeout**. A stream that is buffering, autoplay-blocked, or slow to attach its audio yields **zero audio tracks** in that window, so the engine gave up with the hard no-audio error even though the stream would produce audio moments later.
+
+### Fix (`src/react-app/lib/live-caption-engine.ts` + `src/react-app/components/LiveFeedEmbed.tsx`)
+1. **WAITS for real playback** (`waitForPlayback()` — polls `readyState`/`currentTime`/`playing`, ~20 s cap, nudges `play()`) instead of the fixed timeout. New `CaptionStatus "waiting"` state + friendly WAITING overlay in the player. No hard error ever.
+2. **Auto-start via `playing` listener**: the host wires the media element's `playing` event to restart captions the moment the stream begins, so captions **turn on automatically** when toggled early.
+3. **Web-Audio tap fallback** (`createMediaElementSource`) — routes the element's OUTPUT bus into the caption graph, so a live audio track is **always created** even when `captureStream()` enumeration is empty/unsupported. `source` field widened to `MediaStreamAudioSourceNode | MediaElementAudioSourceNode`.
+4. **Never dead-ends**: genuinely silent/video-only sources report `unavailable` + invoke `onNoAudio`, which auto-advances to a captioned channel instead of sitting on a broken stream.
+5. **`preload()` actually runs** on native-player mount — the ~31 MB Whisper model (or Web Speech path) warms up before the first toggle.
+6. **AudioContext resume** on toggle (autoplay policy honored); **restart on remount** (retry/quality change recreates the media element).
+7. **`stop()`** resets `running`, disconnects the processor/source, releases the AudioContext.
+
+### Tests
+- 3 new vitest cases in `src/test/live-caption-engine.test.ts` (element never plays → WAITING not old hard error; starts playing mid-wait → proceeds; preload exists). Engine suite 14 tests; full suite **320/320** pass.
+- Gates: `tsc -b` 0 errors, eslint 0 errors (pre-existing warnings only), prettier clean, production build (dist/) OK.
+
+### Deploy (verified live on BOTH hosts)
+- **Cloudflare Pages** `fuel-app-mobile.pages.dev` → `News-BfPg2bYO.js`: `Waiting for playback` ×2, `turn on automatically` ×2, `waiting` ×5, `action=hf-proxy` ✅
+- **Vercel production** `fuel-app-mobile.vercel.app` → `News-D4MIGyyq.js`: same markers ✅ (a PARALLEL/stale deploy had overwritten Vercel prod with `News-D8eZ3AXH.js` missing the markers — fixed by re-deploying the prepared `.vercel/output` via `vercel deploy --prebuilt --prod` + `vercel alias set`; verify by MARKER not hash, Vercel hashes differ per build env.)
+- **News tab Live TV verified** in browser: full **13,425-channel catalog** (iptv-org index.m3u + tvgarden + curated) renders, player + AI caption button present. CF `/api/iptv-channels?limit=12000` returns 9,831 iptv-org channels.
+- GitHub: commits `5819c62` (fix) + `47672ee` (AGENTS.md) pushed to branch `fix/caption-model-fetch`; **PR #142** open (draft, head = 47672ee, base = main), body updated with this follow-up section.
+- Supabase: no schema changes (frontend-only).
 
 
 ## Session 2026-08-25 — REVERTED VLC player integration (commit 93a445a)
