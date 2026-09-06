@@ -16,7 +16,7 @@
  * recipient redeems via the `redeem_company_grant` RPC and views the
  * station's read-only snapshot for the granted period.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import QRCode from "qrcode";
 import {
   X,
