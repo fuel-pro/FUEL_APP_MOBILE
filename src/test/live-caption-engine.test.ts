@@ -11,6 +11,7 @@ import {
   LiveCaptionEngine,
   rms,
   downsampleTo16k,
+  modelRemoteHost,
 } from "@/react-app/lib/live-caption-engine";
 
 describe("LiveCaptionEngine language selection (accuracy)", () => {
@@ -76,5 +77,28 @@ describe("LiveCaptionEngine downsampling (capture → 16 kHz PCM)", () => {
     // First output sample ~ input[0], ~3rd ~ input[3] (3x ratio = 48000/16000)
     expect(out[0]).toBeCloseTo(src[0], 5);
     expect(out[3]).toBeCloseTo(src[9], 5);
+  });
+});
+
+describe("LiveCaptionEngine model source (first-party proxy)", () => {
+  it("uses the SAME-ORIGIN /api/hf-proxy/ on known hosts (no external CDN)", () => {
+    const original = window.location.hostname;
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, hostname: "fuel-app-mobile.pages.dev", origin: "https://fuel-app-mobile.pages.dev" },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe("https://fuel-app-mobile.pages.dev/api/hf-proxy/");
+    expect(host).not.toContain("huggingface.co");
+    window.location.hostname = original;
+  });
+
+  it("falls back to huggingface.co on unknown embed hosts", () => {
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, hostname: "evil.example.net", origin: "https://evil.example.net" },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe("https://huggingface.co/");
   });
 });

@@ -41,27 +41,79 @@ export type CaptionStatusCallback = (
 let asrPipeline: any = null;
 let asrLoading: Promise<any> | null = null;
 
+// ---------------------------------------------------------------------------
+// Model source — FIRST-PARTY proxy (bulletproof against "Failed to fetch")
+// ---------------------------------------------------------------------------
+// The on-device caption needs the Whisper + opus-mt model files (~31–80 MB).
+// Direct cross-origin fetches to huggingface.co can fail for real users with
+// "Failed to fetch" (region-blocked CDN, flaky connection, strict network).
+// We therefore serve the model through OUR OWN same-origin reverse proxy
+// (/api/hf-proxy on Vercel AND Cloudflare Pages): no CORS, no SW passthrough,
+// no external-CDN dependency — the browser talks only to the host it is
+// already using, and the data-plane fetch happens server-side. The proxy also
+// sets CDN cache headers, so model files are cached after the first hit.
+
+/** Build the same-origin model base URL. Falls back to HuggingFace directly. */
+export function modelRemoteHost(): string {
+  if (typeof window === "undefined") return "https://huggingface.co/";
+  const base = window.location.origin + "/api/hf-proxy/";
+  // Only use the proxy on hosts we know; if someone embeds the app elsewhere,
+  // fall back to the direct CDN (which is still listed in our CSP).
+  const host = window.location.hostname;
+  const supported =
+    host.endsWith(".pages.dev") ||
+    host.endsWith(".vercel.app") ||
+    host === "localhost" ||
+    host === "127.0.0.1";
+  return supported ? base : "https://huggingface.co/";
+}
+
+/** Retry a promise with exponential backoff (transient network failures). */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function loadAsr(): Promise<any> {
   if (asrPipeline) return asrPipeline;
   if (asrLoading) return asrLoading;
   asrLoading = (async () => {
     const { env } = await import("@xenova/transformers");
-    // Serve model + wasm files from the HuggingFace CDN (free) — no local
-    // bundling. The site CSP allows huggingface.co / cdn-lfs.huggingface.co.
+    // Serve model + wasm files from the SAME-ORIGIN proxy (no CORS / no
+    // external-CDN dependency). The site CSP still allows huggingface.co as a
+    // fallback, and the proxy itself is what makes the CDN immutable-cached.
     env.allowLocalModels = false;
     env.useBrowserCache = true;
-    env.remoteHost = "https://huggingface.co/";
+    env.remoteHost = modelRemoteHost();
     // Single-thread WASM: avoids the SharedArrayBuffer requirement
     // (cross-origin isolation), so the model runs in EVERY browser without
-    // COOP/COEP headers — no silent WASM init failure.
+    // COOP/COEP headers — no silent WASM init failure. The WASM binary is
+    // VENDORED same-origin (public/ort/) so it never depends on an external
+    // CDN (jsdelivr) that could otherwise 404/"Failed to fetch".
     env.backends.onnx.wasm.numThreads = 1;
+    env.backends.onnx.wasm.wasmPaths = new URL(
+      "/ort/",
+      window.location.href,
+    ).href;
     // MULTILINGUAL whisper-tiny (not .en) — auto-detects the spoken language
     // and transcribes it, so non-English streams are captioned too.
     // NOTE: constructed class-by-class (not the named "automatic-speech-
     // recognition" string) so the bundler keeps the Whisper classes alive —
     // the string-dispatch form can fail with "Unsupported model type" after
     // Vite tree-shakes the class registrations.
-    asrPipeline = await buildAsrPipeline("Xenova/whisper-tiny");
+    asrPipeline = await withRetry(() =>
+      buildAsrPipeline("Xenova/whisper-tiny"),
+    );
     return asrPipeline;
   })();
   try {
@@ -126,9 +178,13 @@ async function loadTranslator(lang: string): Promise<any> {
     const { env } = await import("@xenova/transformers");
     env.allowLocalModels = false;
     env.useBrowserCache = true;
-    env.remoteHost = "https://huggingface.co/";
+    env.remoteHost = modelRemoteHost();
     env.backends.onnx.wasm.numThreads = 1;
-    mtPipeline = await buildMtPipeline(modelId);
+    env.backends.onnx.wasm.wasmPaths = new URL(
+      "/ort/",
+      window.location.href,
+    ).href;
+    mtPipeline = await withRetry(() => buildMtPipeline(modelId));
     return mtPipeline;
   })();
   try {
