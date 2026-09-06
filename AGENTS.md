@@ -12375,3 +12375,18 @@ User: (1) mobile-mode "More/All Features" must be horizontal + adopt the desktop
 - Vercel deploy: `rm -rf .vercel/output` before `vercel build --prod` (stale output serves old chunks), then `vercel deploy --prebuilt --prod`, then `vercel alias set <deploy>.vercel.app fuel-app-mobile.vercel.app` (or it auto-aliases).
 - Vercel tokens: API KEYS line 26; CF account line 67, token line 68 (strip `"API Token: "` prefix + `\r`).
 
+## Session 2026-09-06 (cont.) — Company QR modal "hidden above the header" FIXED (commit b337ed5, DEPLOYED LIVE)
+
+User report: the Company QR Code modal appeared "hidden above the header".
+
+**Root cause — `position: fixed` trapped by a positioned ancestor**: `CompanyQrModal` (and `TabConfigModal`) were rendered INSIDE `<header class="relative z-40">`. A `position: fixed` element's containing block is its nearest POSITIONED ancestor, NOT the viewport — so the modal's `fixed inset-0` backdrop resolved against the header box. The overlay covered only the ~120px header strip and the modal content was squeezed/clipped into that strip ("above the header"). Reproduced + confirmed via pixel scan (backdrop ended at y≈120, everything below was the raw page bg). The `MobileBottomNav` instance had the same trap (its `<nav class="fixed z-50">` is also a positioned ancestor).
+
+**Fix — Teleport overlays to `<body>`**: new `src/react-app/components/ui/Teleport.tsx` (SSR-safe `createPortal(document.body)` from `react-dom` v19, `mounted` guard). Wrapped `CompanyQrModal` in BOTH Header.tsx and MobileBottomNav.tsx, and `TabConfigModal` in Header.tsx (same bug class). After teleport, the `fixed inset-0` overlay covers the full viewport and stacks above everything (portal appended last to body).
+
+**Improvements bundled**:
+- `CompanyQrModal`: Escape-key closes + body scroll-lock while open (standard modal hygiene; background can't scroll behind the overlay).
+
+**Verified LIVE** (CF preview `dca7ba98` + Vercel prod aliased): QR modal now renders as a proper full-screen centered overlay — pixel scan shows the dark backdrop spanning the ENTIRE viewport (y=0 through y=1020+), modal card centered at y≈390-540. Grant list (revoked QA grants with "Expires in 7 days · 3 redeems" / "Never expires") renders correctly. Gates: tsc 0, vitest 332/332, eslint 0, prettier clean, build OK.
+
+**Lesson**: ANY `fixed inset-0` overlay rendered inside a positioned ancestor (`relative`/`fixed`/`sticky`/`absolute` or a `transform`/`filter`/`will-change` container) is trapped to that ancestor's box. Modals rendered inside `<header>`, `<nav class="fixed">`, or `relative` wrappers MUST be teleported to `document.body` (or moved out of the positioned container).
+
