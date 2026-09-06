@@ -11511,9 +11511,9 @@ Follow-up to PR #142 (which fixed the original "Failed to fetch" caption-model l
 
 ### Deploy (verified live on BOTH hosts)
 - **Cloudflare Pages** `fuel-app-mobile.pages.dev` → `News-BfPg2bYO.js`: `Waiting for playback` ×2, `turn on automatically` ×2, `waiting` ×5, `action=hf-proxy` ✅
-- **Vercel production** `fuel-app-mobile.vercel.app` → `News-D4MIGyyq.js`: same markers ✅ (Vercel build env produces different chunk hash than local — verify by MARKER not hash.)
-- **News tab Live TV verified** in browser: full **13,425-channel catalog** (iptv-org index.m3u + tvgarden + curated) renders, player + AI caption button present.
-- GitHub: commit `5819c62` pushed to branch `fix/caption-model-fetch`; **PR #142** open (head = 5819c62, base = main), body updated with this follow-up section.
+- **Vercel production** `fuel-app-mobile.vercel.app` → `News-D4MIGyyq.js`: same markers ✅ (a PARALLEL/stale deploy had overwritten Vercel prod with `News-D8eZ3AXH.js` missing the markers — fixed by re-deploying the prepared `.vercel/output` via `vercel deploy --prebuilt --prod` + `vercel alias set`; verify by MARKER not hash, Vercel hashes differ per build env.)
+- **News tab Live TV verified** in browser: full **13,425-channel catalog** (iptv-org index.m3u + tvgarden + curated) renders, player + AI caption button present. CF `/api/iptv-channels?limit=12000` returns 9,831 iptv-org channels.
+- GitHub: commits `5819c62` (fix) + `47672ee` (AGENTS.md) pushed to branch `fix/caption-model-fetch`; **PR #142** open (draft, head = 47672ee, base = main), body updated with this follow-up section.
 - Supabase: no schema changes (frontend-only).
 
 
