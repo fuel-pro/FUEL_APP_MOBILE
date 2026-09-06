@@ -1,3 +1,56 @@
+## Session 2026-09-06 (cont.) — APK 9:20 standalone frame + WebView force-dark lock (commit f510d6b, DEPLOYED LIVE)
+
+User: the APK must render the exact 9:20 standalone/app frame (360×800 dp
+@2x on a 720×1600 screen): full-viewport dark canvas + fixed header/footer
+with a scrollable middle, portrait PWA manifest, WebView force-dark OFF so
+Android never overrides the app CSS.
+
+**Fixes (commit f510d6b, on main, pushed + deployed to BOTH hosts)**:
+1. `Home.tsx` app shell: real full-viewport flex column
+   `h-[100dvh] bg-gray-50 dark:bg-[#0A0D14] max-w-[100vw] overflow-hidden`
+   > centered `mx-auto flex w-full flex-col bg-gray-50 dark:bg-[#0D1117]
+   shadow-2xl` (maxWidth min(1400px,100%)) > Header + `<div class="flex-1
+   overflow-y-auto scrollbar-none pb-24 md:pb-0">` middle + bottom nav.
+   No more vertical stretch / white borders between header and footer.
+2. `Header.tsx`: root `<header>` is `sticky top-0 z-40` so the title bar
+   stays fixed while the middle content scrolls (was relative).
+3. `index.html`: added `<meta name=theme-color content="#0B0F17">` +
+   `<meta name=color-scheme content="dark">` (kept the locked viewport +
+   boot-dark script).
+4. `public/manifest.json`: `display:standalone`, `orientation:portrait`,
+   `background_color/theme_color #0B0F17` (was #0a0e17/#c5a059/any) so
+   the installed PWA/apk splash + taskbar match the dark canvas.
+5. `index.css`: added `.scrollbar-none` alias to the existing
+   `.scrollbar-hide` utility (+ `::-webkit-scrollbar display:none`).
+6. `MainActivity.java` (android wrapper): `onStart` + `onResume` call a
+   `lockWebView()` helper — `WebSettingsCompat.setForceDark(settings,
+   FORCE_DARK_OFF)` when `WebViewFeature.isFeatureSupported(FORCE_DARK)`,
+   `setAlgorithmicDarkeningAllowed(false)` on API 33+
+   (`Build.VERSION_CODES.TIRAMISU`), `setUseWideViewPort(true)` +
+   `setLoadWithOverviewMode(true)`. Everything feature-gated + try/caught
+   so a WebView API drift on a future Android version can never crash
+   startup. androidx.webkit is a Capacitor dep (pinned 1.12.1 in
+   android/variables.gradle) — the API is real and matches the Capacitor
+   Bridge's own WebViewCompat usage.
+
+**Gates**: tsc clean, vite build clean, vitest 325/325. Verified LIVE:
+Playwright at 360×800 on pages.dev — dark=true, data-theme=dark, body bg
+rgb(10,14,23) (#0A0D14 canvas), viewport/theme-color/color-scheme metas
+present, scrollW==winW==360 (zero horizontal overflow). Both hosts serve
+the same build (index.html + manifest.json confirmed).
+
+**Deploy state**: GitHub main f510d6b (rebased on 83352ee);
+Cloudflare Pages LIVE (ab47b0db + main alias); Vercel production LIVE
+(prebuilt rd aliased to fuel-app-mobile.vercel.app). Supabase: no schema
+changes.
+
+**Android wrapper note**: the APK (Capacitor server.url → pages.dev)
+self-updates content with every deploy. The MainActivity.java force-dark
+lock ships in the next APK rebuild (CI wrappers.yml on push to main
+rebuilds .exe/.apk → wrappers-latest release). The try/catch guards mean
+a future Android WebView API change degrades to the CSS/boot-script
+dark-forcing instead of breaking startup.
+
 ## Session 2026-09-06 — APK/mobile layout fix: force dark boot + light-card fallbacks + grid + bottom nav (commit 1c909b4, DEPLOYED LIVE)
 
 User: screenshots showed (1) light-mode fallback with white text invisible
