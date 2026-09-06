@@ -8,6 +8,7 @@ import { useTutorial } from "@/react-app/context/TutorialContext";
 import LocationSelector from "@/react-app/components/LocationSelector";
 import TabConfigModal from "@/react-app/components/TabConfigModal";
 import CompanyQrModal from "@/react-app/components/CompanyQrModal";
+import Teleport from "@/react-app/components/ui/Teleport";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import RoleSelector from "@/react-app/components/RoleSelector";
 import QuickSearch from "@/react-app/components/QuickSearch";
@@ -1224,20 +1225,27 @@ export default function Header({
         </div>
       )}
 
-      {/* QR Code Modal — secure, shareable, revocable station-access QR */}
+      {/* QR Code Modal — secure, shareable, revocable station-access QR.
+          Rendered through Teleport so the `fixed inset-0` overlay is NOT
+          trapped inside <header> (a positioned ancestor bounds `position:
+          fixed` to its own box — "hidden above the header"). */}
       {showQRCode && (
-        <CompanyQrModal
-          stationName={
-            currentStation?.name || state.companyData.name || "Station"
-          }
-          companyName={state.companyData.name || "FuelPro"}
-          onClose={() => setShowQRCode(false)}
-        />
+        <Teleport>
+          <CompanyQrModal
+            stationName={
+              currentStation?.name || state.companyData.name || "Station"
+            }
+            companyName={state.companyData.name || "FuelPro"}
+            onClose={() => setShowQRCode(false)}
+          />
+        </Teleport>
       )}
 
-      {/* TABS Config Modal */}
+      {/* TABS Config Modal — same teleport treatment. */}
       {showTabConfig && (
-        <TabConfigModal onClose={() => setShowTabConfig(false)} />
+        <Teleport>
+          <TabConfigModal onClose={() => setShowTabConfig(false)} />
+        </Teleport>
       )}
     </header>
   );

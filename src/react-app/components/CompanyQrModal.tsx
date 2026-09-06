@@ -115,6 +115,21 @@ export default function CompanyQrModal({
     loadGrants();
   }, [loadGrants]);
 
+  // Modal hygiene: Escape closes, and the page behind is scroll-locked while
+  // the overlay is open (standard for a full-screen modal).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+
   // Refresh the QR whenever the active grant changes.
   useEffect(() => {
     if (!activeGrant || activeGrant.revoked) {

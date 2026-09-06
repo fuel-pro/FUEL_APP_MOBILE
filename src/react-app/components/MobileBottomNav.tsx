@@ -35,6 +35,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import QuickSearch from "@/react-app/components/QuickSearch";
 import CompanyQrModal from "@/react-app/components/CompanyQrModal";
+import Teleport from "@/react-app/components/ui/Teleport";
 
 interface MobileBottomNavProps {
   activeTab: string;
@@ -261,13 +262,17 @@ export default function MobileBottomNav({
               mobile users get the exact same palette as desktop. */}
       <QuickSearch entries={searchEntries} triggerHidden />
 
-      {/* Company QR modal (secure shareable/revocable grant) */}
+      {/* Company QR modal (secure shareable/revocable grant). Teleported to
+          <body> — a `fixed` overlay nested under this nav (also position:
+          fixed) would be confined to the nav's box. */}
       {showQrModal && (
-        <CompanyQrModal
-          stationName={state.companyData?.name || "Station"}
-          companyName={state.companyData?.name || "FuelPro"}
-          onClose={() => setShowQrModal(false)}
-        />
+        <Teleport>
+          <CompanyQrModal
+            stationName={state.companyData?.name || "Station"}
+            companyName={state.companyData?.name || "FuelPro"}
+            onClose={() => setShowQrModal(false)}
+          />
+        </Teleport>
       )}
 
       {/* More Menu Overlay - dim backdrop. Must NOT intercept a tap that
