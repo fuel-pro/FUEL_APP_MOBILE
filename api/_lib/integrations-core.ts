@@ -1099,6 +1099,18 @@ export async function kraEtimsInvoice(body: {
  *  compressed envelope handled transparently) so this works WITHOUT the
  *  migration. Once migrations/027 is applied, the same code ALSO prefers the
  *  `redeem_company_grant` SECURITY DEFINER RPC (atomic + write-safe). */
+/** Normalize a grant access_mode read from snake_case or camelCase rows. */
+function grantAccessMode(
+  grant: Record<string, unknown>,
+): "read" | "edit" | "full" {
+  const raw =
+    grant.access_mode ??
+    grant["accessMode"] ??
+    (grant.read_only === false || grant.readOnly === false ? "full" : "read");
+  const v = String(raw || "read").toLowerCase();
+  return v === "edit" ? "edit" : v === "full" ? "full" : "read";
+}
+
 async function companyGrantRedeem(
   body: Record<string, unknown>,
 ): Promise<IntegrationResult> {
@@ -1280,6 +1292,7 @@ async function companyGrantRedeem(
           ? (grant.allowedTabs as string[])
           : [],
       readOnly: grant.read_only !== false && grant.readOnly !== false,
+      accessMode: grantAccessMode(grant),
       stationId,
       stationOwnerId: ownerId,
       expiresAt: expiresMs != null ? new Date(expiresMs).toISOString() : null,

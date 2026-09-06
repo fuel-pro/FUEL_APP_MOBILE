@@ -50,6 +50,7 @@ import {
   Phone,
   IdCard,
   Building2,
+  Edit3,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -65,6 +66,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import MemberSuggestionsPanel from "@/react-app/components/MemberSuggestionsPanel";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
 import AttendantPerformance from "@/react-app/components/AttendantPerformance";
 import {
@@ -72,6 +74,9 @@ import {
   createAccessCode,
   deleteAccessCode,
   toggleAccessCode,
+  updateAccessCodeMode,
+  accessModeLabel,
+  type AccessMode,
   type StationAccessCode,
 } from "@/react-app/lib/station-access-code-service";
 import {
@@ -1127,6 +1132,7 @@ export default function TeamManager() {
         active: c.enabled,
         accessMethod: "code" as const,
         readOnly: c.readOnly,
+        accessMode: c.accessMode,
         accessCount: c.accessCount,
         lastAccessedAt: c.lastAccessedAt,
       })),
@@ -1644,17 +1650,20 @@ export default function TeamManager() {
       ) : activeView === "performance" ? (
         <AttendantPerformance />
       ) : activeView === "activity" ? (
-        <ActivityHealthView
-          teamHealth={teamHealth}
-          combinedMembers={combinedMembers}
-          accessCodes={accessCodes}
-          activeInvites={activeInvites}
-          usedInvites={usedInvites}
-          expiredInvites={expiredInvites}
-          getRoleLabel={getRoleLabel}
-          exportMembersCSV={exportMembersCSV}
-          showToast={showToast}
-        />
+        <>
+          <MemberSuggestionsPanel />
+          <ActivityHealthView
+            teamHealth={teamHealth}
+            combinedMembers={combinedMembers}
+            accessCodes={accessCodes}
+            activeInvites={activeInvites}
+            usedInvites={usedInvites}
+            expiredInvites={expiredInvites}
+            getRoleLabel={getRoleLabel}
+            exportMembersCSV={exportMembersCSV}
+            showToast={showToast}
+          />
+        </>
       ) : (
         <>
           {/* ── Current User + Hierarchy banner ── */}
@@ -2826,7 +2835,11 @@ export default function TeamManager() {
                     {drawerMember.accessMethod === "code"
                       ? "Access Code"
                       : "Invite Link"}
-                    {drawerMember.readOnly && " · Read-Only"}
+                    {drawerMember.accessMethod === "code" &&
+                      ` · ${accessModeLabel(
+                        drawerMember.accessMode ||
+                          (drawerMember.readOnly ? "read" : "full"),
+                      )}`}
                   </p>
                 </div>
               </div>
@@ -3508,7 +3521,7 @@ function AccessCodeForm({
   const [memberRole, setMemberRole] = useState(
     availableRoles[0]?.id ?? "staff",
   );
-  const [readOnly, setReadOnly] = useState(true);
+  const [accessMode, setAccessMode] = useState<AccessMode>("read");
   const [allowedTabs, setAllowedTabs] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -3538,7 +3551,8 @@ function AccessCodeForm({
           memberName: memberName.trim(),
           memberRole,
           allowedTabs,
-          readOnly,
+          readOnly: accessMode === "read",
+          accessMode,
         },
         stationId,
       );
@@ -3634,15 +3648,43 @@ function AccessCodeForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={readOnly}
-          onChange={(e) => setReadOnly(e.target.checked)}
-          className="rounded"
-        />
-        Read-only access (recommended — member can view but not edit)
-      </label>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+        Access mode — you decide what this member can do
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(["read", "edit", "full"] as AccessMode[]).map((m) => {
+          const [label, desc] = {
+            read: ["Read only", "View only — no changes"],
+            edit: ["Edit only", "Add/update — no deletes"],
+            full: ["Normal", "Full access to assigned tabs"],
+          }[m];
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setAccessMode(m)}
+              aria-pressed={accessMode === m}
+              title={desc}
+              className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg text-[11px] border transition-colors ${
+                accessMode === m
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+              }`}
+            >
+              <span className="font-semibold">{label}</span>
+              <span
+                className={`text-[9px] ${
+                  accessMode === m
+                    ? "text-white/80"
+                    : "text-gray-400 dark:text-gray-500"
+                }`}
+              >
+                {desc}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex gap-2 justify-end">
         <button
@@ -3716,6 +3758,14 @@ function AccessCodesView({
   const handleToggle = async (id: string) => {
     await toggleAccessCode(id, stationId);
     await onRefresh();
+  };
+
+  const handleCycleMode = async (id: string, current: AccessMode) => {
+    const next: AccessMode =
+      current === "read" ? "edit" : current === "edit" ? "full" : "read";
+    await updateAccessCodeMode(id, next, stationId);
+    await onRefresh();
+    flash(`Access mode changed to ${accessModeLabel(next)}`);
   };
 
   const accessLink = stationOwnerId
@@ -3852,11 +3902,22 @@ function AccessCodesView({
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600">
                     {c.memberRole}
                   </span>
-                  {c.readOnly && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
-                      Read-Only
-                    </span>
-                  )}
+                  {(() => {
+                    const m = c.accessMode || (c.readOnly ? "read" : "full");
+                    const modeCls =
+                      m === "full"
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : m === "edit"
+                          ? "bg-amber-500/10 text-amber-600"
+                          : "bg-gray-500/10 text-gray-500";
+                    return (
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full ${modeCls}`}
+                      >
+                        {accessModeLabel(m)}
+                      </span>
+                    );
+                  })()}
                   {c.allowedTabs && c.allowedTabs.length > 0 && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600">
                       {c.allowedTabs.length} tab
@@ -3877,6 +3938,22 @@ function AccessCodesView({
                 </div>
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => handleCycleMode(c.id, c.accessMode || "read")}
+                  className="p-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg"
+                  title={`Cycle access mode (currently ${accessModeLabel(
+                    c.accessMode || (c.readOnly ? "read" : "full"),
+                  )}). Read only → Edit only → Normal → Read only`}
+                >
+                  <Edit3
+                    size={14}
+                    className={
+                      (c.accessMode || "read") !== "read"
+                        ? "text-amber-600"
+                        : "text-gray-500 dark:text-gray-400"
+                    }
+                  />
+                </button>
                 <button
                   onClick={() => handleToggle(c.id)}
                   className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"

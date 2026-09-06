@@ -8,6 +8,7 @@ import {
   listCompanyGrants,
   revokeCompanyGrant,
   deleteCompanyGrant,
+  grantModeLabel,
 } from "@/react-app/lib/company-grant-service";
 
 // The service writes grants through cloudStorageService (app_kv) and redeems
@@ -215,6 +216,113 @@ describe("company grant CRUD (app_kv storage)", () => {
       expect.objectContaining({ code: grant.code }),
       "station-1",
     );
+  });
+
+  it("creates a grant under a non-read access mode (edit / full)", async () => {
+    const edit = await createCompanyGrant(
+      {
+        memberName: "QA Editor",
+        memberRole: "Staff",
+        allowedTabs: ["dashboard"],
+        readOnly: false,
+        accessMode: "edit",
+        expiresInDays: 3,
+      },
+      "station-1",
+    );
+    expect(edit.accessMode).toBe("edit");
+    expect(edit.readOnly).toBe(false);
+
+    const full = await createCompanyGrant(
+      {
+        memberName: "QA Full",
+        memberRole: "Manager",
+        allowedTabs: [],
+        accessMode: "full",
+      },
+      "station-1",
+    );
+    expect(full.accessMode).toBe("full");
+    expect(full.readOnly).toBe(false);
+
+    // Default (no accessMode) → read.
+    const auto = await createCompanyGrant(
+      { memberName: "QA Auto", memberRole: "Staff", allowedTabs: [] },
+      "station-1",
+    );
+    expect(auto.accessMode).toBe("read");
+    expect(auto.readOnly).toBe(true);
+
+    // readOnly:false with no accessMode → full (legacy behavior preserved).
+    const legacy = await createCompanyGrant(
+      {
+        memberName: "QA Legacy",
+        memberRole: "Staff",
+        allowedTabs: [],
+        readOnly: false,
+      },
+      "station-1",
+    );
+    expect(legacy.accessMode).toBe("full");
+    expect(legacy.readOnly).toBe(false);
+  });
+
+  it("reads access_mode from stored rows during listing (snake + camel)", async () => {
+    storageGet.mockResolvedValue([
+      {
+        id: "grant_edit",
+        code: "BBBBBBBBBBBBBBBBBB",
+        stationId: "station-1",
+        ownerId: "owner-1",
+        memberName: "Editor",
+        memberRole: "Staff",
+        allowedTabs: ["pos"],
+        access_mode: "edit",
+        read_only: false,
+        enabled: true,
+        revoked: false,
+        createdAt: Date.now(),
+      },
+      {
+        id: "grant_full",
+        code: "CCCCCCCCCCCCCCCCCC",
+        stationId: "station-1",
+        ownerId: "owner-1",
+        memberName: "Full",
+        memberRole: "Manager",
+        allowedTabs: [],
+        accessMode: "full",
+        readOnly: false,
+        enabled: true,
+        revoked: false,
+        createdAt: Date.now(),
+      },
+      {
+        id: "grant_read",
+        code: "DDDDDDDDDDDDDDDDDD",
+        stationId: "station-1",
+        ownerId: "owner-1",
+        memberName: "Viewer",
+        memberRole: "Auditor",
+        allowedTabs: [],
+        read_only: true,
+        enabled: true,
+        revoked: false,
+        createdAt: Date.now(),
+      },
+    ]);
+    const grants = await listCompanyGrants("station-1");
+    expect(grants.find((g) => g.id === "grant_edit")?.accessMode).toBe("edit");
+    expect(grants.find((g) => g.id === "grant_full")?.accessMode).toBe("full");
+    expect(grants.find((g) => g.id === "grant_read")?.accessMode).toBe("read");
+  });
+
+  it("grantModeLabel covers all modes", () => {
+    expect(grantModeLabel("read")).toContain("Read only");
+    expect(grantModeLabel("edit")).toContain("Edit only");
+    expect(grantModeLabel("full")).toContain("Normal");
+    expect(grantModeLabel(undefined)).toContain("Read only");
+    expect(grantModeLabel(null)).toContain("Read only");
   });
 
   it("lists grants from app_kv, filtered to the owner + station", async () => {

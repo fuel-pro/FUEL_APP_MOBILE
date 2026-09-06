@@ -96,6 +96,7 @@ export default function StationAccess() {
           memberRole: res.memberRole,
           allowedTabs: res.allowedTabs,
           readOnly: res.readOnly,
+          accessMode: res.accessMode,
           stationId: res.stationId,
           stationOwnerId: res.stationOwnerId,
           loginTime: Date.now(),

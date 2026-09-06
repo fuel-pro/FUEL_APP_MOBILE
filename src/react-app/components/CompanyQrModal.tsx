@@ -33,17 +33,21 @@ import {
   Check,
   Mail,
   MessageCircle,
+  Settings2,
 } from "lucide-react";
 import {
   createCompanyGrant,
   listCompanyGrants,
   revokeCompanyGrant,
   deleteCompanyGrant,
+  updateGrantMode,
   buildGrantLink,
   buildWhatsAppShareUrl,
   buildMailtoShareUrl,
   GRANT_TAB_PRESETS,
+  grantModeLabel,
   type CompanyGrant,
+  type GrantAccessMode,
 } from "@/react-app/lib/company-grant-service";
 import { useStations } from "@/react-app/context/StationContext";
 import Modal from "@/react-app/components/ui/Modal";
@@ -81,7 +85,7 @@ export default function CompanyQrModal({
   const [memberName, setMemberName] = useState("");
   const [memberRole, setMemberRole] = useState("Staff");
   const [presetId, setPresetId] = useState("all");
-  const [readOnly, setReadOnly] = useState(true);
+  const [accessMode, setAccessMode] = useState<GrantAccessMode>("read");
   const [expiryDays, setExpiryDays] = useState(7);
   const [maxUses, setMaxUses] = useState("");
   const [creating, setCreating] = useState(false);
@@ -148,7 +152,8 @@ export default function CompanyQrModal({
           memberName: memberName.trim(),
           memberRole,
           allowedTabs: preset?.tabs ?? [],
-          readOnly,
+          readOnly: accessMode === "read",
+          accessMode,
           expiresInDays: expiryDays > 0 ? expiryDays : undefined,
           maxUses: maxUses.trim() ? Number(maxUses) : null,
         },
@@ -203,6 +208,23 @@ link will stop working immediately, even if someone already scanned it.`)
       await loadGrants();
     } catch (e) {
       toastError(e instanceof Error ? e.message : "Delete failed.");
+    }
+  };
+
+  const handleCycleGrantMode = async () => {
+    if (!activeGrant || activeGrant.revoked) return;
+    const next: GrantAccessMode =
+      activeGrant.accessMode === "read"
+        ? "edit"
+        : activeGrant.accessMode === "edit"
+          ? "full"
+          : "read";
+    try {
+      await updateGrantMode(activeGrant.id, next, stationId);
+      toastSuccess(`Access mode changed to ${grantModeLabel(next)}`);
+      await loadGrants();
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "Failed to change mode.");
     }
   };
 
@@ -355,8 +377,11 @@ link will stop working immediately, even if someone already scanned it.`)
               <User size={11} /> {activeGrant.memberName}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Shield size={11} /> {activeGrant.memberRole}
-              {activeGrant.readOnly ? " · read-only" : ""}
+              <Shield size={11} /> {activeGrant.memberRole} ·{" "}
+              {grantModeLabel(
+                activeGrant.accessMode ||
+                  (activeGrant.readOnly ? "read" : "full"),
+              )}
             </span>
             <span className="inline-flex items-center gap-1">
               <Clock size={11} /> {fmtExpiry(activeGrant.expiresAt)}
@@ -409,6 +434,15 @@ link will stop working immediately, even if someone already scanned it.`)
           className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-medium disabled:opacity-40 transition-colors"
         >
           <Download size={13} /> PNG
+        </button>
+        <button
+          onClick={handleCycleGrantMode}
+          disabled={!activeGrant || activeGrant.revoked}
+          aria-label="Change access mode"
+          title="Change access mode (Read only → Edit only → Normal → Read only)"
+          className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium disabled:opacity-40 transition-colors"
+        >
+          <Settings2 size={13} /> Mode
         </button>
         <button
           onClick={() => activeGrant && handleRevoke(activeGrant)}
@@ -495,16 +529,33 @@ link will stop working immediately, even if someone already scanned it.`)
                 ))}
               </select>
             </label>
-            <div className="flex items-center gap-2 flex-wrap">
-              <label className="flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={readOnly}
-                  onChange={(e) => setReadOnly(e.target.checked)}
-                  className="accent-amber-500"
-                />
-                Read-only
-              </label>
+            <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 mb-0.5 block">
+              Access mode — you decide what this visitor can do
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(["read", "edit", "full"] as GrantAccessMode[]).map((m) => {
+                const [label, desc] = {
+                  read: ["Read only", "View only"],
+                  edit: ["Edit only", "Add/update, no deletes"],
+                  full: ["Normal", "Full access"],
+                }[m];
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setAccessMode(m)}
+                    aria-pressed={accessMode === m}
+                    title={desc}
+                    className={`px-2 py-1 rounded-lg text-[10px] border transition-colors ${
+                      accessMode === m
+                        ? "bg-amber-500/20 border-amber-500 text-amber-800 dark:text-amber-300 font-semibold"
+                        : "bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/20 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
               <label className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">
                 Max uses
                 <input

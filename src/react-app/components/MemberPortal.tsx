@@ -35,10 +35,19 @@ import {
   Newspaper,
   Wrench,
   AlertCircle,
+  Edit3,
+  Zap,
 } from "lucide-react";
 import type { StationAccessSession } from "@/react-app/lib/station-access-code-service";
+import { applyMemberEdit } from "@/react-app/lib/station-access-code-service";
 import type { StationSnapshot } from "@/react-app/lib/station-snapshot-service";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+
+/** Member access-mode copy used across the portal. */
+function memberModeOf(session: StationAccessSession): "read" | "edit" | "full" {
+  return (session.accessMode || (session.readOnly ? "read" : "full")) as
+    "read" | "edit" | "full";
+}
 
 /** ────────────────────────────────────────────────────────────────────────
  * MemberPortal — the FULL-APP, read-only experience for team members who
@@ -165,6 +174,14 @@ const ALL_TABS: PortalTab[] = [
   { id: "data", label: "Data", icon: Database },
   { id: "news", label: "News", icon: Newspaper },
   { id: "settings", label: "Settings", icon: Gauge },
+  { id: "audit", label: "Audit Trail", icon: Activity },
+  { id: "automation", label: "Automation", icon: Zap },
+  { id: "documents", label: "Documents", icon: FileBarChart },
+  { id: "integration", label: "Integration", icon: MessageCircle },
+  { id: "price-finder", label: "Fuel Price Finder", icon: TrendingUp },
+  { id: "pumpmapping", label: "Pump Mapping", icon: Gauge },
+  { id: "regional", label: "Compliance", icon: Shield },
+  { id: "terminal", label: "Terminal", icon: Activity },
 ];
 
 function normalizeRole(role: string): string {
@@ -211,6 +228,41 @@ export default function MemberPortal({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  // Member contribution (edit/full modes): suggest a change for the owner.
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestText, setSuggestText] = useState("");
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [suggestDone, setSuggestDone] = useState(false);
+  const canContribute = memberModeOf(session) !== "read";
+
+  const submitSuggestion = async () => {
+    if (!suggestText.trim() || !session.stationOwnerId || !session.stationId)
+      return;
+    setSuggestBusy(true);
+    const res = await applyMemberEdit({
+      ownerId: session.stationOwnerId,
+      stationId: session.stationId,
+      accessCodeId: session.accessCodeId,
+      tab: activeTab,
+      payload: {
+        note: suggestText.trim(),
+        section: activeTab,
+        member: session.memberName,
+      },
+    });
+    setSuggestBusy(false);
+    if (res.ok) {
+      setSuggestDone(true);
+      setSuggestText("");
+      setTimeout(() => {
+        setSuggestDone(false);
+        setSuggestOpen(false);
+      }, 1800);
+    } else {
+      setSuggestDone(false);
+      setSuggestText(`Not saved: ${res.error || "try again later."}`);
+    }
+  };
 
   const visibleTabs = useMemo(() => resolveVisibleTabs(session), [session]);
 
@@ -387,12 +439,25 @@ export default function MemberPortal({
                   <Shield size={11} /> {session.memberName} ·{" "}
                   {session.memberRole}
                 </span>
-                <span
-                  className={`flex items-center gap-1 ${session.readOnly ? "text-blue-600" : "text-green-600"}`}
-                >
-                  {session.readOnly ? <Eye size={11} /> : <EyeOff size={11} />}
-                  {session.readOnly ? "Read-Only" : "Full Access"}
-                </span>
+                {(() => {
+                  const m =
+                    session.accessMode || (session.readOnly ? "read" : "full");
+                  const [lbl, cls, Icon] =
+                    m === "full"
+                      ? ["Normal", "text-green-600", EyeOff]
+                      : m === "edit"
+                        ? [
+                            "Edit only",
+                            "text-amber-600 dark:text-amber-400",
+                            EyeOff,
+                          ]
+                        : ["Read-Only", "text-blue-600", Eye];
+                  return (
+                    <span className={`flex items-center gap-1 ${cls}`}>
+                      <Icon size={11} /> {lbl}
+                    </span>
+                  );
+                })()}
                 {session.method === "qr-grant" && (
                   <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
                     <QrCode size={10} /> QR Grant
@@ -431,6 +496,19 @@ export default function MemberPortal({
             >
               <FileDown size={14} /> Export
             </button>
+            {canContribute && (
+              <button
+                onClick={() => {
+                  setSuggestDone(false);
+                  setSuggestText("");
+                  setSuggestOpen(true);
+                }}
+                className="px-3 py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                title="Suggest a change for the station owner"
+              >
+                <Edit3 size={14} /> Suggest
+              </button>
+            )}
             <button
               onClick={() => window.print()}
               className="hidden sm:flex px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium items-center gap-1.5"
@@ -643,9 +721,70 @@ export default function MemberPortal({
         </div>
       )}
 
+      {/* ── Suggest a change (edit/full modes) ────────────────────── */}
+      {suggestOpen && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/60 p-4 flex items-start justify-center pt-24"
+          onClick={() => setSuggestOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <Edit3 size={16} className="text-amber-500" />
+              <h3 className="font-semibold dark:text-white flex-1">
+                Suggest a change
+              </h3>
+              <button
+                onClick={() => setSuggestOpen(false)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="text-xs text-gray-500 mb-2">
+                Your note is sent to the station owner and appears in their Team
+                Manager → Suggestions. They decide what to apply.
+              </p>
+              <textarea
+                value={suggestText}
+                onChange={(e) => setSuggestText(e.target.value)}
+                rows={4}
+                placeholder={`Describe the ${activeTab} change…`}
+                className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 dark:text-white text-sm outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              {suggestDone && (
+                <p className="text-xs text-green-600 mt-1">
+                  ✓ Sent — the owner will see it shortly.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => setSuggestOpen(false)}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitSuggestion}
+                disabled={suggestBusy || !suggestText.trim()}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40"
+              >
+                <Edit3 size={13} />
+                {suggestBusy ? "Sending…" : "Send to owner"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="text-center text-[10px] text-gray-400 py-3 px-4 md:pb-4">
-        Read-only member access · Changes are not saved · Data auto-refreshes
-        every 30s
+        {canContribute ? "Member access" : "Read-only member access"} · Changes
+        are not saved locally · Data auto-refreshes every 30s
       </footer>
     </div>
   );
@@ -952,6 +1091,28 @@ function renderView(
             </p>,
           )}
         </div>
+      );
+    case "price-finder":
+      return card(
+        "Fuel Prices",
+        s.fuelPrices.length === 0 ? (
+          <Empty text="No fuel prices published." />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {s.fuelPrices.map((p, i) => (
+              <div
+                key={i}
+                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
+              >
+                <p className="text-xs text-gray-500">{p.label}</p>
+                <p className="text-xl font-bold dark:text-white">
+                  {fmt(p.price)}
+                </p>
+                <p className="text-[10px] text-gray-400">per litre</p>
+              </div>
+            ))}
+          </div>
+        ),
       );
     default:
       return <Empty text="This section wasn't shared by the station owner." />;

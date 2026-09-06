@@ -63,6 +63,22 @@ export const GRANT_TAB_PRESETS: Array<{
   { id: "all", label: "All sections", tabs: [] },
 ];
 
+export type GrantAccessMode = "read" | "edit" | "full";
+
+export function grantModeLabel(
+  mode: GrantAccessMode | undefined | null,
+): string {
+  switch (mode) {
+    case "edit":
+      return "Edit only";
+    case "full":
+      return "Normal";
+    case "read":
+    default:
+      return "Read only";
+  }
+}
+
 export interface CompanyGrant {
   id: string;
   code: string;
@@ -79,6 +95,8 @@ export interface CompanyGrant {
   maxUses: number | null;
   uses: number;
   lastRedeemedAt: number | null;
+  /** Owner-decided mode: read / edit / full. Backs `readOnly`. */
+  accessMode: GrantAccessMode;
 }
 
 export interface GrantCreateParams {
@@ -86,6 +104,8 @@ export interface GrantCreateParams {
   memberRole?: string;
   allowedTabs: string[];
   readOnly?: boolean;
+  /** Owner-decided mode: read / edit / full. Defaults to read. */
+  accessMode?: GrantAccessMode;
   expiresInDays?: number; // null = never
   maxUses?: number | null; // null = unlimited
 }
@@ -99,6 +119,8 @@ export interface GrantRedeemResult {
   stationId: string;
   stationOwnerId: string;
   expiresAt: string | null;
+  /** Owner-decided mode: read / edit / full. */
+  accessMode?: GrantAccessMode;
 }
 
 /** Crypto-random URL-safe code (~93 bits of entropy → 15 chars × 6.2 bits). */
@@ -117,6 +139,12 @@ export function generateGrantCode(): string {
   for (let i = 0; i < 18; i++)
     out += alphabet[Math.floor(Math.random() * alphabet.length)];
   return out;
+}
+
+/** Normalize a grant access-mode value read from a cloud/DB row. */
+function normalizeGrantMode(raw: unknown): GrantAccessMode {
+  const v = String(raw || "read").toLowerCase();
+  return v === "edit" ? "edit" : v === "full" ? "full" : "read";
 }
 
 function rowToGrant(
@@ -149,6 +177,7 @@ function rowToGrant(
       ? (pick("allowed_tabs", "allowedTabs") as string[])
       : [],
     readOnly: pick("read_only", "readOnly") !== false,
+    accessMode: normalizeGrantMode(pick("access_mode", "accessMode")),
     enabled: pick("enabled", "enabled") !== false,
     revoked: pick("revoked", "revoked") === true,
     createdAt: ts(pick("created_at", "createdAt")) ?? Date.now(),
@@ -237,6 +266,9 @@ export async function createCompanyGrant(
     params.expiresInDays && params.expiresInDays > 0
       ? new Date(Date.now() + params.expiresInDays * 86400000).toISOString()
       : null;
+  const mode = normalizeGrantMode(
+    params.accessMode ?? (params.readOnly === false ? "full" : "read"),
+  );
   const grant: CompanyGrant = {
     id,
     code,
@@ -245,7 +277,8 @@ export async function createCompanyGrant(
     memberName: (params.memberName || "Team Member").trim(),
     memberRole: params.memberRole || "Staff",
     allowedTabs: params.allowedTabs || [],
-    readOnly: params.readOnly !== false,
+    readOnly: mode === "read",
+    accessMode: mode,
     enabled: true,
     revoked: false,
     createdAt: Date.now(),
@@ -340,6 +373,7 @@ export async function rotateCompanyGrant(
       memberRole: old.memberRole,
       allowedTabs: old.allowedTabs,
       readOnly: old.readOnly,
+      accessMode: old.accessMode,
       expiresInDays: old.expiresAt
         ? Math.max(1, Math.ceil((old.expiresAt - Date.now()) / 86400000))
         : undefined,
@@ -349,6 +383,36 @@ export async function rotateCompanyGrant(
   );
   await revokeCompanyGrant(id, stationId);
   return fresh;
+}
+
+/** Owner: change a grant's access mode (read / edit / full). */
+export async function updateGrantMode(
+  id: string,
+  mode: GrantAccessMode,
+  stationId?: string,
+): Promise<void> {
+  if (!stationId) return;
+  const m = normalizeGrantMode(mode);
+  const current = (await listCompanyGrants(stationId)).map((g) => {
+    if (g.id !== id) return g;
+    // Keep the code-keyed row in sync so the serverless redeemer returns
+    // the same mode.
+    try {
+      void cloudStorageService.set(
+        `company_grant_${g.code}`,
+        { ...g, readOnly: m === "read", accessMode: m } as Record<
+          string,
+          unknown
+        >,
+        stationId,
+      );
+    } catch {
+      /* best-effort */
+    }
+    return { ...g, readOnly: m === "read", accessMode: m };
+  });
+  await cloudStorageService.set(GRANTS_KEY, current as unknown[], stationId);
+  writeGrantsCache(current);
 }
 
 /** Same-origin / Vercel absolute base for the redemption dispatcher (mirrors
@@ -407,6 +471,7 @@ export async function redeemCompanyGrant(
               ? (r.allowedTabs as string[])
               : [],
             readOnly: r.readOnly !== false,
+            accessMode: normalizeGrantMode(r.accessMode),
             stationId: String(r.stationId ?? ""),
             stationOwnerId: String(r.stationOwnerId ?? ""),
             expiresAt: r.expiresAt ? String(r.expiresAt) : null,
@@ -449,6 +514,7 @@ export async function redeemCompanyGrant(
         ? (r.allowedTabs as string[])
         : [],
       readOnly: r.readOnly !== false,
+      accessMode: normalizeGrantMode(r.accessMode),
       stationId: String(r.stationId ?? ""),
       stationOwnerId: String(r.stationOwnerId ?? ""),
       expiresAt: r.expiresAt ? String(r.expiresAt) : null,
