@@ -19,8 +19,19 @@
 alter table station_access_codes
   add column if not exists access_mode text not null default 'read';
 
-alter table company_grants
-  add column if not exists access_mode text not null default 'read';
+-- company_grants may not exist yet if migration 027 was never applied to a
+-- given project (the app stores grants in app_kv; the DB table is optional).
+-- Guard the ALTER so this migration is idempotent on BOTH fresh + old DBs.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'company_grants'
+  ) then
+    alter table company_grants
+      add column if not exists access_mode text not null default 'read';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- verify_access_code: also return the access_mode so the member's client can

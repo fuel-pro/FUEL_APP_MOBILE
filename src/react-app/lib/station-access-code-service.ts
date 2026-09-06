@@ -44,6 +44,22 @@ export type AccessMode = "read" | "edit" | "full";
 
 export const ACCESS_MODES: AccessMode[] = ["read", "edit", "full"];
 
+/**
+ * Resolve a member's effective access mode from a login/RPC result.
+ *
+ * SECURITY: `access_mode` is returned only after migration 028. Before that
+ * the RPC only knows `read_only` — collapsing edit/full into "full" would be
+ * an unintended privilege ESCALATION. We default to the SAFEST mode ("read")
+ * whenever the live RPC cannot report the true mode; the owner applies 028 to
+ * restore exact edit/full behavior.
+ */
+export function resolveMemberSessionMode(
+  result: { accessMode?: unknown; readOnly?: boolean } | null | undefined,
+): AccessMode {
+  if (!result) return "read";
+  return normalizeAccessMode(result.accessMode ?? "read");
+}
+
 export function accessModeLabel(mode: AccessMode | undefined | null): string {
   switch (mode) {
     case "edit":
@@ -298,10 +314,13 @@ export async function createAccessCode(
     if (error.code === "23505") {
       throw new Error("Username already exists. Choose a different username.");
     }
+    // Pre-migration-028 schema: the `access_mode` column does not exist.
+    // Retry with the legacy row shape for EVERY mode (not just read) — the
+    // mode still works in-app because the app_kv mirror below carries
+    // `accessMode`; the DB column only mirrors it for cross-device reads.
     if (
-      (error.code === "42703" ||
-        String(error.message).includes("access_mode")) &&
-      mode === "read"
+      error.code === "42703" ||
+      String(error.message).includes("access_mode")
     ) {
       const { id: _id, access_mode: _am, ...legacyRow } = row;
       const { error: legacyErr } = await client.from(TABLE).insert(legacyRow);
@@ -682,9 +701,7 @@ export async function loginWithAccessCode(
       "Invalid username or password, or access has been disabled.",
     );
   }
-  const mode = normalizeAccessMode(
-    result.accessMode ?? (result.readOnly ? "read" : "full"),
-  );
+  const mode = resolveMemberSessionMode(result);
   const session: StationAccessSession = {
     accessCodeId: result.accessCodeId,
     memberName: result.memberName,
