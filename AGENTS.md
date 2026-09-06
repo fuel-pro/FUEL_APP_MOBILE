@@ -1,3 +1,58 @@
+## Session 2026-09-06 — APK/mobile layout fix: force dark boot + light-card fallbacks + grid + bottom nav (commit 1c909b4, DEPLOYED LIVE)
+
+User: screenshots showed (1) light-mode fallback with white text invisible
+on white, (2) stacked 1-column grids (2x2 metric cards + 3-col tools menu
+collapsed), (3) viewport/container overflow. Applied for the APK.
+
+**Fixes (commit 1c909b4, on main, pushed + deployed to BOTH hosts)**:
+1. `index.html`: inline boot script (runs before any CSS/JS) forces the
+   `dark` class + `data-theme=dark` on `<html>` UNLESS the user explicitly
+   saved `fuelpro_theme=light`; first run now defaults to dark. This kills
+   the white/light fallback flash where white text sat on white. Viewport
+   locked for the APK's fixed 9:20 touch layout: added `maximum-scale=1.0,
+   user-scalable=no` to the existing `viewport-fit=cover`.
+2. `index.css`: the `.fp-kpi` / `.fp-price-card` calm surfaces were defined
+   ONLY under `html.dark`, so ANY light fallback (or delayed dark class)
+   rendered white cards + WHITE text = invisible. Added LIGHT-mode base
+   rules (white bg, `#e5e7eb` border, dark slate text) + the existing
+   `html.dark` overrides still win when dark is active. KPI values/labels/
+   foots, badges, price values all have proper light pairs now.
+3. `Dashboard.tsx` KPI row: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`
+   → `grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4` — mobile is a real 2×2
+   grid (was single stretched column inflating vertical space).
+4. `Header.tsx` Customize & Tools row: `grid grid-cols-3 gap-2 min-w-0`;
+   buttons `items-center justify-center flex-1 ... active:scale-95`.
+5. `Home.tsx` main shell: wrapped the whole app in a centered max-width
+   column container `<div class="mx-auto min-h-screen flex w-full flex-col
+   bg-gray-50 dark:bg-[#0D1117] shadow-2xl" style="maxWidth:
+   min(1400px,100%)">` (dark surface #0D1117 mirrors the requested
+   container), outer `max-w-[100vw] overflow-x-clip`, `pb-24` clears the
+   taller bottom nav.
+6. `MobileBottomNav.tsx`: `<nav>` now `fixed bottom-0 ... h-16 flex
+   items-center justify-around border-t border-slate-800/80 bg-[#0B0F17]`
+   with `w-full h-full` inner `minHeight:64` + existing
+   `env(safe-area-inset-bottom)` padding.
+
+**Gates**: tsc --noEmit clean, vitest 325/325, `npm run build` clean
+(135 precache, sw.js CACHE_VERSION bumped by postbuild). Verified LIVE:
+pages.dev + vercel.app both serve the boot-dark script + locked viewport
++ fp-kpi light fallback + dark override in the same CSS chunk
+(`assets/index-CeM6sXoT.css`); Playwright at 360×800 loads pages.dev with
+`data-theme=dark`, body bg `rgb(10,14,23)` (#0a0e17 royal surface), `dark`
+class true, zero horizontal overflow (scrollW==winW==360).
+
+**Deploy state**: GitHub main 1c909b4 (rebased on remote b65d087);
+Cloudflare Pages LIVE (ceacc6ed + main alias); Vercel production LIVE
+(prebuilt dpl_8FsC6ZhCkxyTa8SHFD4eooCtBrfd aliased to
+fuel-app-mobile.vercel.app). Supabase: no schema changes.
+
+**Gotchas**: `vercel build --prod` requires `vercel pull --yes
+--environment production` FIRST or it errors `project_settings_required`;
+use `npm_config_yes=true` to skip the npx install prompt. When touching
+CSS with templates/copy-paste, watch for zero-width-space (‍) /
+variation-selector (️) artifacts — strip them or the CSS values
+render with stray whitespace.
+
 ## Session 2026-09-05 (cont.) — Live TV: full iptv-org catalog + dead curated channels removed (commit b9942e6, DEPLOYED LIVE, PR #139)
 
 User: in News → Live TV "add and incorporate all channels/streams from
