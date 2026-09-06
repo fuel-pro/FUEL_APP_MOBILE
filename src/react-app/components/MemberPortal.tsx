@@ -651,6 +651,11 @@ export default function MemberPortal({
   );
 }
 
+function litresLabel(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 function formatDuration(ms: number): string {
   const min = Math.max(1, Math.floor(ms / 60000));
   if (min < 60) return `${min} min${min === 1 ? "" : "s"}`;
@@ -681,7 +686,7 @@ function renderView(
           x.invoice || "—",
           x.date || "—",
           x.fuel || "—",
-          String(x.litres ?? "—"),
+          litresLabel(x.litres),
           fmt(x.total),
           x.payment || "—",
         ]),
@@ -694,7 +699,7 @@ function renderView(
           x.invoice || "—",
           x.date || "—",
           x.fuel || "—",
-          String(x.litres ?? "—"),
+          litresLabel(x.litres),
           fmt(x.total),
         ]),
       );
@@ -787,7 +792,7 @@ function renderView(
           d.date || "—",
           d.reg || "—",
           d.fuel || "—",
-          String(d.litres ?? "—"),
+          litresLabel(d.litres),
           fmt(d.amount),
           d.name || "—",
           fmt(d.debt),
@@ -800,7 +805,7 @@ function renderView(
         (s.offloading ?? []).map((o) => [
           o.truck || "—",
           o.fuel || "—",
-          String(o.litres ?? "—"),
+          litresLabel(o.litres),
           o.date || "—",
         ]),
       );
