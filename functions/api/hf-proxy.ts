@@ -1,13 +1,18 @@
-/**
- * Cloudflare Pages Function: GET /api/hf-proxy/<path> -> https://huggingface.co/<path>
- * Same-role first-party proxy as the Vercel handler. Cloudflare serves a
- * CDN-cached copy of model/WASM files after the first fetch, so the caption
- * model loads fast and reliably on fuel-app-mobile.pages.dev with zero
- * client-side CORS/region dependency.
- */
+interface Env {}
+
 const ALLOW = ["https://huggingface.co", "https://cdn-lfs.huggingface.co"];
 
-export const onRequestGet = async ({ request }: { request: Request }) => {
+/**
+ * Cloudflare Pages Function - HuggingFace reverse-proxy (caption models).
+ * Same purpose as /api/hf-proxy.ts (Vercel). Lives at
+ * functions/api/hf-proxy.ts -> accessible at /api/hf-proxy on the same
+ * origin as the SPA (zero CORS, zero external-CDN dependency, CDN-cached
+ * model/WASM files after the first hit).
+ *
+ * GET /api/hf-proxy/<path>  ->  https://huggingface.co/<path>
+ */
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { request } = context;
   const url = new URL(request.url);
   const prefix = "/api/hf-proxy/";
   const rawPath = url.pathname;
@@ -62,4 +67,16 @@ export const onRequestGet = async ({ request }: { request: Request }) => {
       { status: 502 },
     );
   }
+};
+
+export const onRequestOptions: PagesFunction<Env> = async () => {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
 };
