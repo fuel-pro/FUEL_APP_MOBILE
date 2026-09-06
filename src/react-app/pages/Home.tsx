@@ -789,9 +789,9 @@ function HomeContent() {
   // first-class and the result is an enhancement, not a replica of
   // app.saleszote.com.
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 md:pb-0 transition-colors duration-300 max-w-[100vw] overflow-x-clip">
+    <div className="h-[100dvh] w-full bg-gray-50 dark:bg-[#0A0D14] transition-colors duration-300 max-w-[100vw] overflow-hidden">
       <div
-        className="mx-auto min-h-screen flex w-full flex-col bg-gray-50 dark:bg-[#0D1117] shadow-2xl"
+        className="relative mx-auto flex h-full w-full flex-col overflow-hidden bg-gray-50 dark:bg-[#0D1117] shadow-2xl"
         style={{ maxWidth: "min(1400px, 100%)" }}
       >
       <Header
@@ -799,6 +799,7 @@ function HomeContent() {
         onShowCombined={() => setShowCombined(true)}
       />
 
+      <div className="flex-1 overflow-y-auto scrollbar-none pb-24 md:pb-0">
       <div className="container mx-auto px-1 sm:px-2 lg:px-4 py-1 sm:py-2">
         {/* Desktop Tab Navigation */}
         <div className="hidden md:block">
@@ -904,6 +905,7 @@ function HomeContent() {
           </p>
         </div>
       )}
+      </div>
       </div>
     </div>
   );

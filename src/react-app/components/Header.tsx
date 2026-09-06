@@ -182,7 +182,7 @@ export default function Header({
   };
 
   return (
-    <header className="bg-white dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 border-b border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-sm dark:shadow-lg relative z-40">
+    <header className="sticky top-0 z-40 bg-white dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 border-b border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-sm dark:shadow-lg">
       {/* Desktop Header */}
       <div className="container mx-auto px-2 sm:px-4 py-1.5 sm:py-2 lg:py-3">
         <div className="flex items-center justify-between gap-3">
