@@ -12289,3 +12289,12 @@ User: "in 'News' tab 'Live TV' add and incorporate all (channels, streams) from 
 
 **Gotchas**: Vercel build via `npm_config_yes=true npx vercel build --prod --token=...` (npx install prompt hangs otherwise); the valid Vercel token is on API KEYS line 26 (`vcp_7sbKi...`) — the line-25 header names it; deploy with `--scope=leons-projects-78a92c96`, then `vercel alias set <deploy>.vercel.app fuel-app-mobile.vercel.app`. Login via Playwright: system `/usr/bin/chromium` + project node_modules playwright; OnboardingTutorial z-[9999] overlay requires clicking "Skip tour" before Live TV. CF Account ID is API KEYS line 67 (`f91f912cc0b7ffd09403f9842d66e902`), token line 68. fmt=m3u packets are large (~630KB raw JSON from a 3.3MB m3u) — the CF preview first cold fetch showed ~0.6s; subsequent hits serve from the 10-min cache.
 
+### Perf follow-up (same session, commit e6d56c5 on PR #140) — News → Live TV runs smoothly
+
+User: "make sure News tab runs smoothly, no lags/delays (currently experiencing)". The 13k-channel catalog caused jank. Fixes in `LiveFeedEmbed.tsx`:
+1. **Debounced search (150ms)** — `channelSearch` state stays instant; a `debouncedSearch` state (updated via setTimeout) feeds the `filteredChannels` memo, so typing never re-scans 13k channels per keystroke.
+2. **Fast first paint** — the fetch effect now calls `finish(list)` on the BASE country list first (renders instantly, skeleton drops), THEN fetches+merges the full iptv m3u and calls `finish(merged)` after paint. `finish()` applies genre keywords + curated + YouTube-first sort + setChannels + auto-select. `keywordFilterMissed` is reset to false when a keyword match is found (both runs).
+3. **O(1) country lookup** — module-level `COUNTRY_NAME_MAP` + `countryName(code)` helper replace the per-card `ALL_COUNTRIES.find` (218-entry scan per rendered card).
+
+Measured live (headless Chrome, pages.dev): time-to-channel-grid **277 ms** after clicking Live TV; search response **265 ms**; channel count 13,425 (full catalog preserved); Zee One variants searchable. Gates: tsc 0, vitest 306/306, build OK (135 precache). Deployed: CF preview `bf486350` + main alias; Vercel production aliased (News chunk `News-BLtnmSc5.js` has debouncedSearch/countryName markers; Vercel hashes differ from local/CF — verify by marker, not hash).
+
