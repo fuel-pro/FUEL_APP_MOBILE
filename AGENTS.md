@@ -12271,3 +12271,30 @@ Gates: tsc -b 0 errors, vitest 283/283, eslint 0 errors (pre-existing warnings o
 
 Gotchas: Vercel `vercel build --prod` takes ~5 min and must run in background (`> /tmp/vercel_build2.log 2>&1 &`); then `vercel deploy --prebuilt --prod`. PriceBoard + PriceScheduler + pricing-mode are all bundled into the FuelTypesManager chunk by Vite (inner sub-tabs) — verify markers in `FuelTypesManager-*.js`, not a separate chunk. The seeding effect must gate on a `cloudLoaded` STATE flag (not the ref) so it re-runs after the async cloud load; the ref alone doesn't trigger re-render.
 
+## Session 2026-09-05 (cont.) — Live TV: full index.m3u catalog (VLC parity ~13k) + custom UA/Referrer propagation (PR #140)
+
+User: "in 'News' tab 'Live TV' add and incorporate all (channels, streams) from https://iptv-org.github.io/iptv/index.m3u ... and make sure it works well." This continues PR #139 (fix/iptv-live-tv-global-catalog-alt-search, MERGED) and adds the ACTUAL master m3u catalog instead of the API-catalog slice.
+
+**What shipped:**
+- `api/_lib/iptv-m3u.ts` (NEW shared parser, Node + CF edge): parses `index.m3u` = 12,949 entries. Handles `#EXTINF` attrs, `tvg-*`, `#EXTVLCOPT`, and inline `|User-Agent=|Referer=` custom headers (moved onto `userAgent`/`referrer`). Clean display names (geo-note/quality split into `quality` title suffix, e.g. "Zee One Français" -> "Zee One Français (720p)"); country derived from `tvg-id` TLD; stable ids `${id}-2`, `-3`… for duplicate/geo variants.
+- `api/live-channels.ts` (`handleIptvM3u`): `fmt=m3u` returns the ACTUAL master m3u catalog (was channels.json+streams.json API merge). master parsed once + cached (10-min TTL), filtered per country/category. Limit raised to 13,500.
+- `functions/api/iptv-channels.ts` (CF): same fmt=m3u path self-contained; MAX_RESULTS = 13,500.
+- `api/hls-proxy.ts` + `functions/api/hls-proxy.ts`: `ua`/`ref` query params -> forwarded upstream + propagated into EVERY rewritten playlist/segment URL (so custom-header streams don't 403). `rewritePlaylist()`/`rewritePlaylistUrl()` take `extra?: { ua?, ref? }`.
+- `LiveStreamService.ts`: `IptvChannel`/`LiveChannel` gain `userAgent`/`referrer`/`quality`; `fetchIptvChannels()` defaults `fmt=m3u`, limit 13,500; background prefetch warms full global catalog.
+- `LiveFeedEmbed.tsx`: `hlsProxyUrl(url, ua?, ref?)` threads headers through all 3 call sites (native direct, hls.js attach, Safari native).
+
+**Verified live (both hosts):** `/api/iptv-channels?fmt=m3u` -> 12,949 entries; 671 UA streams, 238 referrer streams, 9,605 quality variants. Headless Chrome on fuel-app-mobile.pages.dev: News -> Live TV shows "13,430 channels", search "Zee One" -> Zee One (1080p) / Français (720p) / German (720p). hls-proxy confirms ua/ref in rewritten URLs on both hosts. Gates: tsc 0, vitest 306/306 (10 new), eslint 0, build OK (clean Vite cache, 135 precache).
+
+**Deploy-state**: branch `fix/iptv-full-m3u-catalog` pushed; PR #140 open. Cloudflare Pages LIVE (preview 06e59cb8 + main alias). Vercel production LIVE (prebuilt dpl aliased to fuel-app-mobile.vercel.app).
+
+**Gotchas**: Vercel build via `npm_config_yes=true npx vercel build --prod --token=...` (npx install prompt hangs otherwise); the valid Vercel token is on API KEYS line 26 (`vcp_7sbKi...`) — the line-25 header names it; deploy with `--scope=leons-projects-78a92c96`, then `vercel alias set <deploy>.vercel.app fuel-app-mobile.vercel.app`. Login via Playwright: system `/usr/bin/chromium` + project node_modules playwright; OnboardingTutorial z-[9999] overlay requires clicking "Skip tour" before Live TV. CF Account ID is API KEYS line 67 (`f91f912cc0b7ffd09403f9842d66e902`), token line 68. fmt=m3u packets are large (~630KB raw JSON from a 3.3MB m3u) — the CF preview first cold fetch showed ~0.6s; subsequent hits serve from the 10-min cache.
+
+### Perf follow-up (same session, commit e6d56c5 on PR #140) — News → Live TV runs smoothly
+
+User: "make sure News tab runs smoothly, no lags/delays (currently experiencing)". The 13k-channel catalog caused jank. Fixes in `LiveFeedEmbed.tsx`:
+1. **Debounced search (150ms)** — `channelSearch` state stays instant; a `debouncedSearch` state (updated via setTimeout) feeds the `filteredChannels` memo, so typing never re-scans 13k channels per keystroke.
+2. **Fast first paint** — the fetch effect now calls `finish(list)` on the BASE country list first (renders instantly, skeleton drops), THEN fetches+merges the full iptv m3u and calls `finish(merged)` after paint. `finish()` applies genre keywords + curated + YouTube-first sort + setChannels + auto-select. `keywordFilterMissed` is reset to false when a keyword match is found (both runs).
+3. **O(1) country lookup** — module-level `COUNTRY_NAME_MAP` + `countryName(code)` helper replace the per-card `ALL_COUNTRIES.find` (218-entry scan per rendered card).
+
+Measured live (headless Chrome, pages.dev): time-to-channel-grid **277 ms** after clicking Live TV; search response **265 ms**; channel count 13,425 (full catalog preserved); Zee One variants searchable. Gates: tsc 0, vitest 306/306, build OK (135 precache). Deployed: CF preview `bf486350` + main alias; Vercel production aliased (News chunk `News-BLtnmSc5.js` has debouncedSearch/countryName markers; Vercel hashes differ from local/CF — verify by marker, not hash).
+
