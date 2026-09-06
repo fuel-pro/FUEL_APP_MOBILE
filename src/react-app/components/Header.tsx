@@ -3,6 +3,14 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useTheme } from "@/react-app/context/ThemeContext";
 import { COLOR_THEMES } from "@/react-app/context/ThemeContext";
+import {
+  useZoom,
+  FRAME_MODES,
+  zoomLabel,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  ZOOM_STEP,
+} from "@/react-app/context/ZoomContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useTutorial } from "@/react-app/context/TutorialContext";
 import LocationSelector from "@/react-app/components/LocationSelector";
@@ -44,6 +52,10 @@ import {
   Loader2,
   HelpCircle,
   Palette,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  MonitorSmartphone,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -65,11 +77,14 @@ export default function Header({
     colorThemeMeta,
     setColorTheme,
   } = useTheme();
+  const { zoom, frame, setZoom, zoomIn, zoomOut, resetZoom, setFrame } =
+    useZoom();
   const location = useLocation();
   const tutorial = useTutorial();
   const navigate = useNavigate();
   const [showEditInfo, setShowEditInfo] = useState(false);
   const [showColorThemes, setShowColorThemes] = useState(false);
+  const [showZoomMenu, setShowZoomMenu] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showStationMenu, setShowStationMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -98,6 +113,7 @@ export default function Header({
         !customizeMenuRef.current.contains(e.target as Node)
       ) {
         setShowCustomizeMenu(false);
+        setShowZoomMenu(false);
       }
       if (
         profileMenuRef.current &&
@@ -435,6 +451,111 @@ export default function Header({
                     </p>
                   </div>
                 )}
+                {/* View Zoom & Frame popover (opened from inside the
+                    Customize dropdown, anchored to the same trigger). */}
+                {showZoomMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                        View Zoom
+                      </p>
+                      <button
+                        onClick={() => {
+                          resetZoom();
+                          toastSuccess("Zoom reset to 100%");
+                        }}
+                        className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 hover:text-amber-500 transition-colors"
+                        title="Reset zoom to 100%"
+                      >
+                        <RotateCcw size={11} />
+                        Reset
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={zoomOut}
+                        disabled={zoom <= ZOOM_MIN}
+                        aria-label="Zoom out"
+                        className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 disabled:opacity-40 transition-colors"
+                      >
+                        <ZoomOut size={15} />
+                      </button>
+                      <div className="flex-1 flex items-center justify-center">
+                        <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
+                          {zoomLabel(zoom)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={zoomIn}
+                        disabled={zoom >= ZOOM_MAX}
+                        aria-label="Zoom in"
+                        className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 disabled:opacity-40 transition-colors"
+                      >
+                        <ZoomIn size={15} />
+                      </button>
+                    </div>
+                    <input
+                      type="range"
+                      min={ZOOM_MIN}
+                      max={ZOOM_MAX}
+                      step={ZOOM_STEP}
+                      value={zoom}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      aria-label="Zoom level"
+                      className="w-full accent-amber-500"
+                    />
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                      Scales the whole app frame (75–200%). Fits the layout to
+                      your screen & accessibility needs.
+                    </p>
+                    <div className="h-px bg-gray-200 dark:bg-white/10" />
+                    <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                      Frame Aspect
+                    </p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {FRAME_MODES.map((fm) => {
+                        const sel = frame === fm.id;
+                        return (
+                          <button
+                            key={fm.id}
+                            onClick={() => {
+                              setFrame(fm.id);
+                              toastSuccess(`Frame: ${fm.name}`);
+                            }}
+                            title={fm.hint}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-left transition-colors ${
+                              sel
+                                ? "border-amber-500/60 bg-amber-500/10"
+                                : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                            }`}
+                          >
+                            <MonitorSmartphone
+                              size={13}
+                              className={
+                                sel
+                                  ? "text-amber-500"
+                                  : "text-gray-500 dark:text-gray-400"
+                              }
+                            />
+                            <span
+                              className={`text-[10px] font-medium truncate w-full text-center ${
+                                sel
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-gray-700 dark:text-gray-300"
+                              }`}
+                            >
+                              {fm.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                      Device = narrow 9:20 phone frame · Wide = bigger frame ·
+                      Full = edge-to-edge.
+                    </p>
+                  </div>
+                )}
                 {showCustomizeMenu && (
                   <div
                     role="listbox"
@@ -457,6 +578,19 @@ export default function Header({
                       <span>Color Theme</span>
                       <span className="ml-auto text-[10px] text-gray-400 truncate max-w-20">
                         {colorThemeMeta.name}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowZoomMenu((v) => !v);
+                        setShowCustomizeMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 h-10 text-left text-xs text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <ZoomIn size={13} className="text-amber-400" />
+                      <span>View Zoom & Frame</span>
+                      <span className="ml-auto text-[10px] text-gray-400 truncate max-w-20">
+                        {zoomLabel(zoom)}
                       </span>
                     </button>
                     <button
@@ -625,7 +759,10 @@ export default function Header({
             ref={mobileMenuRef}
           >
             <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              onClick={() => {
+                setShowMobileMenu(!showMobileMenu);
+                if (!showMobileMenu) setShowZoomMenu(false);
+              }}
               className="p-2.5 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-xl transition-colors text-gray-700 dark:text-gray-200"
             >
               {showMobileMenu ? <X size={20} /> : <Menu size={20} />}
@@ -729,6 +866,18 @@ export default function Header({
                   />
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
                     Theme
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowZoomMenu((v) => !v);
+                  }}
+                  className="flex flex-col items-center justify-center flex-1 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors active:scale-95"
+                  title={`View Zoom & Frame — ${zoomLabel(zoom)}`}
+                >
+                  <ZoomIn size={16} className="text-amber-400" />
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Zoom
                   </span>
                 </button>
                 <button
@@ -900,6 +1049,100 @@ export default function Header({
                 </div>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500 px-1 pt-1">
                   Syncs across your devices
+                </p>
+              </div>
+            )}
+
+            {/* Inline View Zoom & Frame control (mobile) — APK accessibility */}
+            {showZoomMenu && (
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                    View Zoom & Frame
+                  </p>
+                  <button
+                    onClick={() => {
+                      resetZoom();
+                      toastSuccess("Zoom reset to 100%");
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 hover:text-amber-500 transition-colors"
+                  >
+                    <RotateCcw size={11} />
+                    Reset
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={zoomOut}
+                    disabled={zoom <= ZOOM_MIN}
+                    aria-label="Zoom out"
+                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 disabled:opacity-40 transition-colors"
+                  >
+                    <ZoomOut size={16} />
+                  </button>
+                  <div className="flex-1 flex items-center justify-center">
+                    <span className="text-base font-bold text-gray-900 dark:text-white tabular-nums">
+                      {zoomLabel(zoom)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={zoomIn}
+                    disabled={zoom >= ZOOM_MAX}
+                    aria-label="Zoom in"
+                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 disabled:opacity-40 transition-colors"
+                  >
+                    <ZoomIn size={16} />
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={ZOOM_MIN}
+                  max={ZOOM_MAX}
+                  step={ZOOM_STEP}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  aria-label="Zoom level"
+                  className="w-full accent-amber-500"
+                />
+                <div className="h-px bg-gray-200 dark:bg-white/10" />
+                <div className="grid grid-cols-3 gap-1.5">
+                  {FRAME_MODES.map((fm) => {
+                    const sel = frame === fm.id;
+                    return (
+                      <button
+                        key={fm.id}
+                        onClick={() => setFrame(fm.id)}
+                        title={fm.hint}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-colors ${
+                          sel
+                            ? "border-amber-500/60 bg-amber-500/10"
+                            : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                        }`}
+                      >
+                        <MonitorSmartphone
+                          size={13}
+                          className={
+                            sel
+                              ? "text-amber-500"
+                              : "text-gray-500 dark:text-gray-400"
+                          }
+                        />
+                        <span
+                          className={`text-[10px] font-medium truncate w-full text-center ${
+                            sel
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          {fm.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                  Scales the whole app frame (75–200%) + width profile — fits
+                  your screen & accessibility needs, syncs across devices.
                 </p>
               </div>
             )}

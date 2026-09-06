@@ -28,6 +28,22 @@
             root.setAttribute("data-theme", "dark");
             document.body.style.colorScheme = "dark";
           }
+          // Apply saved view-zoom + frame before first paint (no size flash).
+          try {
+            var zStored = localStorage.getItem("fuelpro_view_zoom");
+            if (zStored !== null) {
+              var zn = Number(zStored);
+              if (Number.isFinite(zn)) {
+                var zc = Math.min(200, Math.max(75, Math.round(zn / 5) * 5));
+                root.setAttribute("data-zoom", String(zc));
+                root.style.fontSize = zc + "%";
+              }
+            }
+            var fStored = localStorage.getItem("fuelpro_frame_mode");
+            if (fStored === "wide" || fStored === "full" || fStored === "device") {
+              root.setAttribute("data-frame", fStored);
+            }
+          } catch (e2) { /* ignore */ }
         } catch (e) {
           document.documentElement.classList.add("dark");
         }

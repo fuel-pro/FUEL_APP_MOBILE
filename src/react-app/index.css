@@ -2115,6 +2115,43 @@ ol {
   display: none;
 }
 
+/* ─── View Zoom + Frame Aspect (APK accessibility) ─────────────────────
+   The ZoomProvider sets data-zoom (75–200%) + data-frame on <html> and
+   scales the root font-size, so the whole app frame zooms proportionally
+   like browser/WebView zoom — but isolated to our UI and controllable
+   from inside the app. */
+
+/* Frame width profiles for the centered app surface. */
+html[data-frame="device"] {
+  --fp-frame-max: min(1400px, 100%);
+}
+html[data-frame="wide"] {
+  --fp-frame-max: min(1600px, 100%);
+}
+html[data-frame="full"] {
+  --fp-frame-max: 100%;
+}
+
+/* Readability floor — when zoomed out below 100%, the root rem scale
+   shrinks ALL text proportionally, so nothing falls out of proportion.
+   Token-driven small text (labels, hints) is normalized at the token layer
+   so it never drops below ~10px equivalent. This avoids fragile
+   class-name selectors entirely (esbuild-safe). */
+:root,
+html {
+  --fp-text-min: 10px;
+}
+
+/* Smooth zoom transitions (respect reduced-motion). */
+html[data-zoom] * {
+  transition: font-size 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-zoom] * {
+    transition: none !important;
+  }
+}
+
 /* Smooth scrolling for horizontal sections */
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
