@@ -4,23 +4,17 @@ const ALLOW = ["https://huggingface.co", "https://cdn-lfs.huggingface.co"];
 
 /**
  * Cloudflare Pages Function - HuggingFace reverse-proxy (caption models).
- * Same purpose as /api/hf-proxy.ts (Vercel). Lives at
- * functions/api/hf-proxy.ts -> accessible at /api/hf-proxy on the same
- * origin as the SPA (zero CORS, zero external-CDN dependency, CDN-cached
- * model/WASM files after the first hit).
+ * Catch-all route: functions/api/hf-proxy/[[path]].ts matches
+ * /api/hf-proxy/<anything...> so model files with deep sub-paths
+ * (e.g. Xenova/whisper-tiny/resolve/main/...) are proxied.
  *
  * GET /api/hf-proxy/<path>  ->  https://huggingface.co/<path>
  */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { request } = context;
   const url = new URL(request.url);
-  const prefix = "/api/hf-proxy/";
   const rawPath = url.pathname;
-  if (!rawPath.startsWith(prefix)) {
-    return new Response("Bad Request: expected /api/hf-proxy/<path>", {
-      status: 400,
-    });
-  }
+  const prefix = "/api/hf-proxy/";
   const hfPath = rawPath.slice(prefix.length);
   if (!hfPath) {
     return new Response("Bad Request: missing path", { status: 400 });
