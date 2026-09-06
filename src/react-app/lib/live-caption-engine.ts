@@ -56,16 +56,23 @@ let asrLoading: Promise<any> | null = null;
 /** Build the same-origin model base URL. Falls back to HuggingFace directly. */
 export function modelRemoteHost(): string {
   if (typeof window === "undefined") return "https://huggingface.co/";
-  const base = window.location.origin + "/api/hf-proxy/";
-  // Only use the proxy on hosts we know; if someone embeds the app elsewhere,
-  // fall back to the direct CDN (which is still listed in our CSP).
   const host = window.location.hostname;
-  const supported =
+  // Cloudflare Pages: path-based catch-all /api/hf-proxy/<path>.
+  if (
     host.endsWith(".pages.dev") ||
-    host.endsWith(".vercel.app") ||
     host === "localhost" ||
-    host === "127.0.0.1";
-  return supported ? base : "https://huggingface.co/";
+    host === "127.0.0.1"
+  ) {
+    return window.location.origin + "/api/hf-proxy/";
+  }
+  // Vercel: folded into the existing /api/integrations dispatcher to keep the
+  // Hobby 12-function cap. The model path lands in the `p` query param
+  // (transformers.js pathJoin preserves the `?` inside the first part).
+  if (host.endsWith(".vercel.app")) {
+    return window.location.origin + "/api/integrations?action=hf-proxy&p=";
+  }
+  // Unknown embed host — keep the direct CDN (still CSP-allowed).
+  return "https://huggingface.co/";
 }
 
 /** Retry a promise with exponential backoff (transient network failures). */

@@ -84,7 +84,11 @@ describe("LiveCaptionEngine model source (first-party proxy)", () => {
   it("uses the SAME-ORIGIN /api/hf-proxy/ on known hosts (no external CDN)", () => {
     const original = window.location.hostname;
     Object.defineProperty(window, "location", {
-      value: { ...window.location, hostname: "fuel-app-mobile.pages.dev", origin: "https://fuel-app-mobile.pages.dev" },
+      value: {
+        ...window.location,
+        hostname: "fuel-app-mobile.pages.dev",
+        origin: "https://fuel-app-mobile.pages.dev",
+      },
       writable: true,
     });
     const host = modelRemoteHost();
@@ -93,9 +97,28 @@ describe("LiveCaptionEngine model source (first-party proxy)", () => {
     window.location.hostname = original;
   });
 
+  it("folds into /api/integrations?action=hf-proxy&p= on Vercel (12-func cap)", () => {
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        hostname: "fuel-app-mobile.vercel.app",
+        origin: "https://fuel-app-mobile.vercel.app",
+      },
+      writable: true,
+    });
+    const host = modelRemoteHost();
+    expect(host).toBe(
+      "https://fuel-app-mobile.vercel.app/api/integrations?action=hf-proxy&p=",
+    );
+  });
+
   it("falls back to huggingface.co on unknown embed hosts", () => {
     Object.defineProperty(window, "location", {
-      value: { ...window.location, hostname: "evil.example.net", origin: "https://evil.example.net" },
+      value: {
+        ...window.location,
+        hostname: "evil.example.net",
+        origin: "https://evil.example.net",
+      },
       writable: true,
     });
     const host = modelRemoteHost();
