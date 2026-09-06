@@ -12484,3 +12484,17 @@ User report: the Company QR Code modal appeared "hidden above the header".
 
 **Lesson**: ANY `fixed inset-0` overlay rendered inside a positioned ancestor (`relative`/`fixed`/`sticky`/`absolute` or a `transform`/`filter`/`will-change` container) is trapped to that ancestor's box. Modals rendered inside `<header>`, `<nav class="fixed">`, or `relative` wrappers MUST be teleported to `document.body` (or moved out of the positioned container).
 
+
+## Session 2026-09-06 — Fix header tap-block on APK/mobile: zoom relocated + tutorial gating (commit 40e7e7c, DEPLOYED LIVE BOTH HOSTS)
+
+Root cause: Onboarding tutorial launch overlay (`fixed inset-0 z-[9999]`) covered the whole viewport on fresh login, blocking all header taps; the header also carried zoom UI that didn't belong there.
+
+Fixes:
+- `TutorialContext.tsx`: auto-start now gates on wide screens only — `shouldAutoStart` checks `window.matchMedia("(max-width: 768px)")` so a 9:20 APK/standalone mobile viewport NEVER auto-launches a full-screen overlay that covers the header. Tutorial stays available via Header Help menu.
+- `OnboardingTutorial.tsx`: launch-screen backdrop is now `pointer-events-none` (page + header stay interactive behind the modal card; only the card is clickable). Started-tour spotlight keeps its dim by design. Verify: outer `fixed inset-0` wrapper has `pointer-events-none`, card div has `pointer-events-auto`.
+- `Header.tsx`: removed ALL zoom/frame UI (desktop Customize popover + "View Zoom & Frame" menu entry, mobile "Zoom" tile + inline panel) — imports cleaned (`useZoom`, `showZoomMenu` state, `setShowZoomMenu`, ZoomIn/ZoomOut/MonitorSmartphone/RotateCcw). Customize dropdown now lists only Color Theme / Switch Light-Dark / Layout & Tabs / Upload Logo / Company QR / Replay Tutorial / General Settings.
+- `GeneralSettings.tsx`: ADDED "View Zoom & Frame" SectionCard in AppearanceTab (after Layout card, before Logo card): Zoom Level (75–200%) with ZoomOut/ZoomIn buttons (disabled at clamps), slider, Reset, Frame Aspect 3-mode buttons (Device/Wide/Full from FRAME_MODES), hint text. Uses `useZoom()` + `zoomLabel`, `ZOOM_MIN/MAX/STEP`.
+
+Deploy: GitHub main 40e7e7c (rebased on remote ccb3ee0); Cloudflare Pages LIVE (preview 1017db49 + main alias); Vercel production LIVE (prebuilt, aliased fuel-app-mobile.vercel.app). Verified live at 360x800: no z-[9999] overlay in header tap chain after fresh load; `dark=true` (no light fallback); `data-zoom=100` boots; Customize menu has no zoom entry; deployed `GeneralSettings-H8QQEs8a.js` contains "View Zoom & Frame"/"Frame Aspect" (CF hash differs from local `GeneralSettings-BfnbtbM2.js` — verify by MARKER not hash; Header main chunk has 0 ZoomIn/showZoomMenu refs). Gates: tsc 0, eslint 0 errors (pre-existing warnings only), 337/337 tests, prettier clean, clean Vite-cache build.
+
+Gotchas: `vite preview --port 8899` local probes confirm fixes BEFORE deploy (playwright system chromium `--no-sandbox`); `wrangler` v4.126 does NOT accept `--account-id` arg — use env `CLOUDFLARE_ACCOUNT_ID`; Vercel deploy = `npm_config_yes=true npx vercel build --prod --scope=leons-projects-78a92c96` then `npx vercel deploy --prebuilt --prod` then `vercel alias set <hash>.vercel.app fuel-app-mobile.vercel.app`. Live 404-check on pages.dev root: the real `/` serves the SPA 200 (a "Page Not Found" body seen in some HEAD probes is the CDN's cached 404.html artifact, NOT the app root).
