@@ -45,17 +45,23 @@ async function loadAsr(): Promise<any> {
   if (asrPipeline) return asrPipeline;
   if (asrLoading) return asrLoading;
   asrLoading = (async () => {
-    const { pipeline, env } = await import("@xenova/transformers");
-    // Serve model files from the HuggingFace CDN (free) — no local bundling.
+    const { env } = await import("@xenova/transformers");
+    // Serve model + wasm files from the HuggingFace CDN (free) — no local
+    // bundling. The site CSP allows huggingface.co / cdn-lfs.huggingface.co.
     env.allowLocalModels = false;
     env.useBrowserCache = true;
+    env.remoteHost = "https://huggingface.co/";
+    // Single-thread WASM: avoids the SharedArrayBuffer requirement
+    // (cross-origin isolation), so the model runs in EVERY browser without
+    // COOP/COEP headers — no silent WASM init failure.
+    env.backends.onnx.wasm.numThreads = 1;
     // MULTILINGUAL whisper-tiny (not .en) — auto-detects the spoken language
-    // and transcribes it to English, so non-English streams are captioned too.
-    asrPipeline = await pipeline(
-      "automatic-speech-recognition",
-      "Xenova/whisper-tiny",
-      { quantized: true },
-    );
+    // and transcribes it, so non-English streams are captioned too.
+    // NOTE: constructed class-by-class (not the named "automatic-speech-
+    // recognition" string) so the bundler keeps the Whisper classes alive —
+    // the string-dispatch form can fail with "Unsupported model type" after
+    // Vite tree-shakes the class registrations.
+    asrPipeline = await buildAsrPipeline("Xenova/whisper-tiny");
     return asrPipeline;
   })();
   try {
@@ -63,6 +69,28 @@ async function loadAsr(): Promise<any> {
   } finally {
     asrLoading = null;
   }
+}
+
+/** Explicit class-based construction of the ASR pipeline (tree-shake-proof). */
+async function buildAsrPipeline(modelId: string): Promise<any> {
+  const {
+    AutoModelForSpeechSeq2Seq,
+    AutoProcessor,
+    AutoTokenizer,
+    AutomaticSpeechRecognitionPipeline,
+  } = await import("@xenova/transformers");
+  const [model, processor, tokenizer] = await Promise.all([
+    AutoModelForSpeechSeq2Seq.from_pretrained(modelId, { quantized: true }),
+    AutoProcessor.from_pretrained(modelId),
+    AutoTokenizer.from_pretrained(modelId),
+  ]);
+  // AutomaticSpeechRecognitionPipeline({ task, model, tokenizer, processor })
+  return new AutomaticSpeechRecognitionPipeline({
+    task: "automatic-speech-recognition",
+    model,
+    tokenizer,
+    processor,
+  });
 }
 
 // Translation pipeline (English -> preferred language), loaded on demand only.
@@ -95,10 +123,12 @@ async function loadTranslator(lang: string): Promise<any> {
   if (!modelId) return null; // unsupported language — captions stay English
   mtLang = lang;
   mtLoading = (async () => {
-    const { pipeline, env } = await import("@xenova/transformers");
+    const { env } = await import("@xenova/transformers");
     env.allowLocalModels = false;
     env.useBrowserCache = true;
-    mtPipeline = await pipeline("translation", modelId, { quantized: true });
+    env.remoteHost = "https://huggingface.co/";
+    env.backends.onnx.wasm.numThreads = 1;
+    mtPipeline = await buildMtPipeline(modelId);
     return mtPipeline;
   })();
   try {
@@ -106,6 +136,22 @@ async function loadTranslator(lang: string): Promise<any> {
   } finally {
     mtLoading = null;
   }
+}
+
+/** Explicit class-based construction of the translation pipeline
+ *  (tree-shake-proof, mirror of buildAsrPipeline). */
+async function buildMtPipeline(modelId: string): Promise<any> {
+  const { AutoModelForSeq2SeqLM, AutoTokenizer, TranslationPipeline } =
+    await import("@xenova/transformers");
+  const [model, tokenizer] = await Promise.all([
+    AutoModelForSeq2SeqLM.from_pretrained(modelId, { quantized: true }),
+    AutoTokenizer.from_pretrained(modelId),
+  ]);
+  return new TranslationPipeline({
+    task: "translation",
+    model,
+    tokenizer,
+  });
 }
 
 /** Translate an English caption into the preferred language (on-device). */
