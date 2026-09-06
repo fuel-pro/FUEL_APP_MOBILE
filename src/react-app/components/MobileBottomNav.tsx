@@ -32,6 +32,7 @@ import { Search as SearchIcon } from "lucide-react";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import QuickSearch from "@/react-app/components/QuickSearch";
 import CompanyQrModal from "@/react-app/components/CompanyQrModal";
 
@@ -198,7 +199,7 @@ export default function MobileBottomNav({
         id: tab.id,
         label: tab.label,
         description: tab.description || "",
-        category: "Navigation" as const,
+        category: "Navigation" as "Navigation" | "Quick Action",
         tabId: tab.id,
         keywords: `${tab.id} ${tab.label}`,
       }));
@@ -284,6 +285,9 @@ export default function MobileBottomNav({
           inside the sheet never reaches the backdrop's close handler. */}
       {showMoreMenu && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="All features"
           className="fixed bottom-[72px] left-2 right-2 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl z-[60] md:hidden border border-gray-200 dark:border-gray-700 overflow-hidden"
           style={{ maxHeight: "62vh", overflowY: "auto" }}
           onClick={(e) => e.stopPropagation()}
@@ -322,47 +326,59 @@ export default function MobileBottomNav({
 
           {/* All secondary tabs — HORIZONTAL scroll so every feature is
               reachable at every aspect ratio (matches the desktop parity
-              request: no grid crushing into unreadable columns). */}
-          <div
-            className="flex gap-1.5 p-2 overflow-x-auto"
-            role="list"
-            aria-label="All features"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            {secondaryNav.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  role="listitem"
-                  onClick={() => handleNavClick(item.id)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex flex-col items-center justify-center min-w-16 px-3 rounded-xl transition-all active:scale-95 shrink-0 ${
-                    isActive
-                      ? "bg-blue-100 dark:bg-blue-900/40"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                  }`}
-                  style={{ minHeight: 64, touchAction: "manipulation" }}
-                >
-                  <Icon
-                    size={22}
-                    className={
-                      isActive ? item.color : "text-gray-500 dark:text-gray-400"
-                    }
-                  />
-                  <span
-                    className={`text-[11px] mt-1 font-medium ${
-                      isActive
-                        ? "text-blue-700 dark:text-blue-300"
-                        : "text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+              request: no grid crushing into unreadable columns). Proper
+              ul>li>button semantics so screen readers announce a list of
+              features (aria-label on the list, aria-current on the active). */}
+          <div className="relative">
+            <ul
+              className="flex gap-1.5 p-2 overflow-x-auto snap-x scrollbar-hide"
+              aria-label="All features"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {secondaryNav.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <li key={item.id} className="shrink-0 snap-start">
+                    <button
+                      onClick={() => handleNavClick(item.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      aria-label={item.label}
+                      className={`flex flex-col items-center justify-center min-w-16 px-3 rounded-xl transition-all active:scale-95 ${
+                        isActive
+                          ? "bg-blue-100 dark:bg-blue-900/40"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                      }`}
+                      style={{ minHeight: 64, touchAction: "manipulation" }}
+                    >
+                      <Icon
+                        size={22}
+                        aria-hidden
+                        className={
+                          isActive
+                            ? item.color
+                            : "text-gray-500 dark:text-gray-400"
+                        }
+                      />
+                      <span
+                        className={`text-[11px] mt-1 font-medium ${
+                          isActive
+                            ? "text-blue-700 dark:text-blue-300"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        {item.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {/* Right-edge fade hint so users know the rail scrolls. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-xl bg-gradient-to-r from-transparent via-white/70 to-white dark:via-gray-800/70 dark:to-gray-800"
+            />
           </div>
         </div>
       )}
@@ -448,6 +464,9 @@ export default function MobileBottomNav({
           {showMoreButton && (
             <button
               onClick={() => setShowMoreMenu(!showMoreMenu)}
+              aria-expanded={showMoreMenu}
+              aria-haspopup="menu"
+              aria-label="More features (opens all features sheet)"
               className="flex flex-col items-center justify-center flex-1 h-full transition-all active:scale-95 relative"
               style={{ minWidth: 48, touchAction: "manipulation" }}
             >

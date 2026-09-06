@@ -122,7 +122,7 @@ export default function CompanyQrModal({
       return;
     }
     const link = buildGrantLink(activeGrant.code);
-    QRCode.toDataURL(link, { width: 260, margin: 2, errorCorrection: "M" })
+    QRCode.toDataURL(link, { width: 260, margin: 2, errorCorrectionLevel: "M" })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(""));
   }, [activeGrant]);
