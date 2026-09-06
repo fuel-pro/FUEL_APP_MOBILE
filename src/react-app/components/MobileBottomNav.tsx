@@ -24,11 +24,16 @@ import {
   Monitor,
   Receipt,
   Settings,
+  QrCode,
+  Film,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Search as SearchIcon } from "lucide-react";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import QuickSearch from "@/react-app/components/QuickSearch";
+import CompanyQrModal from "@/react-app/components/CompanyQrModal";
 
 interface MobileBottomNavProps {
   activeTab: string;
@@ -47,6 +52,7 @@ export default function MobileBottomNav({
   onTabChange,
 }: MobileBottomNavProps) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   const { canAccessTab } = usePermissions();
   const { featureFlags } = useTenant();
 
@@ -182,11 +188,87 @@ export default function MobileBottomNav({
     setShowMoreMenu(false);
   };
 
+  // Site-wide search entries for the mobile QuickSearch — mirrors the
+  // desktop Header scope (navigation + quick actions). Movies/sub-tabs are
+  // searched automatically by QuickSearch's own index.
+  const searchEntries = useMemo(() => {
+    const entries = (state.tabConfigurations || [])
+      .filter((t) => t.visible && isTabAllowed(t.id))
+      .map((tab) => ({
+        id: tab.id,
+        label: tab.label,
+        description: tab.description || "",
+        category: "Navigation" as const,
+        tabId: tab.id,
+        keywords: `${tab.id} ${tab.label}`,
+      }));
+    entries.push(
+      ...[
+        {
+          id: "qa-pos",
+          label: "New Sale (POS)",
+          description: "Quick fuel sale",
+          category: "Quick Action" as const,
+          tabId: "pos",
+          keywords: "sell checkout pos cart",
+        },
+        {
+          id: "qa-invoice",
+          label: "New Invoice",
+          description: "Create a new invoice",
+          category: "Quick Action" as const,
+          tabId: "invoice",
+          keywords: "bill receipt customer",
+        },
+        {
+          id: "qa-expense",
+          label: "Record Expense",
+          description: "Log a new expense",
+          category: "Quick Action" as const,
+          tabId: "expenses",
+          keywords: "cost spend money",
+        },
+        {
+          id: "qa-credit",
+          label: "Credit Accounts",
+          description: "Manage customer credit",
+          category: "Quick Action" as const,
+          tabId: "credit",
+          keywords: "debt loan customer balance",
+        },
+        {
+          id: "qa-stkpush",
+          label: "M-PESA STK Push",
+          description: "Collect payment via M-PESA",
+          category: "Quick Action" as const,
+          tabId: "livetransaction",
+          keywords: "mpesa payment collect phone",
+        },
+      ],
+    );
+    return entries;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.tabConfigurations, featureFlags, canAccessTab]);
+
   const isMoreActive = secondaryNav.some((item) => item.id === activeTab);
   const showMoreButton = secondaryNav.length > 0;
 
   return (
     <>
+      {/* QuickSearch (Ctrl+K palette) — full site search on mobile.
+              The bottom-nav Search button clicks the (hidden) trigger, so
+              mobile users get the exact same palette as desktop. */}
+      <QuickSearch entries={searchEntries} triggerHidden />
+
+      {/* Company QR modal (secure shareable/revocable grant) */}
+      {showQrModal && (
+        <CompanyQrModal
+          stationName={state.companyData?.name || "Station"}
+          companyName={state.companyData?.name || "FuelPro"}
+          onClose={() => setShowQrModal(false)}
+        />
+      )}
+
       {/* More Menu Overlay - dim backdrop. Must NOT intercept a tap that
           belongs to a sheet button — it's ultra-dim and closes on a tap
           outside the sheet. */}
@@ -203,24 +285,60 @@ export default function MobileBottomNav({
       {showMoreMenu && (
         <div
           className="fixed bottom-[72px] left-2 right-2 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl z-[60] md:hidden border border-gray-200 dark:border-gray-700 overflow-hidden"
-          style={{ maxHeight: "60vh", overflowY: "auto" }}
+          style={{ maxHeight: "62vh", overflowY: "auto" }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="sticky top-0 bg-white dark:bg-gray-800 p-3 border-b border-gray-200 dark:border-gray-700 z-10">
             <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">
               All Features
             </h3>
-            <p className="text-[10px] text-gray-400">Tap to navigate</p>
+            <p className="text-[10px] text-gray-400">
+              All tabs · search · share the company QR
+            </p>
           </div>
-          <div className="grid grid-cols-3 gap-1 p-2">
+
+          {/* Site utilities row (always available in the sheet) */}
+          <div className="flex flex-wrap gap-2 p-2">
+            <button
+              onClick={() => {
+                setShowQrModal(true);
+                setShowMoreMenu(false);
+              }}
+              aria-label="Company QR Code (secure, revocable station access)"
+              title="Company QR Code"
+              className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              <QrCode size={14} /> Company QR
+            </button>
+            <button
+              onClick={() => switchToTab("news")}
+              aria-label="Open Live TV & Movies"
+              title="Live TV, Radio & Movies"
+              className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              <Film size={14} /> TV & Movies
+            </button>
+          </div>
+
+          {/* All secondary tabs — HORIZONTAL scroll so every feature is
+              reachable at every aspect ratio (matches the desktop parity
+              request: no grid crushing into unreadable columns). */}
+          <div
+            className="flex gap-1.5 p-2 overflow-x-auto"
+            role="list"
+            aria-label="All features"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {secondaryNav.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
+                  role="listitem"
                   onClick={() => handleNavClick(item.id)}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all active:scale-95 ${
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex flex-col items-center justify-center min-w-16 px-3 rounded-xl transition-all active:scale-95 shrink-0 ${
                     isActive
                       ? "bg-blue-100 dark:bg-blue-900/40"
                       : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
@@ -299,6 +417,32 @@ export default function MobileBottomNav({
               </button>
             );
           })}
+
+          {/* Search button — opens the same full-site QuickSearch the
+              desktop header uses (essential tool previously unavailable
+              on mobile mode). */}
+          <button
+            onClick={() => {
+              const evt = document.querySelector(
+                '[aria-label="Quick search (Ctrl+K)"]',
+              ) as HTMLButtonElement | null;
+              evt?.click();
+            }}
+            aria-label="Search anything (tabs, actions, movies)"
+            title="Search anything"
+            className="flex flex-col items-center justify-center flex-1 h-full transition-all active:scale-95 relative"
+            style={{ minWidth: 48, touchAction: "manipulation" }}
+          >
+            <div className="p-1.5 rounded-xl transition-all">
+              <SearchIcon
+                size={22}
+                className="text-gray-500 dark:text-gray-400"
+              />
+            </div>
+            <span className="text-[10px] mt-0.5 font-medium leading-none text-gray-500 dark:text-gray-400">
+              Search
+            </span>
+          </button>
 
           {/* More Button */}
           {showMoreButton && (

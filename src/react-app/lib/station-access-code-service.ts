@@ -58,6 +58,12 @@ export interface StationAccessSession {
   stationId: string;
   stationOwnerId: string; // the owner whose data we're viewing
   loginTime: number;
+  /** How this session was established: "code" (username+password access
+   *  code) or "qr-grant" (a Company QR / shared grant link). */
+  method?: "code" | "qr-grant";
+  /** For qr-grant sessions: the server-enforced expiry (ms epoch). The
+   *  viewer can show a countdown, but expiry is enforced by the RPC. */
+  grantExpiresAt?: number | null;
 }
 
 const SESSION_STORAGE_KEY = "fuelpro_station_access_session";
@@ -447,6 +453,7 @@ export async function loginWithAccessCode(
     stationId: result.stationId || stationId,
     stationOwnerId: cleanOwnerId,
     loginTime: Date.now(),
+    method: "code",
   };
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   return session;

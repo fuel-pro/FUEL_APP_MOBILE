@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Lock,
   User,
@@ -21,6 +21,8 @@ import {
   Search,
   Building2,
   CheckCircle2,
+  QrCode,
+  Clock,
 } from "lucide-react";
 import {
   loginWithAccessCode,
@@ -30,6 +32,7 @@ import {
   type StationAccessSession,
   type StationLookupResult,
 } from "@/react-app/lib/station-access-code-service";
+import { redeemCompanyGrant } from "@/react-app/lib/company-grant-service";
 import {
   getStationSnapshot,
   type StationSnapshot,
@@ -64,6 +67,10 @@ export default function StationAccess() {
   );
   const [stationSearching, setStationSearching] = useState(false);
   const [showManualIds, setShowManualIds] = useState(false);
+  // QR-grant redemption state (a shared Company QR link carries ?grant=).
+  const [grantCode, setGrantCode] = useState("");
+  const [grantRedeeming, setGrantRedeeming] = useState(false);
+  const grantedRef = useRef(false);
 
   useEffect(() => {
     setSession(getAccessSession());
@@ -76,7 +83,54 @@ export default function StationAccess() {
     const station = params.get("station");
     if (owner) setStationOwnerId(owner);
     if (station) setStationId(station);
+    const grant = params.get("grant");
+    if (grant) setGrantCode(grant);
   }, []);
+
+  // Auto-redeem a Company QR grant passed via the URL (?grant=<code>). This
+  // is the "scan the QR / tap the shared link" flow — no account, no
+  // password. The unauthenticated member redeems via the SECURITY DEFINER
+  // RPC; on success we switch straight to the read-only snapshot viewer.
+  useEffect(() => {
+    if (!grantCode || grantedRef.current) return;
+    setGrantRedeeming(true);
+    setError("");
+    redeemCompanyGrant(grantCode)
+      .then((res) => {
+        if (!res) {
+          setError(
+            "This link is invalid, expired, or has been revoked by the station owner.",
+          );
+          return;
+        }
+        grantedRef.current = true;
+        const session: StationAccessSession = {
+          accessCodeId: `grant_${res.grantId}`,
+          method: "qr-grant",
+          memberName: res.memberName,
+          memberRole: res.memberRole,
+          allowedTabs: res.allowedTabs,
+          readOnly: res.readOnly,
+          stationId: res.stationId,
+          stationOwnerId: res.stationOwnerId,
+          loginTime: Date.now(),
+          grantExpiresAt: res.expiresAt
+            ? new Date(res.expiresAt).getTime()
+            : null,
+        };
+        localStorage.setItem(
+          "fuelpro_station_access_session",
+          JSON.stringify(session),
+        );
+        setSession(session);
+      })
+      .catch((e) => {
+        setError(
+          e instanceof Error ? e.message : "This link could not be redeemed.",
+        );
+      })
+      .finally(() => setGrantRedeeming(false));
+  }, [grantCode, setGrantRedeeming, setError, setSession]);
 
   // Debounced station search by name or code.
   const handleStationSearch = useCallback((value: string) => {
@@ -219,6 +273,19 @@ export default function StationAccess() {
                     <Eye size={11} />
                     {session.readOnly ? "Read-Only" : "Full Access"}
                   </span>
+                  {session.method === "qr-grant" && (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                      <QrCode size={10} /> QR Grant
+                    </span>
+                  )}
+                  {session.method === "qr-grant" && session.grantExpiresAt && (
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <Clock size={11} />
+                      {session.grantExpiresAt > Date.now()
+                        ? `Access until ${new Date(session.grantExpiresAt).toLocaleString()}`
+                        : "Access expired"}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -673,6 +740,38 @@ export default function StationAccess() {
             </p>
           </div>
         </div>
+
+        {/* QR-grant redemption (a shared Company QR link carries ?grant=) */}
+        {grantCode && !session && (
+          <div className="mb-4 px-3 py-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <Shield size={13} className="shrink-0" />
+              {grantRedeeming
+                ? "Verifying your access link…"
+                : "You've been granted access via a secure QR link."}
+            </p>
+            {grantRedeeming && (
+              <span className="mt-2 block w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+            )}
+            {error && !grantRedeeming && (
+              <p className="text-[11px] text-red-600 dark:text-red-400 mt-2">
+                {error}
+              </p>
+            )}
+            {!grantRedeeming && error && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setGrantCode("");
+                }}
+                className="mt-1 text-[11px] underline text-gray-500"
+              >
+                Clear link and sign in with a username instead
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           {/* Station search (by name or code) — replaces manual UUID entry */}

@@ -2373,6 +2373,32 @@ code {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE BOTTOM-NAV LAYOUT (Task 1 — "more/all features in horizontal")
+   The More sheet lists every tab as a 64px HORIZONTAL scroll chip so ALL
+   features stay reachable at every aspect ratio (zoomed-out / landscape
+   phones never crush the grid into unreadable columns). The bottom bar
+   itself keeps 4 primary + Search + More, each a full 64px touch column.
+   ════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* More sheet: horizontal chip rail never overflows the page. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  /* Hide the scrollbar drag handle visually — keep the scroll hint. */
+  .md\:hidden {
+    scrollbar-width: thin;
+  }
+}
+
+/* Bottom bar participates in safe-area insets (we already pad it). */
+.fixed.bottom-0.z-\[50\],
+.fixed.bottom-0.z-\[55\],
+.fixed.bottom-0.z-\[60\] {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* ============================================================
    PREMIUM DESIGN SYSTEM (seamlessly integrated from design specs)
    - 6 gradient palettes (file 2)
