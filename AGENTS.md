@@ -1,3 +1,44 @@
+## Session 2026-09-06 (cont.) — Self-hardening Modal primitive (commit 001c09a, DEPLOYED LIVE)
+
+Same bug-class as the "Company QR hidden above the header" fix, but in a
+different form — instead of relying on call-site Teleports, the modal now
+protects itself. Exhaustive audit first: AST/line scans of
+`src/react-app/components/**/*.tsx` confirmed Header + MobileBottomNav were
+the only positioned-ancestor traps (both already teleported); Header has ZERO
+direct fixed elements; MobileBottomNav's fixed elements (nav/backdrop/sheet)
+are intended full-screen/nav elements at its root. No transform/filter/
+will-change wrappers contain fixed children; no trapped toasts.
+
+**New `src/react-app/components/ui/Modal.tsx`** — the ONE reference modal
+implementation (correct-by-construction):
+- Teleports to `<body>` (via ui/Teleport) so `position: fixed` resolves
+  against the viewport even inside a positioned ancestor — future callers
+  can NEVER re-introduce the trapped-modal bug.
+- Escape closes, body scroll locks while open, backdrop click closes, inner
+  card stops propagation, `role="dialog"` + `aria-modal` + label.
+- Props: onClose (required), label, lockScroll, closeOnBackdrop, className.
+
+**Refactored onto Modal**: `CompanyQrModal.tsx` + `TabConfigModal.tsx`
+(removed their duplicated Escape/scroll-lock effects + raw fixed backdrop;
+removed dead `ArrowLeftRight` import). Call-site Teleports in Header +
+MobileBottomNav kept as harmless belt-and-suspenders (nested portal to the
+same container is valid).
+
+Gates: tsc --noEmit 0, vitest 332/332, eslint 0 errors, prettier clean,
+clean Vite-cache build (135 precache).
+
+Deploy: GitHub main 001c09a; Cloudflare Pages LIVE (preview accc1b4d +
+main alias fuel-app-mobile.pages.dev); Vercel production LIVE (prebuilt
+deploy aliased to fuel-app-mobile.vercel.app). Browser-verified on CF:
+QR modal backdrop spans full viewport (pixel scan y=0..1040 dark, card
+centered ~400-560) — new Modal works.
+
+Gotchas: npx vercel build must run in background (takes ~5 min); keep the
+call-site Teleports even after migrating to Modal (they make the modal
+future-proof against any regression). Playwright headless mobile login
+doesn't complete (Supabase auth restriction) — verify modal layout via the
+desktop browser + screenshot pixel scan instead.
+
 ## Session 2026-09-06 (cont.) — APK 9:20 standalone frame + WebView force-dark lock (commit f510d6b, DEPLOYED LIVE)
 
 User: the APK must render the exact 9:20 standalone/app frame (360×800 dp
