@@ -789,7 +789,11 @@ function HomeContent() {
   // first-class and the result is an enhancement, not a replica of
   // app.saleszote.com.
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 md:pb-0 transition-colors duration-300 max-w-[100vw] overflow-x-clip">
+      <div
+        className="mx-auto min-h-screen flex w-full flex-col bg-gray-50 dark:bg-[#0D1117] shadow-2xl"
+        style={{ maxWidth: "min(1400px, 100%)" }}
+      >
       <Header
         onShowStations={() => setShowStationManager(true)}
         onShowCombined={() => setShowCombined(true)}
@@ -900,6 +904,7 @@ function HomeContent() {
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

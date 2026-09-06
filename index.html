@@ -3,8 +3,34 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <!-- Boot theme: force dark by default (APK/mobile fixed dark container).
+         Users who explicitly chose light are kept light; everyone else gets
+         the dark surface immediately so there is no light-mode flash/white
+         fallback (root cause of the invisible-white-text screenshots). -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("fuelpro_theme");
+          if (stored === null || stored === undefined) {
+            // First run on this device: default to dark (mobile/APK fixed
+            // dark container) so the app never renders white/invisible.
+            localStorage.setItem("fuelpro_theme", "dark");
+            stored = "dark";
+          }
+          var forceDark = stored !== "light";
+          var root = document.documentElement;
+          if (forceDark) {
+            root.classList.add("dark");
+            root.setAttribute("data-theme", "dark");
+            document.body.style.colorScheme = "dark";
+          }
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
     <!-- Content Security Policy: allow only the domains the app actually uses
          (Supabase REST/Realtime/Storage, Google Identity Services, Google Fonts,
          Open-Meteo weather, Nominatim geocoding, allorigins CORS proxy fallback,

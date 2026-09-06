@@ -714,12 +714,12 @@ export default function Header({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1 mb-1.5">
                 Customize & Tools
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 min-w-0">
                 <button
                   onClick={() => {
                     setShowColorThemes((v) => !v);
                   }}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
+                  className="flex flex-col items-center justify-center flex-1 p-3 bg-gray-100 dark:bg-white/5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors active:scale-95"
                   title={`Theme: ${colorThemeMeta.name}`}
                 >
                   <Palette

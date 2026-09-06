@@ -1361,8 +1361,10 @@ export default function Dashboard() {
 
       {/* KPI Cards — calm financial-grade cards (reference rule 5):
           dark surface, white values, small colored icon chip + trend badge.
-          Replaces the competing multi-color gradient cards. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          Replaces the competing multi-color gradient cards.
+          Fixed 2×2 grid on mobile (was grid-cols-1 → single stretched
+          column inflating vertical space + breaking the 9:20 layout). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="fp-kpi">
           <div className="fp-kpi-top">
             <div className="fp-kpi-icon gold">

@@ -385,12 +385,12 @@ export default function MobileBottomNav({
 
       {/* Bottom Navigation Bar - 64px height for proper touch targets */}
       <nav
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50 md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden h-16 flex items-center justify-around border-t border-slate-800/80 bg-[#0B0F17]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div
-          className="flex items-center justify-around"
-          style={{ height: 64 }}
+          className="flex items-center justify-around w-full h-full"
+          style={{ minHeight: 64 }}
         >
           {primaryNav.map((item) => {
             const Icon = item.icon;
