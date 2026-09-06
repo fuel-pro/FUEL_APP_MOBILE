@@ -249,6 +249,8 @@ function ChannelPlayer({
     { index: number; label: string; lang: string }[]
   >([]);
   const [activeSubtitleIdx, setActiveSubtitleIdx] = useState(-1); // -1 = off
+  const activeSubtitleIdxRef = useRef(-1);
+  activeSubtitleIdxRef.current = activeSubtitleIdx;
   const [showCcMenu, setShowCcMenu] = useState(false);
   const subtitleLangRef = useRef(subtitleLang);
   subtitleLangRef.current = subtitleLang;
@@ -393,7 +395,7 @@ function ChannelPlayer({
           }),
         );
         setSubtitleTracks(tracks);
-        if (tracks.length > 0 && activeSubtitleIdx < 0) {
+        if (tracks.length > 0 && activeSubtitleIdxRef.current < 0) {
           const match = findSubtitleTrackIndex(
             data.subtitleTracks as { lang?: string; name?: string }[],
             subtitleLangRef.current,
@@ -587,8 +589,9 @@ function ChannelPlayer({
       startLiveCaptions();
     }
     // If the player has no media yet (not playing), the status callback will
-    // show "press play first" — never a dead end.
-    onCaptionFallback?.();
+    // show "press play first" — never a dead end. No channel auto-advance
+    // here: AI captions generate on ANY stream, so the preferred language
+    // never needs to throw the user to a different channel.
   };
 
   // ─── YOUTUBE IFRAME API — error detection + auto-advance ─────────────
@@ -916,6 +919,7 @@ function ChannelPlayer({
               ref={audioRef}
               controls
               autoPlay
+              crossOrigin="anonymous"
               className="w-full max-w-md"
             />
           </div>
@@ -928,6 +932,7 @@ function ChannelPlayer({
               autoPlay
               muted
               playsInline
+              crossOrigin="anonymous"
               className="absolute inset-0 w-full h-full object-contain bg-black"
             />
             {buffering && !error && (
